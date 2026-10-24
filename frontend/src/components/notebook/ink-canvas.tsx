@@ -145,7 +145,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       updateBacking(width, height, dpr);
     }
 
-    const ctx = c.getContext('2d', { desynchronized: true })!;
+    const ctx = c.getContext('2d')!;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
 
@@ -181,7 +181,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
       ctx.globalAlpha = 1;
     }
-  }, [width, height, dim, inkSize, editable, tool, zoom, updateBacking]);
+  }, [width, height, inkSize, editable, tool, zoom, updateBacking]);
 
   const drawRef = useRef(draw);
   useLayoutEffect(() => {
@@ -189,19 +189,34 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   });
 
   useLayoutEffect(() => {
-    const confirmed = new Set(strokes.map((s) => s.id));
-    if (pendingStrokesRef.current.length > 0) {
-      pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
+    if (strokes.length === 0 && !liveStroke.current) {
+      pendingStrokesRef.current = [];
+      strokesRef.current = [];
+    } else {
+      const confirmed = new Set(strokes.map((s) => s.id));
+      if (pendingStrokesRef.current.length > 0) {
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
+      }
+      if (strokes.length < strokesRef.current.length) {
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => confirmed.has(s.id));
+      }
+      const map = new Map<string, Stroke>();
+      for (const s of strokes) map.set(s.id, s);
+      for (const s of pendingStrokesRef.current) {
+        if (!map.has(s.id)) map.set(s.id, s);
+      }
+      strokesRef.current = Array.from(map.values());
     }
-    const map = new Map<string, Stroke>();
-    for (const s of strokes) map.set(s.id, s);
-    for (const s of pendingStrokesRef.current) {
-      if (!map.has(s.id)) map.set(s.id, s);
-    }
-    strokesRef.current = Array.from(map.values());
     backingDirty.current = true;
     drawRef.current();
   }, [strokes]);
+
+  useLayoutEffect(() => {
+    if (width > 0) {
+      backingDirty.current = true;
+      drawRef.current();
+    }
+  }, [width, height]);
 
   const schedule = useCallback(() => {
     if (scheduled.current) return;
@@ -286,6 +301,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     schedule();
   };
 
+  const eraseAtRef = useRef(eraseAt);
+  useLayoutEffect(() => {
+    eraseAtRef.current = eraseAt;
+  });
+
   // Mount native listeners ONCE. Never unbind/rebind on state or props changes!
   useEffect(() => {
     const c = canvas.current;
@@ -306,7 +326,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
       if (tool === 'eraser') {
         erasing.current = new Set();
-        eraseAt(e);
+        eraseAtRef.current(e);
       } else {
         const strokeId = shortId('s');
         const p = local(e, e.timeStamp);
@@ -355,7 +375,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
 
       if (erasing.current) {
-        eraseAt(e);
+        eraseAtRef.current(e);
         return;
       }
 
@@ -414,7 +434,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
     };
 
-    // Prevent Safari/iPadOS from intercepting touches for Scribble or native gestures
+    // Prevent Safari/iPadOS from intercepting single-finger touches for scrolling or Scribble
     const onTouch = (e: TouchEvent) => {
       if (e.touches.length <= 1 && propsRef.current.editable && propsRef.current.tool !== 'view') {
         if (e.cancelable) e.preventDefault();
@@ -423,8 +443,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
     c.addEventListener('touchstart', onTouch, { passive: false });
     c.addEventListener('touchmove', onTouch, { passive: false });
-    c.addEventListener('touchend', onTouch, { passive: false });
-    c.addEventListener('touchcancel', onTouch, { passive: false });
 
     c.addEventListener('pointerdown', onDown, { passive: false });
     window.addEventListener('pointermove', onMove, { passive: false });
@@ -437,8 +455,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
       c.removeEventListener('touchstart', onTouch);
       c.removeEventListener('touchmove', onTouch);
-      c.removeEventListener('touchend', onTouch);
-      c.removeEventListener('touchcancel', onTouch);
       c.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
