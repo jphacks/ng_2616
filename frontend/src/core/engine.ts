@@ -408,7 +408,9 @@ export class NotebookEngine {
     const draftAfter = nb.lines.slice(lineIndex(nb, last.id) + 1).find((l) => emptyDraft(l));
     const targetId = mode === 'COMPLETE_RHS' ? last.id : (draftAfter?.id ?? shortId('L'));
     const epoch = s.epoch;
-    const ctxLines = mode === 'COMPLETE_RHS' ? contextLinesFor(nb, last.id) : [...contextLinesFor(nb, last.id), last];
+    // the model always sees the current line (for COMPLETE_RHS that is the incomplete line itself);
+    // the CAS checks a completion against the lines before it (verifyCandidate)
+    const ctxLines = [...contextLinesFor(nb, last.id), last];
     const pending: Candidate = {
       id: uuid(),
       mode,
