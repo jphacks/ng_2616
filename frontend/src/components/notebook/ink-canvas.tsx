@@ -92,16 +92,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   }, [width, height, dim]);
 
   useLayoutEffect(() => {
-    if (strokes.length === 0 && !live.current) {
-      pendingStrokesRef.current = [];
-      strokesRef.current = [];
-    } else {
-      const confirmed = new Set(strokes.map((s) => s.id));
-      if (pendingStrokesRef.current.length > 0) {
-        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
-      }
-      strokesRef.current = [...strokes, ...pendingStrokesRef.current];
+    const confirmed = new Set(strokes.map((s) => s.id));
+    if (pendingStrokesRef.current.length > 0) {
+      pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
     }
+    strokesRef.current = [...strokes, ...pendingStrokesRef.current];
     draw();
   }, [strokes, draw]);
 
@@ -113,7 +108,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const local = (e: PointerEvent | React.PointerEvent, t0: number): StrokePoint => {
     const r = canvas.current!.getBoundingClientRect();
     const scale = r.width / width || 1;
-    const pressure = e.pointerType === 'pen' || e.pointerType === 'touch' ? (e.pressure > 0 ? e.pressure : 0.5) : 0.5;
+    const pressure = e.pointerType === 'pen' || e.pointerType === 'touch' ? (e.pressure > 0 ? Math.max(0.15, e.pressure) : 0.5) : 0.5;
     return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
   };
 
@@ -123,11 +118,19 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     if (fingerScroll || !editable) {
       if (!editable && tool !== 'view') onActivate?.();
       scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
-      e.currentTarget.setPointerCapture(e.pointerId);
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
       return;
     }
     e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // iOS WebKit can throw or ignore pointer capture
+    }
     onPenDown?.();
     if (tool === 'eraser') {
       erasing.current = new Set();
@@ -206,7 +209,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   };
 
   return (
-    <div ref={wrap} className="relative w-full" style={{ height }}>
+    <div ref={wrap} className="relative w-full" style={{ height, touchAction: 'none' }}>
       <canvas
         ref={canvas}
         className="absolute inset-0 h-full w-full"
