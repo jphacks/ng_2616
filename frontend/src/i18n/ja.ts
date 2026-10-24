@@ -59,6 +59,11 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'home.moveEarlier': '前へ移動',
   'home.moveLater': '後ろへ移動',
   'home.dismiss': '閉じる',
+  'home.select': '選択',
+  'home.selected': '{n}件を選択',
+  'home.selectAll': 'すべて選択',
+  'home.doneSelecting': '選択を終了',
+  'home.deletedMany': '{n}件のノートを削除しました',
   'home.actionFailed': '操作できませんでした：{msg}',
 
   'lang.en': 'English',

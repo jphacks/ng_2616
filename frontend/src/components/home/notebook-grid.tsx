@@ -12,7 +12,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { arrayMove, rectSortingStrategy, SortableContext } from '@dnd-kit/sortable';
-import { ArrowLeft, ArrowRight, Copy, FolderOpen, PenLine, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CircleCheck, Copy, FolderOpen, PenLine, Trash2 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { useMemo, useRef, useState } from 'react';
 import type { NotebookSummary } from '@/core/persistence/repo';
@@ -39,9 +39,25 @@ export interface GridActions {
   remove: (nb: NotebookSummary) => void;
   /** New full order of the visible notebooks. */
   reorder: (ids: string[]) => void;
+  /** Starts selection mode with this notebook selected. */
+  select: (id: string) => void;
+  toggle: (id: string) => void;
 }
 
-export function NotebookGrid({ items, reorderable, stagger, actions }: { items: NotebookSummary[]; reorderable: boolean; stagger: boolean; actions: GridActions }) {
+export function NotebookGrid({
+  items,
+  reorderable,
+  stagger,
+  selected,
+  actions,
+}: {
+  items: NotebookSummary[];
+  reorderable: boolean;
+  stagger: boolean;
+  /** the selection while in selection mode, otherwise null */
+  selected: ReadonlySet<string> | null;
+  actions: GridActions;
+}) {
   const t = useT();
   const [menu, setMenu] = useState<{ id: string; anchor: Anchor; touch: boolean } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -87,6 +103,7 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
   const handlers: CardHandlers = {
     onOpen: actions.open,
     onMenu: (id, anchor) => setMenu({ id, anchor, touch: false }),
+    onToggle: actions.toggle,
   };
 
   // the keyboard and switch-access way to reorder, alongside dragging
@@ -118,7 +135,8 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
                   nb={nb}
                   index={i}
                   stagger={stagger}
-                  reorderable={reorderable}
+                  reorderable={reorderable && !selected}
+                  selection={selected ? selected.has(nb.id) : null}
                   lifted={dragging === nb.id || (menu?.touch === true && menu.id === nb.id)}
                   handlers={handlers}
                 />
@@ -147,6 +165,9 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
             </MenuItem>
             <MenuItem icon={<Copy size={18} />} onClick={() => actions.duplicate(target.id)}>
               {t('home.duplicate')}
+            </MenuItem>
+            <MenuItem icon={<CircleCheck size={18} />} onClick={() => actions.select(target.id)}>
+              {t('home.select')}
             </MenuItem>
             {reorderable && items.length > 1 && (
               <>

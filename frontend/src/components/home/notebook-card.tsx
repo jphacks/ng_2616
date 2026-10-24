@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
-import { MoreHorizontal } from 'lucide-react';
+import { Check, MoreHorizontal } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useSyncExternalStore, type MouseEvent } from 'react';
 import type { NotebookSummary } from '@/core/persistence/repo';
@@ -49,6 +49,8 @@ export interface CardHandlers {
   onOpen: (id: string) => void;
   /** Opens the card menu against an element, or at the pointer for a right-click. */
   onMenu: (id: string, anchor: Element | { x: number; y: number }) => void;
+  /** In selection mode, a tap selects or deselects instead of opening. */
+  onToggle: (id: string) => void;
 }
 
 /**
@@ -61,6 +63,7 @@ export function NotebookCard({
   lifted,
   stagger,
   reorderable,
+  selection,
   handlers,
 }: {
   nb: NotebookSummary;
@@ -68,11 +71,15 @@ export function NotebookCard({
   lifted: boolean;
   stagger: boolean;
   reorderable: boolean;
+  /** null outside selection mode; otherwise whether this card is selected */
+  selection: boolean | null;
   handlers: CardHandlers;
 }) {
   const t = useT();
   const edited = useEdited(nb.updated_at);
-  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: nb.id });
+  const selecting = selection !== null;
+  // while selecting, a hold or drag does nothing, so taps only select
+  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: nb.id, disabled: selecting });
   // the card answers a press at once, so a hold visibly builds up before it lifts
   const [pressed, setPressed] = useState(false);
   const release = () => setPressed(false);
@@ -81,7 +88,7 @@ export function NotebookCard({
     e.preventDefault();
     // a touch hold is handled by the drag sensor, which also opens the menu
     const type = (e.nativeEvent as PointerEvent).pointerType;
-    if (type === 'touch' || type === 'pen') return;
+    if (type === 'touch' || type === 'pen' || selecting) return;
     handlers.onMenu(nb.id, { x: e.clientX, y: e.clientY });
   };
 
@@ -106,11 +113,13 @@ export function NotebookCard({
         className={clsx(
           'group relative overflow-hidden rounded-3xl bg-sheet',
           lifted ? 'shadow-float' : 'shadow-card',
+          selection && 'ring-2 ring-accent',
         )}
       >
         <button
           type="button"
-          onClick={() => handlers.onOpen(nb.id)}
+          aria-pressed={selecting ? selection : undefined}
+          onClick={() => (selecting ? handlers.onToggle(nb.id) : handlers.onOpen(nb.id))}
           className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-inset"
         >
           <NotebookPreview preview={nb.preview} />
@@ -122,6 +131,17 @@ export function NotebookCard({
             </span>
           </span>
         </button>
+        {selecting ? (
+          <span
+            aria-hidden
+            className={clsx(
+              'pointer-events-none absolute top-3 left-3 flex size-7 items-center justify-center rounded-full ring-2',
+              selection ? 'bg-accent text-white ring-accent' : 'bg-sheet/90 ring-border',
+            )}
+          >
+            {selection && <Check size={16} />}
+          </span>
+        ) : (
         <button
           type="button"
           aria-label={t('home.more')}
@@ -135,6 +155,7 @@ export function NotebookCard({
             <MoreHorizontal size={18} aria-hidden />
           </span>
         </button>
+        )}
       </motion.div>
     </li>
   );

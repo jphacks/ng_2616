@@ -57,6 +57,11 @@ export const en = {
   'home.moveEarlier': 'Move earlier',
   'home.moveLater': 'Move later',
   'home.dismiss': 'Dismiss',
+  'home.select': 'Select',
+  'home.selected': '{n} selected',
+  'home.selectAll': 'Select all',
+  'home.doneSelecting': 'Done selecting',
+  'home.deletedMany': 'Deleted {n} notebooks',
   'home.actionFailed': 'That did not work: {msg}',
 
   'lang.en': 'English',
