@@ -8,11 +8,13 @@ import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
 import { INK_WEIGHTS, useDevicePrefs } from '@/core/prefs/device';
 import type { Tool } from '@/core/store/notebook-store';
 import { fingersDown, useSecondFinger } from './gestures';
+import { usePageZoom } from './zoom';
 
 export const LINE_HEIGHT = 140;
 const MAX_HEIGHT = 560;
 const GROW_MARGIN = 36;
 const ERASER_RADIUS = 12;
+const MAX_BACKING_SCALE = 3;
 
 // in auto mode, once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
 let penSeen = false;
@@ -60,6 +62,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   // where a hovering Apple Pencil would touch down (iPads with Pencil hover)
   const hover = useRef<{ x: number; y: number } | null>(null);
   const inkSize = INK_WEIGHTS[useDevicePrefs((s) => s.inkWeight)];
+  // zoomed in, the bitmap gets more pixels so ink stays sharp (capped for memory)
+  const zoom = usePageZoom((s) => s.settled);
   // every draw reads the latest strokes from strokesRef.
   // pendingStrokesRef holds optimistically added strokes that React has not yet passed down in props.strokes.
   // This prevents fast consecutive strokes from being wiped out by an in-flight React re-render.
@@ -81,7 +85,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const draw = useCallback(() => {
     const c = canvas.current;
     if (!c || width === 0) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(MAX_BACKING_SCALE, (window.devicePixelRatio || 1) * zoom);
     if (c.width !== Math.round(width * dpr) || c.height !== Math.round(height * dpr)) {
       c.width = Math.round(width * dpr);
       c.height = Math.round(height * dpr);
@@ -113,7 +117,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         ctx.fill();
       }
     }
-  }, [width, height, dim, inkSize, editable, tool]);
+  }, [width, height, dim, inkSize, editable, tool, zoom]);
 
   useLayoutEffect(() => {
     if (strokes.length === 0 && !live.current) {

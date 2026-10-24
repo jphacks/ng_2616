@@ -293,6 +293,7 @@ export const en = {
   'toast.redone': 'Redone',
   'toast.cleared': 'Line cleared',
   'toast.erased': 'Scratched out',
+  'zoom.reset': 'Reset zoom to 100%',
   'toast.signInAgain': 'Your session expired. Sign in again; your ink is kept.',
   'toast.recovered': 'Revision verified. The earlier line is kept as history.',
   'toast.fixWrongFirst': 'Revise the line marked wrong before asking for the next step.',
