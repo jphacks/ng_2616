@@ -46,7 +46,7 @@ export interface CasStatus {
   version?: string;
 }
 
-export type Sheet = { kind: 'line'; lineId: string } | { kind: 'rejection' } | { kind: 'problem' } | null;
+export type Sheet = { kind: 'line'; lineId: string } | { kind: 'rejection' } | null;
 
 /** A button on a toast, such as Undo after a destructive edit. */
 export interface ToastAction {
@@ -96,11 +96,11 @@ export interface NotebookState {
 
 function snapshotOf(s: NotebookState): Snapshot {
   const nb = s.notebook!;
-  return { lines: nb.lines, recoveries: nb.recoveries, problem: nb.problem, activeLineId: s.activeLineId };
+  return { lines: nb.lines, recoveries: nb.recoveries, activeLineId: s.activeLineId };
 }
 
 function applySnapshot(nb: Notebook, snap: Snapshot): Notebook {
-  return { ...nb, lines: snap.lines, recoveries: snap.recoveries, problem: snap.problem };
+  return { ...nb, lines: snap.lines, recoveries: snap.recoveries };
 }
 
 let toastId = 0;

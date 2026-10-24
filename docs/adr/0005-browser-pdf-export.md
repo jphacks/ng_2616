@@ -39,6 +39,15 @@ still load as ordinary same-origin static assets.
 
 ## Verification
 
+### Compatibility with the v2.2 line model
+
+Following ADR 0006, export reads the notebook's lines instead of a problem card. Leading given,
+definition and prose lines form the Problem section. Givens introduced later remain in the
+Derivation section at their original position, so the report does not change their scope.
+The notebook title is the only source title; optional report metadata remains independent.
+PDF question labels and mock/correction flags are retained from line provenance. Legacy card
+snapshots migrate to given lines with their PDF source before export.
+
 Unit tests cover status/provenance, stale context, revisions/drafts, unsupported math, IR limits,
 snapshot preservation, safe filenames and lossless paragraph splitting. Browser tests generate a
 real multipage PDF without export API calls, verify unsaved content, cancellation and limits.

@@ -9,11 +9,9 @@ import { openHome } from './helpers';
 function fixture(): Notebook {
   const n = buildNotebook('integral', 'ja');
   n.title = 'PDF出力の検証：日本語・数式・修正履歴';
-  n.problem.origin = { kind: 'pdf', name: '演習プリント_01.pdf', page: 2 };
-  n.problem.independent_var = 'x';
   n.lines = [];
   const add = (formula: string, status: Proof['status'], extra: Partial<Line> = {}, ancestors: string[] = []) => {
-    const l: Line = { id: `L${n.lines.length}`, version: 1, state: 'SETTLED', source: 'user', role: 'step', ink: [], segments: segmentsFromSource(formula, { functions: n.problem.functions }), ...extra };
+    const l: Line = { id: `L${n.lines.length}`, version: 1, state: 'SETTLED', source: 'user', role: 'step', ink: [], segments: segmentsFromSource(formula, { functions: [{ name: 'I', args: ['a'] }] }), ...extra };
     n.lines.push(l);
     const hash = inputHash(n, payloadForLine(n, l.id), 'test-cas');
     l.verified = { verification_id: `v${l.id}`, input_hash: hash, proof: { status, conditions: [], evidence: [], hints: [], segment_results: [], depends_on: [], depends_on_unverified: !!ancestors.length, unverified_ancestors: ancestors, input_hash: hash, mock: false, cas: { version: 'test-cas', rules_version: '2.0.0', elapsed_ms: 1, timed_out: false } } };

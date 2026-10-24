@@ -1,4 +1,4 @@
-import type { Line, Notebook, Proof, Status } from '@mn/contracts';
+import { declaredFunctions, reparseSegments, type Line, type Notebook, type Proof, type Status } from '@mn/contracts';
 import { shortId } from '@/core/ids';
 
 export const PENDING_STATES = new Set<Line['state']>(['RECOGNIZING', 'VERIFYING']);
@@ -82,6 +82,25 @@ export function canContinueFrom(l: Line): boolean {
 export function mathLatexOf(l: Line): string {
   return l.segments.map((s) => (s.type === 'math' ? s.latex : '')).filter(Boolean).join(',\\; ');
 }
+
+/**
+ * Declarations hold for the whole page (v2.2): when the functions the lines declare change, every
+ * line is read again with them. Returns the same array when nothing changes.
+ */
+export function withDeclarations(lines: Line[]): Line[] {
+  const functions = declaredFunctions(lines);
+  let changed = false;
+  const out = lines.map((l) => {
+    const segments = reparseSegments(l.segments, functions);
+    if (segments === l.segments) return l;
+    changed = true;
+    return { ...l, version: l.version + 1, segments };
+  });
+  return changed ? out : lines;
+}
+
+/** Given lines state the problem: marked by the student, or a template's opening lines. */
+export const isGiven = (l: Line) => l.role === 'premise';
 
 export function emptyDraft(l: Line | undefined): boolean {
   return !!l && l.state === 'DRAFT' && l.ink.length === 0;

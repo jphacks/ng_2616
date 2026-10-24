@@ -4,7 +4,7 @@ import {
   printSegmentLatex,
   type MathJSON,
 } from '@mn/contracts/ir';
-import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
+import { declaredFunctions, type Line, type Meta, type Notebook, type Proof, type Recovery, type Stroke, type SuggestInput, type UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
 import { getCas, type CasController } from '@/core/cas/controller';
 import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine } from '@/core/cas/payload';
@@ -19,11 +19,13 @@ import {
   findLine,
   hasMath,
   hasUnresolvedWrong,
+  isGiven,
   lastSettledMath,
   lineIndex,
   mathLatexOf,
   newDraftLine,
   proofOf,
+  withDeclarations,
 } from '@/core/notebook/model';
 import { Autosaver } from '@/core/persistence/autosave';
 import { clearPending, openOutbox, putPending, putPendingNow } from '@/core/persistence/outbox';
@@ -219,14 +221,14 @@ export class NotebookEngine {
     const ctl = this.slot(`line:${lineId}`);
     const nb = this.nb;
     const prev = contextLinesFor(nb, lineId).filter(hasMath).pop();
-    const userIndex = contextLinesFor(nb, lineId).filter((l) => l.source === 'user' && hasMath(l)).length;
+    const userIndex = contextLinesFor(nb, lineId).filter((l) => l.source === 'user' && !isGiven(l) && hasMath(l)).length;
     try {
       const result = await api.recognize(
         this.meta(lineId, version),
         {
           image,
           previous_math_latex: prev ? mathLatexOf(prev) : undefined,
-          functions: nb.problem.functions ?? [],
+          functions: declaredFunctions(nb.lines),
           ui_lang: this.deps.lang(),
           prefetch: false,
           demo: demoBinding(nb),
@@ -239,7 +241,9 @@ export class NotebookEngine {
       if (result.segments.length === 0) return this.failLine(lineId, version, 'recognize', 'RECOGNIZE_UNREADABLE');
       const recognized: Line = { ...line, version: version + 1, state: 'VERIFYING', segments: result.segments };
       store.getState().settleLine(recognized);
+      const reread = this.syncDeclarations();
       await this.verifyLine(lineId);
+      if (reread) void this.recheckStale();
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
       const code = e instanceof ApiCallError ? e.code : 'NETWORK';
@@ -282,6 +286,26 @@ export class NotebookEngine {
       lineId,
     );
     this.abortSlot(`line:${lineId}`);
+    if (this.syncDeclarations()) void this.recheckStale();
+  }
+
+  /**
+   * A function declaration holds for the whole page, so lines written above it are read again
+   * when the declared functions change (outside history: undo restores lines read consistently).
+   * True when any line changed; lines already being checked are checked again.
+   */
+  private syncDeclarations(): boolean {
+    const s = store.getState();
+    const nb = s.notebook;
+    if (!nb) return false;
+    const lines = withDeclarations(nb.lines);
+    if (lines === nb.lines) return false;
+    s.set('notebook', { ...nb, lines });
+    s.set('dirty', true);
+    for (const [i, l] of lines.entries()) {
+      if (l !== nb.lines[i] && l.state === 'VERIFYING') void this.verifyLine(l.id);
+    }
+    return true;
   }
 
   private abortSlot(key: string) {
@@ -367,8 +391,10 @@ export class NotebookEngine {
 
   /** After opening a notebook or a CAS upgrade: recheck lines whose stored input hash no longer matches. */
   async recheckStale() {
+    if (!store.getState().notebook) return;
+    this.syncDeclarations();
     const nb = this.nb;
-    if (!nb || this.cas.status !== 'ready') return;
+    if (this.cas.status !== 'ready') return;
     for (const l of nb.lines) {
       const cur = findLine(this.nb, l.id);
       if (!cur || cur.state !== 'SETTLED' || !hasMath(cur)) continue;
@@ -403,7 +429,8 @@ export class NotebookEngine {
     if (anyPending(nb)) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';
     const last = lastSettledMath(nb);
-    if (!last) return 'empty';
+    // a template's given lines alone do not start suggestions: the student writes first
+    if (!last || !nb.lines.some((l) => l.state === 'SETTLED' && hasMath(l) && !isGiven(l))) return 'empty';
     const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
     if (!incomplete && !canContinueFrom(last)) return 'cannot-continue';
     if (s.candidate && ['GENERATING', 'VERIFYING', 'READY', 'HELD'].includes(s.candidate.state)) return 'busy';
@@ -458,7 +485,7 @@ export class NotebookEngine {
       const reference = await buildReferences(this.deps.ownerId, nb.id, recentText).catch(() => []);
       const base: Omit<SuggestInput, 'rejected_hashes'> = {
         context: {
-          problem: nb.problem,
+          functions: declaredFunctions(nb.lines),
           lines: ctxLines.filter((l) => l.segments.length > 0).slice(-64).map((l) => ({ id: l.id, role: l.role, source: l.source, status: proofOf(l)?.status, segments: l.segments })),
         },
         mode,
@@ -625,6 +652,7 @@ export class NotebookEngine {
     s.set('rejection', null);
     s.set('rejectedHashes', []);
     s.set('rejectedLatex', []);
+    if (this.syncDeclarations()) void this.recheckStale();
     this.scheduleSuggestion(500);
     return 'adopted';
   }
@@ -686,22 +714,37 @@ export class NotebookEngine {
   undo() {
     this.abortAll();
     this.cancelSuggestion();
-    if (store.getState().undo()) this.scheduleSuggestion();
+    if (!store.getState().undo()) return;
+    void this.recheckStale();
+    this.scheduleSuggestion();
   }
 
   redo() {
     this.abortAll();
     this.cancelSuggestion();
-    if (store.getState().redo()) this.scheduleSuggestion();
+    if (!store.getState().redo()) return;
+    void this.recheckStale();
+    this.scheduleSuggestion();
   }
 
-  editProblem(problem: Notebook['problem']) {
+  /**
+   * Marks a line as given (a premise: stated, never checked) or back to a step. Lines that are
+   * only assumptions or function declarations count without the mark; the mark is for the rest,
+   * such as an equation the problem states. The line and everything after it is checked again.
+   */
+  setGiven(lineId: string, given: boolean) {
     const s = store.getState();
+    const line = findLine(this.nb, lineId);
+    if (!line || line.state !== 'SETTLED' || isGiven(line) === given) return;
     if (anyPending(this.nb)) {
       s.showToast(this.deps.t('toast.waitForChecks'));
       return;
     }
-    s.commit('EDIT_PROBLEM', (snap) => ({ ...snap, problem }));
+    s.commit(
+      'MARK_GIVEN',
+      (snap) => ({ ...snap, lines: snap.lines.map((l) => (l.id === lineId ? { ...l, version: l.version + 1, role: given ? 'premise' : 'step' } : l)) }),
+      lineId,
+    );
     s.bumpEpoch();
     s.set('candidate', null);
     void this.recheckStale();

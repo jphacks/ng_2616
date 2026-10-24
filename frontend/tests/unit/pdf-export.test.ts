@@ -39,13 +39,13 @@ describe('PDF document snapshot', () => {
     addLine(n, 'ok', { ai_origin: { candidate_id: 'c', mode: 'COMPLETE_RHS', unverified_adoption: true }, source: 'user' });
     addLine(n, 'none', { source: 'pdf', role: 'premise', document_origin: { name: '演習.pdf', page: 2, has_unreadable: true } });
     const text = resultText(n);
-    for (const expected of ['確認不能', '局所変形は整合', '誤り', '検証対象外', '未検証のAI候補を採用', '資料参照（未検証）', '演習.pdf', 'p.2', '未読箇所あり']) assert.ok(text.includes(expected), expected);
+    for (const expected of ['確認不能', '局所変形は整合', '誤り', '検証対象外', '未検証のAI候補を採用', '前提（問題として与えられた内容・検証対象外）', '演習.pdf', 'p.2', '未読箇所あり']) assert.ok(text.includes(expected), expected);
   });
 
-  it('does not call a result verified after the problem assumptions change', () => {
+  it('does not call a result verified after the given lines change', () => {
     const n = fixture(); addLine(n, 'ok');
     assert.ok(resultText(n).includes('検証済み'));
-    n.problem.assumptions.push({ symbol: 'x', kind: 'positive', source: 'user' });
+    n.lines.unshift({ id: 'given-x', version: 1, state: 'SETTLED', source: 'user', role: 'premise', ink: [], segments: segmentsFromSource('$x>0$') });
     assert.ok(resultText(n).includes('現在の前提では未検証'));
     assert.ok(!resultText(n).includes('検証済み'));
   });
@@ -62,11 +62,30 @@ describe('PDF document snapshot', () => {
     assert.ok(JSON.stringify(result.document).includes('未確定行'));
   });
 
+  it('separates opening givens and keeps later givens in their original scope', () => {
+    const n = fixture();
+    addLine(n, 'none', { role: 'premise', segments: segmentsFromSource('$a>0$') });
+    const first = addLine(n, 'ok');
+    const later = addLine(n, 'none', { role: 'premise', segments: segmentsFromSource('$a<0$') });
+    addLine(n, 'ok');
+    const sections = serializeNotebook(n, 'en').document.sections;
+    assert.equal(sections[0]!.title, 'Problem');
+    assert.equal(sections[0]!.blocks.length, 1);
+    assert.deepEqual(sections[1]!.blocks.map(b => b.label), [String(n.lines.indexOf(first) + 1), String(n.lines.indexOf(later) + 1), '4']);
+  });
+
+  it('preserves PDF question provenance and mock/correction flags through exportSnapshot', () => {
+    const n = fixture();
+    addLine(n, 'none', { source: 'pdf', role: 'premise', document_origin: { name: 'sheet.pdf', page: 3, has_unreadable: false }, extensions: { pdf_question: { label: '10', mock: true, corrected: true } } });
+    const text = JSON.stringify(serializeNotebook(exportSnapshot(n), 'en').document);
+    for (const expected of ['sheet.pdf', 'p.3', 'Question 10', 'MOCK', 'corrected by user']) assert.ok(text.includes(expected), expected);
+  });
+
   it('regenerates math from IR and keeps arbitrary recognition/HTML strings as literal text', () => {
     const n = fixture();
     addLine(n, 'unknown', { segments: [{ type: 'math', expr: ['Unparsed', '\\input{secret}<img src=x onerror=alert(1)>'], notation: 'plain', latex: '\\directlua{bad}' }] });
     addLine(n, 'ok', { segments: [{ type: 'math', expr: ['Equal', 'x', 2], notation: 'plain', latex: '\\input{bad}' }] });
-    const blocks = serializeNotebook(n, 'ja').document.sections[1]!.blocks;
+    const blocks = serializeNotebook(n, 'ja').document.sections.find(s => s.title === '導出')!.blocks;
     assert.equal(blocks[0]!.fragments[0]!.kind, 'text');
     assert.equal(blocks[1]!.fragments[0]!.value, 'x = 2');
     assert.ok(!JSON.stringify(blocks).includes('directlua'));

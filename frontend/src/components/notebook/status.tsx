@@ -25,6 +25,14 @@ const TONE_CLASS: Record<Tone, string> = {
 
 const ICON: Record<Tone, typeof CircleCheck> = { ok: CircleCheck, local: CircleDashed, wrong: CircleX, unknown: CircleHelp, none: CircleMinus };
 
+const NONE_LABEL: Record<string, string> = {
+  DEFINITION: 'status.definition',
+  PREMISE: 'status.premise',
+  ASSUMPTION: 'status.assumption',
+  FUNCTION: 'status.function',
+  TEXT_ONLY: 'status.text',
+};
+
 export function useStatusLabel() {
   const t = useT();
   /** `ancestor` is the visible number of the first unverified line this one depends on. */
@@ -42,7 +50,7 @@ export function useStatusLabel() {
       case 'none':
         return {
           label: t(
-            p.reason === 'DEFINITION' ? 'status.definition' : p.reason === 'PREMISE' ? 'status.premise' : p.reason === 'TEXT_ONLY' ? 'status.text' : 'status.first',
+            NONE_LABEL[p.reason ?? ''] ?? 'status.first',
           ),
         };
     }

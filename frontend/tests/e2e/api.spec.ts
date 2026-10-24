@@ -10,7 +10,6 @@ const meta = () => ({
 
 const suggestInput = (target = 'L2') => ({
   context: {
-    problem: { id: 'p', title: 't', statement: [], definitions: [], conditions: [], assumptions: [], unknowns: [] },
     lines: [],
   },
   mode: 'NEXT_STEP',

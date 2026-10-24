@@ -22,6 +22,7 @@ export const UNICODE_TO_LATEX: Record<string, string> = {
   '≤': '\\le ', '≥': '\\ge ', '≠': '\\ne ', '±': '\\pm ', 'π': '\\pi ', 'ħ': '\\hbar ',
   '∂': '\\partial ', '∞': '\\infty ', '∫': '\\int ', '∑': '\\sum ', '√': '\\sqrt ',
   '′': "'", '″': "''", '□': '\\square ', '∶': ':',
+  '∈': '\\in ', 'ℤ': '\\mathbb{Z}', 'ℕ': '\\mathbb{N}', 'ℝ': '\\mathbb{R}', '⁺': '^{+}',
   'α': '\\alpha ', 'β': '\\beta ', 'γ': '\\gamma ', 'δ': '\\delta ', 'ε': '\\epsilon ',
   'ζ': '\\zeta ', 'η': '\\eta ', 'θ': '\\theta ', 'ι': '\\iota ', 'κ': '\\kappa ',
   'λ': '\\lambda ', 'μ': '\\mu ', 'ν': '\\nu ', 'ξ': '\\xi ', 'ρ': '\\rho ', 'σ': '\\sigma ',
@@ -29,6 +30,19 @@ export const UNICODE_TO_LATEX: Record<string, string> = {
   'ω': '\\omega ', 'Γ': '\\Gamma ', 'Δ': '\\Delta ', 'Θ': '\\Theta ', 'Λ': '\\Lambda ',
   'Ξ': '\\Xi ', 'Σ': '\\Sigma ', 'Φ': '\\Phi ', 'Ψ': '\\Psi ', 'Ω': '\\Omega ',
 };
+
+/** Number sets a symbol can be declared in, as in "n \in \mathbb{Z}^{+}" (the right side of Element). */
+export const NUMBER_SETS = {
+  PositiveIntegers: '\\mathbb{Z}^{+}',
+  Integers: '\\mathbb{Z}',
+  NaturalNumbers: '\\mathbb{N}',
+  Reals: '\\mathbb{R}',
+} as const;
+export type NumberSet = keyof typeof NUMBER_SETS;
+
+export function isNumberSet(s: unknown): s is NumberSet {
+  return typeof s === 'string' && Object.hasOwn(NUMBER_SETS, s);
+}
 
 export const SYMBOL_NAME = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
