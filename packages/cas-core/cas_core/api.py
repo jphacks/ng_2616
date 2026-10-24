@@ -45,11 +45,12 @@ def verify(payload: dict) -> dict:
     try:
         ctx = build_context(payload.get("lines") or [], payload.get("parent_id"))
         target = payload["target"]
+        role, claim = target.get("role", "step"), payload.get("claim")
         results: list[tuple[int, SegResult]] = []
         for i, seg in enumerate(target.get("segments") or []):
             if seg.get("type") != "math":
                 continue
-            results.append((i, verify_segment(seg["expr"], seg.get("notation", "plain"), target.get("role", "step"), ctx, payload.get("claim"))))
+            results.append((i, verify_segment(seg["expr"], seg.get("notation", "plain"), role, ctx, claim)))
         plain = [seg for seg in target.get("segments") or [] if seg.get("type") == "math" and seg.get("notation", "plain") == "plain"]
         if len(results) >= 2 and len(plain) == len(results) and any(r.status in ("wrong", "unknown") for _, r in results):
             # "x + 3 = 0 または x + 4 = 0": one formula per segment, read together as the solutions
