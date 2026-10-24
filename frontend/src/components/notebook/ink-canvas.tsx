@@ -49,6 +49,7 @@ interface Props {
 interface LiveStroke {
   id: string;
   pointerId: number;
+  touch: boolean;
   points: StrokePoint[];
   t0: number;
 }
@@ -187,6 +188,13 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   useLayoutEffect(() => {
     drawRef.current = draw;
   });
+
+  // repaint when the size, zoom, weight or dimming changes: a canvas that is only shown (a failed
+  // line, a line being read) gets its width after mount and has no input to trigger a repaint
+  useLayoutEffect(() => {
+    backingDirty.current = true;
+    draw();
+  }, [draw]);
 
   useLayoutEffect(() => {
     if (strokes.length === 0 && !liveStroke.current) {
@@ -330,7 +338,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       } else {
         const strokeId = shortId('s');
         const p = local(e, e.timeStamp);
-        liveStroke.current = { id: strokeId, pointerId: e.pointerId, points: [p], t0: e.timeStamp };
+        liveStroke.current = { id: strokeId, pointerId: e.pointerId, touch: e.pointerType === 'touch', points: [p], t0: e.timeStamp };
         schedule();
       }
     };
@@ -338,7 +346,16 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     const onDown = (e: PointerEvent) => {
       const isPen = e.pointerType === 'pen' || (e.pointerType === 'touch' && e.pressure > 0 && e.pressure !== 0.5);
       if (isPen) markPenSeen();
-      if (e.pointerType === 'touch' && !isPen && fingersDown() > 1) return;
+      // a second finger is a gesture (undo tap, pinch), never a stroke, whatever pressure it reports
+      if (e.pointerType === 'touch' && fingersDown() > 1) return;
+      // its pointerdown can also arrive before fingersDown() counts it: then drop what the first
+      // finger started instead of salvaging it as a stroke
+      const live = liveStroke.current;
+      if (e.pointerType === 'touch' && live?.touch && live.pointerId !== e.pointerId) {
+        liveStroke.current = null;
+        schedule();
+        return;
+      }
 
       const { editable, tool, onActivate } = propsRef.current;
       const mode = useDevicePrefs.getState().inputMode;
