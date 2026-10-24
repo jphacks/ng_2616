@@ -3,10 +3,10 @@ import { strokesHit } from './stroke';
 
 // a scratch-out is a fast back-and-forth: several reversals along its main axis, a path
 // much longer than the area it covers, drawn over existing ink
-const MIN_POINTS = 12;
+const MIN_POINTS = 16;
 const MIN_SPAN = 24;
-const MIN_REVERSALS = 4;
-const MIN_PATH_RATIO = 3;
+const MIN_REVERSALS = 5;
+const MIN_PATH_RATIO = 3.5;
 // a turn shorter than this is jitter, not a reversal
 const TURN_HYSTERESIS = 6;
 const HIT_RADIUS = 6;

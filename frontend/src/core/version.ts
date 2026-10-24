@@ -1,1 +1,1 @@
-export const APP_BUILD_VERSION = 'v-ink-hyper-1025';
+export const APP_BUILD_VERSION = 'v-ink-bulletproof-1025';

@@ -191,7 +191,12 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     if (pendingStrokesRef.current.length > 0) {
       pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
     }
-    strokesRef.current = [...strokes, ...pendingStrokesRef.current];
+    const map = new Map<string, Stroke>();
+    for (const s of strokes) map.set(s.id, s);
+    for (const s of pendingStrokesRef.current) {
+      if (!map.has(s.id)) map.set(s.id, s);
+    }
+    strokesRef.current = Array.from(map.values());
     backingDirty.current = true;
     drawRef.current();
   }, [strokes]);
@@ -240,7 +245,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       setHeight(Math.min(MAX_HEIGHT, maxY + GROW_MARGIN * 2));
     }
 
-    const scratched = useDevicePrefs.getState().scratchToErase && propsRef.current.onScratchOut
+    const duration = l.points.length > 1 ? l.points[l.points.length - 1]!.t - l.points[0]!.t : 0;
+    // Fast writing (< 250ms) should never be treated as scratch-out gesture
+    const scratched = duration >= 250 && useDevicePrefs.getState().scratchToErase && propsRef.current.onScratchOut
       ? scratchTargets(l.points, strokesRef.current)
       : null;
 
@@ -254,7 +261,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     } else {
       const stroke = { id: l.id, points: l.points };
       pendingStrokesRef.current.push(stroke);
-      strokesRef.current = [...strokesRef.current, stroke];
+      if (!strokesRef.current.some((s) => s.id === stroke.id)) {
+        strokesRef.current = [...strokesRef.current, stroke];
+      }
       backingDirty.current = true;
       drawRef.current();
       propsRef.current.onStroke?.(stroke);
@@ -278,27 +287,16 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     const c = canvas.current;
     if (!c) return;
 
-    const onDown = (e: PointerEvent) => {
+    const startStroke = (e: PointerEvent) => {
       // 1. SALVAGE: If rapid strokes occur and the previous stroke was not yet committed, commit it immediately!
       if (liveStroke.current && liveStroke.current.points.length > 0) {
         commitLiveRef.current();
       }
 
       if (!rectRef.current) rectRef.current = c.getBoundingClientRect();
-      if (e.pointerType === 'pen') markPenSeen();
-      if (e.pointerType === 'touch' && fingersDown() > 1) return;
+      const { editable, tool, onPenDown } = propsRef.current;
+      if (!editable || tool === 'view') return;
 
-      const { editable, tool, onActivate, onPenDown } = propsRef.current;
-      const mode = useDevicePrefs.getState().inputMode;
-      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && (mode === 'pen' || (mode === 'auto' && penSeen)));
-
-      if (fingerScroll || !editable) {
-        if (!editable && tool !== 'view') onActivate?.();
-        scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
-        return;
-      }
-
-      e.preventDefault();
       hover.current = null;
       onPenDown?.();
 
@@ -313,8 +311,33 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
     };
 
+    const onDown = (e: PointerEvent) => {
+      const isPen = e.pointerType === 'pen' || (e.pointerType === 'touch' && e.pressure > 0 && e.pressure !== 0.5);
+      if (isPen) markPenSeen();
+      if (e.pointerType === 'touch' && !isPen && fingersDown() > 1) return;
+
+      const { editable, tool, onActivate } = propsRef.current;
+      const mode = useDevicePrefs.getState().inputMode;
+      const fingerScroll = tool === 'view' || (!isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
+
+      if (fingerScroll || !editable) {
+        if (!editable && tool !== 'view') onActivate?.();
+        scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
+        return;
+      }
+
+      e.preventDefault();
+      startStroke(e);
+    };
+
     const onMove = (e: PointerEvent) => {
-      if (e.pointerType === 'pen' && e.buttons === 0) {
+      const isContact = (e.buttons & 1) === 1 || (e.pointerType === 'pen' && (e.pressure > 0 || e.buttons > 0));
+
+      // Pen is hovering above the screen without contact
+      if (e.pointerType === 'pen' && !isContact) {
+        if (liveStroke.current) {
+          commitLiveRef.current();
+        }
         hover.current = local(e, 0);
         schedule();
         return;
@@ -332,11 +355,19 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
+      // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
+      if (!liveStroke.current && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
+        startStroke(e);
+      }
+
       const l = liveStroke.current;
       if (!l) return;
 
-      // Ignore move events belonging to a different pointer (e.g. previous touch or stray pointer)
-      if (l.pointerId !== e.pointerId) return;
+      // Contact lost mid-move without pointerup event
+      if (!isContact && e.pointerType === 'pen') {
+        commitLiveRef.current();
+        return;
+      }
 
       e.preventDefault();
 
@@ -373,12 +404,23 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       const l = liveStroke.current;
       if (!l) return;
 
-      // Only commit if this pointerup corresponds to the active stroke!
-      // This is crucial: a delayed pointerup from stroke 1 must NEVER prematurely terminate stroke 2.
-      if (l.pointerId === e.pointerId) {
+      // Commit if this pointer matches or if the timestamp is newer than stroke start
+      if (e.timeStamp >= l.t0 || l.pointerId === e.pointerId) {
         commitLiveRef.current();
       }
     };
+
+    // Prevent Safari/iPadOS from intercepting touches for Scribble or native gestures
+    const onTouch = (e: TouchEvent) => {
+      if (e.touches.length <= 1 && propsRef.current.editable && propsRef.current.tool !== 'view') {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    c.addEventListener('touchstart', onTouch, { passive: false });
+    c.addEventListener('touchmove', onTouch, { passive: false });
+    c.addEventListener('touchend', onTouch, { passive: false });
+    c.addEventListener('touchcancel', onTouch, { passive: false });
 
     c.addEventListener('pointerdown', onDown, { passive: false });
     window.addEventListener('pointermove', onMove, { passive: false });
@@ -389,6 +431,10 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       if (liveStroke.current) {
         commitLiveRef.current();
       }
+      c.removeEventListener('touchstart', onTouch);
+      c.removeEventListener('touchmove', onTouch);
+      c.removeEventListener('touchend', onTouch);
+      c.removeEventListener('touchcancel', onTouch);
       c.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
