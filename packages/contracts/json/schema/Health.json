@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "ok"
+    },
+    "build_id": {
+      "type": "string"
+    },
+    "llm_configured": {
+      "type": "boolean"
+    },
+    "lean_ready": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "status",
+    "build_id",
+    "llm_configured",
+    "lean_ready"
+  ],
+  "additionalProperties": false
+}

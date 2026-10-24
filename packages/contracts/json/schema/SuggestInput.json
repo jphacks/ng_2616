@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "context": {
+      "type": "object",
+      "properties": {
+        "problem": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "title": {
+              "type": "string"
+            },
+            "statement": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 4000
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "math"
+                      },
+                      "expr": {
+                        "$ref": "#/$defs/__schema0"
+                      },
+                      "notation": {
+                        "type": "string",
+                        "enum": [
+                          "plain",
+                          "continuation"
+                        ]
+                      },
+                      "latex": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "expr",
+                      "notation",
+                      "latex"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "definitions": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            "conditions": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            "assumptions": {
+              "maxItems": 32,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "symbol": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "real",
+                      "positive",
+                      "nonnegative",
+                      "nonzero",
+                      "positive_integer",
+                      "interval"
+                    ]
+                  },
+                  "lower": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "upper": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "expr": {
+                    "$ref": "#/$defs/__schema0"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "adopted"
+                    ]
+                  }
+                },
+                "required": [
+                  "symbol",
+                  "kind",
+                  "source"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "unknowns": {
+              "maxItems": 3,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "independent_var": {
+              "type": "string"
+            },
+            "functions": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "args": {
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "args"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "origin": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "preset",
+                    "pdf",
+                    "resource"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "page": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "statement",
+            "definitions",
+            "conditions",
+            "assumptions",
+            "unknowns"
+          ],
+          "additionalProperties": false
+        },
+        "lines": {
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "premise",
+                  "definition",
+                  "step",
+                  "text"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "ai",
+                  "pdf",
+                  "resource"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "wrong",
+                  "unknown",
+                  "none"
+                ]
+              },
+              "segments": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "text"
+                        },
+                        "text": {
+                          "type": "string",
+                          "maxLength": 4000
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "text"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "math"
+                        },
+                        "expr": {
+                          "$ref": "#/$defs/__schema0"
+                        },
+                        "notation": {
+                          "type": "string",
+                          "enum": [
+                            "plain",
+                            "continuation"
+                          ]
+                        },
+                        "latex": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "expr",
+                        "notation",
+                        "latex"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "role",
+              "source",
+              "segments"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "problem",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "COMPLETE_RHS",
+        "NEXT_STEP",
+        "BRIDGE"
+      ]
+    },
+    "based_on_line_id": {
+      "type": "string"
+    },
+    "target_line_id": {
+      "type": "string"
+    },
+    "lhs_expr": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "rejected_hashes": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reference": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 9000
+          }
+        },
+        "required": [
+          "name",
+          "page",
+          "text"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ui_lang": {
+      "type": "string",
+      "enum": [
+        "en",
+        "ja"
+      ]
+    },
+    "demo": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "script"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "context",
+    "mode",
+    "based_on_line_id",
+    "target_line_id",
+    "rejected_hashes",
+    "ui_lang"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "minItems": 1
+        }
+      ]
+    }
+  }
+}
