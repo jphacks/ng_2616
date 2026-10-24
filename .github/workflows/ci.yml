@@ -47,6 +47,8 @@ jobs:
       - run: pnpm --filter frontend test:e2e
         env:
           CI: 'true'
+          # GitHub's Linux runners (4 vCPU, 16 GB) fit three browsers with Pyodide
+          E2E_WORKERS: '3'
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
           NEXT_PUBLIC_PYODIDE_INDEX_URL: https://cdn.jsdelivr.net/pyodide/v314.0.7/full/
