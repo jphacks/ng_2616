@@ -4,7 +4,8 @@ import { inputHash, payloadForLine } from '@/core/cas/payload';
 
 const MAX_LINES = 500;
 
-export interface ReportDetails { title: string; author: string; studentId: string }
+export type { ReportDetails } from '@mn/contracts';
+import type { ReportDetails } from '@mn/contracts';
 
 const WORDS = {
   en: { problem: 'Problem', derivation: 'Derivation', history: 'Revision history', statement: 'Statement', given: 'Given', definitions: 'Definitions', assumptions: 'Assumptions', unknowns: 'Unknowns', variable: 'Independent variable', functions: 'Functions', origin: 'Source', verified: 'Verified', local: 'Local transformation consistent; depends on unverified lines', wrong: 'Wrong', unknown: 'Unverified', none: 'Not checked', stale: 'Verification is pending or no longer current', premise: 'Given (stated, not checked)', definition: 'Definition (not verified)', draft: 'Unfinished line omitted', unparsed: 'Unparsed formula (not verified)', mock: 'MOCK / scripted content', ai: 'AI-assisted', aiUnknown: 'AI suggestion adopted without verification', superseded: 'Superseded', empty: 'No confirmed lines.', unreadable: 'Contains unreadable content', snapshot: 'Content at the time PDF export was requested. Verification labels describe the notebook; they are not a new proof.' },
@@ -108,7 +109,7 @@ export function serializeNotebook(nb: Notebook, language: UiLang, report?: Repor
     else lines.push(renderLine(l));
   }
   if (!lines.length) lines.push({ label: '', fragments: [text(w.empty)], notes: [] });
-  const document = PdfDocumentSchema.parse({ title: report?.title.trim() || nb.title, author: report?.author.trim() || undefined, student_id: report?.studentId.trim() || undefined, language, sections: [...(blocks.length ? [{ title: w.problem, blocks }] : []), { title: w.derivation, blocks: lines }, ...(history.length ? [{ title: w.history, blocks: history }] : [])] });
+  const document = PdfDocumentSchema.parse({ title: report?.title.trim() || nb.title, author: report?.author.trim() || undefined, student_id: report?.studentId.trim() || undefined, language, homework: report?.homework, sections: [...(blocks.length ? [{ title: w.problem, blocks }] : []), { title: w.derivation, blocks: lines }, ...(history.length ? [{ title: w.history, blocks: history }] : [])] });
   // Hash binds the exact export representation, not omitted ink or volatile timings.
   return { document, snapshotHash: hashOf({ notebook_id: nb.id, document }), omitted };
 }

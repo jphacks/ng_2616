@@ -1,0 +1,16 @@
+hackerserver.japaneast.cloudapp.azure.com {
+    request_body {
+        max_size 2MiB
+    }
+    @compiler path /api/v1/reports/compile /api/v1/health
+    handle @compiler {
+        reverse_proxy pdf-compiler:8001 {
+            transport http {
+                response_header_timeout 45s
+            }
+        }
+    }
+    handle {
+        respond "Not found" 404
+    }
+}

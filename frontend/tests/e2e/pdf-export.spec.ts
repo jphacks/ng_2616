@@ -64,6 +64,7 @@ test('exports a real multipage PDF locally, preserving unsaved title and noteboo
   const posts: string[] = [];
   page.on('request', (r) => { if (r.method() === 'POST') posts.push(r.url()); });
   await page.getByRole('button', { name: 'Export PDF' }).click();
+  await page.getByLabel('PDF generation').selectOption('browser');
   await page.getByLabel('Name (optional)').fill('山田 太郎');
   await page.getByLabel('Student ID (optional)').fill('12345678');
   await page.getByRole('button', { name: 'Create report PDF' }).click();
@@ -133,8 +134,89 @@ test('reports document limits and allows retry without saving or clearing ink', 
   await openFixture(page, n);
   await page.getByRole('button', { name: 'Export PDF' }).click();
   await page.getByRole('button', { name: 'Create report PDF' }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('too large');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('exceeds the limit');
   await page.getByRole('button', { name: 'Try again' }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('too large');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('exceeds the limit');
   await expect(page.getByRole('link', { name: 'Download PDF' })).toHaveCount(0);
+});
+
+test('keeps the safe TeX download when the compiler is unavailable and sends structured notebook data', async ({ page }) => {
+  await page.route('**/api/v1/reports/pdf', async route => {
+    const input = route.request().postDataJSON();
+    expect(input).toHaveProperty('notebook.lines');
+    expect(input).not.toHaveProperty('tex');
+    expect(input.report.homework.course).toBe('Physics');
+    await route.fulfill({ status: 503, json: { ok: false, error: { code: 'TEX_COMPILER_UNAVAILABLE', message: 'unavailable', retryable: true } } });
+  });
+  await openFixture(page);
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  await expect(page.getByLabel('PDF generation')).toHaveValue('tex');
+  await page.getByLabel('Course', { exact: true }).fill('Physics');
+  await page.getByLabel('Report title', { exact: true }).fill('Safe \\input{secret} report');
+  await page.getByRole('button', { name: 'Create report PDF' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('compiler');
+  const download = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download LaTeX (.tex)', exact: true }).click();
+  const file = await download;
+  const stream = await file.createReadStream(); const chunks = [];
+  for await (const chunk of stream!) chunks.push(chunk);
+  const tex = Buffer.concat(chunks).toString('utf8');
+  expect(tex).toContain('\\textbackslash{}input\\{secret\\}');
+  expect(tex).not.toContain('\\input{secret}');
+  await page.getByLabel('Course', { exact: true }).fill('Changed course');
+  await expect(page.getByRole('link', { name: 'Download LaTeX (.tex)', exact: true })).toHaveCount(0);
+});
+
+test('compiles a real LuaLaTeX report through the web gateway', async ({ page }) => {
+  test.skip(process.env.PDF_E2E_COMPILER !== '1', 'requires a configured local or Azure compiler');
+  const n = buildNotebook('integral', 'ja');
+  n.lines = [
+    { id: 'p', version: 1, state: 'SETTLED', source: 'user', role: 'premise', ink: [], segments: segmentsFromSource('$a > 0$') },
+    { id: 's', version: 1, state: 'SETTLED', source: 'user', role: 'step', ink: [], segments: segmentsFromSource('$I = \\frac{1}{3}$') },
+  ];
+  await openFixture(page, n);
+  const count = await page.locator('[data-line-id]').count();
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  await page.getByLabel('Report title', { exact: true }).fill('Homework Example');
+  await page.getByLabel('Course', { exact: true }).fill('Mathematical Physics I');
+  await page.getByLabel('Name (optional)').fill('山田 太郎');
+  await page.getByLabel('Student ID (optional)').fill('12345678');
+  await page.getByLabel('Paper size', { exact: true }).selectOption('a4');
+  await page.getByLabel('Include verification and revision records as an appendix').uncheck();
+  await page.getByRole('button', { name: 'Create report PDF' }).click();
+  await expect(page.getByText('Your PDF is ready.').or(page.getByRole('dialog').getByRole('alert'))).toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole('dialog').getByRole('alert')).toHaveCount(0);
+  const download = page.waitForEvent('download');
+  await page.getByRole('link', { name: 'Download PDF', exact: true }).click();
+  const file = await download;
+  const folder = process.env.PDF_QA_DIR ?? test.info().outputDir;
+  await mkdir(folder, { recursive: true });
+  const target = path.join(folder, 'homework-lualatex.pdf'); await file.saveAs(target);
+  const { readFile } = await import('node:fs/promises'); const bytes = await readFile(target);
+  const result = await page.evaluate(async data => {
+    const url = '/pdfjs/pdf.min.mjs'; const pdfjs = await import(/* webpackIgnore: true */ url);
+    pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+    const task = pdfjs.getDocument({ data: new Uint8Array(data) }); const pdf = await task.promise;
+    const p = await pdf.getPage(1); const viewport = p.getViewport({ scale: 1 });
+    const content = await p.getTextContent();
+    const result = { count: pdf.numPages, width: viewport.width, height: viewport.height, text: content.items.map((i: { str?: string }) => i.str ?? '').join(' ') };
+    await task.destroy(); return result;
+  }, [...bytes]);
+  expect(result.count).toBe(1); expect(result.width).toBeCloseTo(595.28, 0); expect(result.height).toBeCloseTo(841.89, 0);
+  for (const text of ['Homework Example', 'Mathematical Physics I', '12345678']) expect(result.text).toContain(text);
+  expect(result.text).not.toContain('Verification and revision record');
+  await page.getByRole('button', { name: 'close', exact: true }).last().click();
+  expect(await page.locator('[data-line-id]').count()).toBe(count);
+});
+
+test('rejects raw TeX and deeply nested notebook data before reaching the compiler', async ({ request }) => {
+  const raw = await request.post('/api/v1/reports/pdf', { data: { tex: '\\input{private}' } });
+  expect(raw.status()).toBe(400);
+  const n = fixture();
+  const deep: unknown[] = []; let cursor = deep;
+  for (let i = 0; i < 60; i++) { const next: unknown[] = []; cursor.push(next); cursor = next; }
+  n.lines[0]!.segments = [{ type: 'math', expr: deep as import('@mn/contracts').MathJSON, notation: 'plain', latex: 'x' }];
+  const response = await request.post('/api/v1/reports/pdf', { data: { notebook: n, language: 'en', report: { title: 'Test', author: '', studentId: '' } } });
+  expect(response.status()).toBe(413);
+  expect((await response.json()).error.code).toBe('EXPORT_TOO_LARGE');
 });
