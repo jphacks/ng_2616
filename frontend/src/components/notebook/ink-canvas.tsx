@@ -13,7 +13,7 @@ import { usePageZoom } from './zoom';
 
 export const LINE_HEIGHT = 140;
 const MAX_HEIGHT = 560;
-const GROW_MARGIN = 36;
+const PADDING_BOTTOM = 16;
 const ERASER_RADIUS = 12;
 const MAX_BACKING_SCALE = 3;
 const INK_ALPHA = { erasing: 0.18, dim: 0.55, hover: 0.32 } as const;
@@ -25,7 +25,9 @@ const markPenSeen = () => {
 
 export function inkHeight(strokes: readonly Stroke[]): number {
   const b = strokesBounds(strokes);
-  return Math.min(MAX_HEIGHT, Math.max(LINE_HEIGHT, b ? b.maxY + GROW_MARGIN : LINE_HEIGHT));
+  if (!b) return LINE_HEIGHT;
+  const needed = Math.ceil(b.maxY + PADDING_BOTTOM);
+  return Math.min(MAX_HEIGHT, Math.max(LINE_HEIGHT, needed));
 }
 
 function scrollParent(el: HTMLElement | null): HTMLElement | null {
@@ -87,7 +89,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
   useEffect(() => {
     backingDirty.current = true;
-    setHeight((h) => Math.max(inkHeight(strokes), liveStroke.current ? h : 0));
+    setHeight((h) => (liveStroke.current ? Math.max(h, inkHeight(strokes)) : inkHeight(strokes)));
   }, [strokes]);
 
   useEffect(() => {
@@ -243,8 +245,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
     // Check dynamic row expansion on pen-up instead of inside high-frequency onMove
     const maxY = l.points.reduce((max, p) => (p.y > max ? p.y : max), 0);
-    if (maxY > heightRef.current - GROW_MARGIN && heightRef.current < MAX_HEIGHT) {
-      setHeight(Math.min(MAX_HEIGHT, maxY + GROW_MARGIN * 2));
+    const needed = Math.ceil(maxY + PADDING_BOTTOM);
+    if (needed > heightRef.current && heightRef.current < MAX_HEIGHT) {
+      setHeight(Math.min(MAX_HEIGHT, Math.max(LINE_HEIGHT, needed)));
     }
 
     const duration = l.points.length > 1 ? l.points[l.points.length - 1]!.t - l.points[0]!.t : 0;
@@ -297,7 +300,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         commitLiveRef.current();
       }
 
-      if (!rectRef.current) rectRef.current = c.getBoundingClientRect();
+      rectRef.current = c.getBoundingClientRect();
       const { editable, tool, onPenDown } = propsRef.current;
       if (!editable || tool === 'view') return;
 
