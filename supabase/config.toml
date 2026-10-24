@@ -12,6 +12,15 @@ major_version = 17
 [studio]
 port = 54323
 
+[storage]
+file_size_limit = "50MiB"
+
+# mirrors the bucket created in migrations/0002 (private; resources up to 30 MiB)
+[storage.buckets.mn-resources]
+public = false
+file_size_limit = "30MiB"
+allowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "image/webp"]
+
 [inbucket]
 enabled = true
 port = 54324

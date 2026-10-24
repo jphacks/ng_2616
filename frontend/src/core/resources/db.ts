@@ -19,6 +19,12 @@ export interface ResourceRecord {
   created_at: string;
   /** built-in demo material rendered from text rather than a file */
   builtin?: boolean;
+  /** this device's copy of the cloud row (ADR 0005): rows exist in the cloud */
+  synced?: boolean;
+  /** the source file (and thumbnails) reached Storage */
+  upload_state?: 'pending' | 'uploaded';
+  /** pinned page changed while the cloud was unreachable */
+  meta_dirty?: boolean;
 }
 
 export type OcrState = 'not_needed' | 'needed' | 'running' | 'done' | 'failed';
@@ -31,6 +37,10 @@ export interface PageRecord {
   text_source: 'pdf' | 'ocr' | 'builtin' | 'none';
   ocr_state: OcrState;
   thumb?: Blob;
+  /** Storage path of the thumbnail */
+  thumb_path?: string;
+  /** text or OCR state changed while the cloud was unreachable */
+  text_dirty?: boolean;
   width?: number;
   height?: number;
 }
@@ -56,7 +66,7 @@ export type { ResourceDb };
 const dbs = new Map<string, ResourceDb>();
 const dbName = (ownerId: string) => `mn_resources_${ownerId}`;
 
-/** Resources stay on this device, scoped by owner (spec §15.2). */
+/** This device's cache of the owner's resources; Supabase holds the originals (ADR 0005). */
 export function resourceDb(ownerId: string): ResourceDb {
   let db = dbs.get(ownerId);
   if (!db) {

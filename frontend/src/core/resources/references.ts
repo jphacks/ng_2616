@@ -4,6 +4,7 @@ import type { ReferenceExcerpt } from '@mn/contracts';
 import { getPages, listResources } from './service';
 
 const TOTAL = 9000;
+const fetched = new Set<string>();
 const PER_PAGE = 3000;
 
 function tokens(text: string): Set<string> {
@@ -29,7 +30,9 @@ export async function buildReferences(ownerId: string, notebookId: string, recen
   };
   const textbooks: { name: string; pinned?: number; pages: { page: number; text: string }[] }[] = [];
   for (const r of resources) {
-    const pages = await getPages(ownerId, r.id);
+    // text from the cloud once per session (another device may have OCR'd it), then this device's copy
+    const pages = await getPages(ownerId, r.id, { thumbs: false, remote: !fetched.has(r.id) });
+    fetched.add(r.id);
     if (r.kind === 'textbook') textbooks.push({ name: r.name, pinned: r.pinned_page, pages });
     else for (const p of pages) take(r.name, p.page, p.text);
   }
