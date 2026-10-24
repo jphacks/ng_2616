@@ -4,8 +4,20 @@
 
 **方針（人間の決定）**：案A＝Python の suggest は作らない。既存の TypeScript 実装を仕上げる。基準設計書は `docs/design/v2.0-en.md` + `v2.1-deltas.md` + ADR。`docs/tasks/AI_COMPLETION_TASK.md`（v1.9 前提）は担当範囲の考え方と「他担当の領域に触らない」ルールだけを参照する。v1.9 前提の部分は失効しており、末尾の「履歴」にある。
 
-**触ってよい範囲**：`frontend/src/server/ai/direct/{candidate,prompts}.ts`、新規の `frontend/src/core/candidates/`、`frontend/tests/unit/suggest/`、この NOTES。
-**他担当の許可待ち（変更しない）**：`engine.ts`、`notebook-store.ts`（Canvas・履歴担当と共有）、`ghost-line.tsx`、`toolbar.tsx`（UI 担当）、`packages/contracts`、gateway、`client.ts`、`model.ts`、`i18n`、`package.json`。
+**役割分担（チーム決定）**：機能ごとの縦割り。私は **③ AI数式補完担当**（2モード補完 API、CAS 事前検証連携、破線プレビュー UI、未解決エラー時のロック）。他の担当は ①＝筆記・Canvas・履歴、②＝CAS・復帰（修正）、④＝問題カード・PDF・LaTeX 出力、⑤＝共有基盤・QA。
+
+**触ってよい（③）**
+- `engine.ts` の補完まわりの関数：`requestSuggestion`、`scheduleSuggestion`、`cancelSuggestion`、`verifyCandidate`、`adopt`、`reject`、`suggestBlocker`、`canSuggest`、`isStale`、`maybeReleaseHeld`
+- `notebook-store.ts` の候補に関する型と状態（`candidate`、`rejectedHashes`、`rejectedLatex` など）
+- `ghost-line.tsx`、`frontend/src/server/ai/direct/` の suggest 関係、`frontend/src/core/candidates/`、`frontend/tests/unit/suggest/`、この NOTES
+- i18n（`en.ts`、`ja.ts`）は **新しいキーの追加だけ**。既存キーの変更は不可
+
+**触らない**
+- ①：`engine.ts` の `addStroke`、`eraseStrokes`、`clearDraft`、`confirmLine`、`undo`／`redo`、コンストラクタ
+- ②：`startRevision`、`markRecovery`、`model.ts`
+- ④：`editProblem`、PDF・LaTeX 関係
+- ⑤・共有：`package.json`、Playwright 設定、mock provider、`packages/contracts`、`client.ts`、gateway の共通処理
+- 触らない関数でないと実現できない項目は飛ばし、「依頼事項」に書く。
 
 ## 現在の状態（段階1）
 
