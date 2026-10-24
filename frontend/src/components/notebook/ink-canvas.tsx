@@ -50,6 +50,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const erasing = useRef<Set<string> | null>(null);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
   const frame = useRef(0);
+  const rectRef = useRef<DOMRect | null>(null);
   // every draw reads the latest strokes from strokesRef.
   // pendingStrokesRef holds optimistically added strokes that React has not yet passed down in props.strokes.
   // This prevents fast consecutive strokes from being wiped out by an in-flight React re-render.
@@ -106,16 +107,24 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   };
 
   const local = (e: PointerEvent | React.PointerEvent, t0: number): StrokePoint => {
-    const r = canvas.current!.getBoundingClientRect();
-    const scale = r.width / width || 1;
+    let r = rectRef.current;
+    if (!r && canvas.current) {
+      r = canvas.current.getBoundingClientRect();
+      rectRef.current = r;
+    }
+    const rLeft = r ? r.left : 0;
+    const rTop = r ? r.top : 0;
+    const rWidth = r ? r.width : width || 1;
+    const scale = rWidth / (width || 1) || 1;
     const pressure = e.pointerType === 'pen' || e.pointerType === 'touch' ? (e.pressure > 0 ? Math.max(0.15, e.pressure) : 0.5) : 0.5;
-    return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
+    return { x: (e.clientX - rLeft) / scale, y: (e.clientY - rTop) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
   };
 
   const commitLive = () => {
     const l = live.current;
     if (!l) return;
     live.current = null;
+    rectRef.current = null;
     if (l.points.length > 0) {
       const stroke = { id: shortId('s'), points: l.points };
       pendingStrokesRef.current.push(stroke);
@@ -131,6 +140,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     if (live.current && live.current.points.length > 0) {
       commitLive();
     }
+    rectRef.current = canvas.current?.getBoundingClientRect() ?? null;
     if (e.pointerType === 'pen') markPenSeen();
     const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
     if (fingerScroll || !editable) {
@@ -225,6 +235,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     if (l.id === e.pointerId || e.pointerType === 'pen') {
       commitLive();
     }
+    rectRef.current = null;
     schedule();
   };
 
@@ -238,7 +249,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         onPointerMove={onPointerMove}
         onPointerUp={finish}
         onPointerCancel={finish}
-        onPointerLeave={finish}
+        onLostPointerCapture={finish}
       />
     </div>
   );
