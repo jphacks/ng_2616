@@ -2,6 +2,7 @@
 
 import type { Line, Notebook, Proof, Segment, SuggestMode, Target, Verified } from '@mn/contracts';
 import { create } from 'zustand';
+import type { SyncState } from '@/core/persistence/autosave';
 import { HISTORY_LIMIT, interruptPending, patchPending, type Command, type CommandType, type Snapshot } from '@/core/history/history';
 
 export type Tool = 'pen' | 'eraser' | 'view';
@@ -36,7 +37,8 @@ export interface CheckerRejection {
   basedOnLineId: string;
 }
 
-export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+/** Autosave progress (core/persistence/autosave.ts); `dirty` means the cloud lacks the latest edits. */
+export type SaveState = SyncState;
 
 export interface CasStatus {
   state: 'idle' | 'loading' | 'ready' | 'failed';
@@ -82,7 +84,8 @@ export interface NotebookState {
   setActive(id: string | null): void;
   set<K extends keyof NotebookState>(key: K, value: NotebookState[K]): void;
   showToast(text: string, tone?: 'info' | 'error'): void;
-  markSaved(revision: number): void;
+  /** The cloud holds `nb` at `revision`. */
+  markSaved(nb: Notebook, revision: number): void;
 }
 
 function snapshotOf(s: NotebookState): Snapshot {
@@ -223,8 +226,10 @@ export const useNotebook = create<NotebookState>((set, get) => ({
     }, 4000);
   },
 
-  markSaved(revision) {
-    set({ cloudRevision: revision, dirty: false, saveState: 'saved' });
+  markSaved(nb, revision) {
+    if (get().notebook?.id !== nb.id) return;
+    // edits made during the save stay dirty
+    set({ cloudRevision: revision, dirty: get().notebook !== nb });
   },
 }));
 
