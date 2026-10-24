@@ -7,6 +7,7 @@ import {
 import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
 import { suggestBlockerOf, suggestModeOf } from '@/core/candidates/blocker';
+import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
 import { getCas, type CasController } from '@/core/cas/controller';
@@ -428,6 +429,8 @@ export class NotebookEngine {
     const ctl = this.slot('suggest');
     const slot = this.slotFor(uuid(), last, ctxLines);
     this.suggestSlot = slot;
+    // any epoch bump (confirm, Undo/Redo, revision, problem edit, notebook switch) cancels this request
+    const stopWatching = abortOnEpochChange(store, ctl);
     try {
       const recentText = ctxLines.slice(-8).map(mathLatexOf).join(' ');
       const reference = await buildReferences(this.deps.ownerId, nb.id, recentText).catch(() => []);
@@ -456,11 +459,12 @@ export class NotebookEngine {
       store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
       await this.verifyCandidate(res.candidate, pending, ctxLines, manual, slot);
     } catch (e) {
-      if ((e as Error).name === 'AbortError') return;
+      if ((e as Error).name === 'AbortError') return this.discard(pending);
       if (store.getState().candidate?.id === pending.id || store.getState().candidate?.state === 'GENERATING') store.getState().set('candidate', null);
       if (manual) store.getState().showToast(this.deps.t('toast.suggestFailed'), 'error');
       console.warn('[suggest]', e);
     } finally {
+      stopWatching();
       store.getState().set('suggesting', false);
     }
   }

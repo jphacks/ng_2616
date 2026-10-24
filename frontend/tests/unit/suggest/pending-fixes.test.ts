@@ -14,8 +14,9 @@ describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', 
   // R13: addStroke only holds the candidate when the stroke lands on the candidate's target line.
   it.skip('G4 writing on any draft line turns a READY candidate into HELD (R13)', () => {});
 
-  // R17: undo/redo abort the suggest request; confirmLine, startRevision and editProblem do not.
-  it.skip('G5 confirming, starting a revision or editing the problem aborts the suggest request (R17)', () => {});
+  // R17: requestSuggestion now aborts itself on any epoch change (abortOnEpochChange, tested in epoch.test.ts).
+  // The wiring inside NotebookEngine needs a fake CAS and api (constructor owner).
+  it.skip('G5 engine wiring: confirming, starting a revision or editing the problem aborts the suggest request (R17)', () => {});
 
   // R16: NotebookEngine.isStale now compares all seven slot fields via matchesSlot (rules tested in pure.test.ts).
   // The wiring (request superseded, context line edited, epoch bumped) needs a fake CAS and api (constructor owner).
