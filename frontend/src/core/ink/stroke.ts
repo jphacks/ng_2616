@@ -6,7 +6,17 @@ export const INK_SIZE = 3.4;
 export function strokeOutline(points: StrokePoint[], size = INK_SIZE, last = true): number[][] {
   return getStroke(
     points.map((p) => [p.x, p.y, p.p]),
-    { size, thinning: 0.55, smoothing: 0.5, streamline: 0.45, simulatePressure: points.every((p) => p.p === 0.5), last },
+    {
+      size,
+      thinning: 0.55,
+      smoothing: last ? 0.35 : 0.15,
+      // Stylus/Apple Pencil zero-latency: low streamline prevents trailing behind cursor
+      // During active live drawing, streamline is minimal (0.04) so ink stays glued to the pen tip.
+      // Once stroke is finished (last = true), mild streamline (0.12) smooths the final line.
+      streamline: last ? 0.12 : 0.04,
+      simulatePressure: points.every((p) => p.p === 0.5),
+      last,
+    },
   );
 }
 

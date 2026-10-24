@@ -335,8 +335,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       const l = liveStroke.current;
       if (!l) return;
 
-      // On iPad, tolerate pointerId shifts for pen strokes
-      if (l.pointerId !== e.pointerId && e.pointerType !== 'pen') return;
+      // Ignore move events belonging to a different pointer (e.g. previous touch or stray pointer)
+      if (l.pointerId !== e.pointerId) return;
 
       e.preventDefault();
 
@@ -373,8 +373,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       const l = liveStroke.current;
       if (!l) return;
 
-      // Tolerate pointerId shifts for iPad Apple Pencil
-      if (l.pointerId === e.pointerId || e.pointerType === 'pen') {
+      // Only commit if this pointerup corresponds to the active stroke!
+      // This is crucial: a delayed pointerup from stroke 1 must NEVER prematurely terminate stroke 2.
+      if (l.pointerId === e.pointerId) {
         commitLiveRef.current();
       }
     };
@@ -385,6 +386,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     window.addEventListener('pointercancel', onUp, { passive: false });
 
     return () => {
+      if (liveStroke.current) {
+        commitLiveRef.current();
+      }
       c.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
