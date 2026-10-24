@@ -59,6 +59,16 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(() => inkHeight(strokes));
 
+  const propsRef = useRef({ strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown });
+  const widthRef = useRef(width);
+  const heightRef = useRef(height);
+
+  useLayoutEffect(() => {
+    propsRef.current = { strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown };
+    widthRef.current = width;
+    heightRef.current = height;
+  });
+
   useEffect(() => setHeight((h) => Math.max(inkHeight(strokes), live.current ? h : 0)), [strokes]);
 
   useEffect(() => {
@@ -106,7 +116,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     frame.current = requestAnimationFrame(draw);
   };
 
-  const local = (e: PointerEvent | React.PointerEvent, t0: number): StrokePoint => {
+  const local = (e: PointerEvent, t0: number): StrokePoint => {
     let r = rectRef.current;
     if (!r && canvas.current) {
       r = canvas.current.getBoundingClientRect();
@@ -114,8 +124,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     }
     const rLeft = r ? r.left : 0;
     const rTop = r ? r.top : 0;
-    const rWidth = r ? r.width : width || 1;
-    const scale = rWidth / (width || 1) || 1;
+    const currentW = widthRef.current || 1;
+    const rWidth = r ? r.width : currentW;
+    const scale = rWidth / currentW || 1;
     const pressure = e.pointerType === 'pen' || e.pointerType === 'touch' ? (e.pressure > 0 ? Math.max(0.15, e.pressure) : 0.5) : 0.5;
     return { x: (e.clientX - rLeft) / scale, y: (e.clientY - rTop) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
   };
@@ -130,114 +141,133 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       pendingStrokesRef.current.push(stroke);
       strokesRef.current = [...strokesRef.current, stroke];
       draw();
-      onStroke?.(stroke);
+      propsRef.current.onStroke?.(stroke);
     }
   };
 
-  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // If a previous stroke was not finished before this new pointerdown (e.g. rapid pen gestures on iPad),
-    // salvage and commit it so the 1st stroke is never lost!
-    if (live.current && live.current.points.length > 0) {
-      commitLive();
-    }
-    rectRef.current = canvas.current?.getBoundingClientRect() ?? null;
-    if (e.pointerType === 'pen') markPenSeen();
-    const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
-    if (fingerScroll || !editable) {
-      if (!editable && tool !== 'view') onActivate?.();
-      scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
-      if (e.pointerType === 'mouse') {
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {
-          // ignore
-        }
-      }
-      return;
-    }
-    e.preventDefault();
-    if (e.pointerType === 'mouse') {
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        // ignore
-      }
-    }
-    onPenDown?.();
-    if (tool === 'eraser') {
-      erasing.current = new Set();
-      eraseAt(e);
-      return;
-    }
-    live.current = { id: e.pointerId, points: [], t0: e.timeStamp };
-    live.current.points.push(local(e, e.timeStamp));
-    schedule();
-  };
-
-  const eraseAt = (e: PointerEvent | React.PointerEvent) => {
+  const eraseAt = (e: PointerEvent) => {
     const p = local(e, 0);
     for (const id of strokesHit(strokesRef.current, p.x, p.y)) erasing.current?.add(id);
     schedule();
   };
 
-  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const sc = scrolling.current;
-    if (sc && sc.id === e.pointerId) {
-      if (sc.el) sc.el.scrollTop -= e.clientY - sc.y;
-      sc.y = e.clientY;
-      return;
-    }
-    if (erasing.current) {
-      eraseAt(e);
-      return;
-    }
-    const l = live.current;
-    if (!l) return;
-    // On iPad, pointerId can occasionally shift or be 0 for pens; track if it's the active pen
-    if (l.id !== e.pointerId && e.pointerType !== 'pen') return;
-    const events = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
-    for (const ev of events.length ? events : [e.nativeEvent]) {
-      const p = local(ev, l.t0);
-      l.points.push(p);
-      if (p.y > height - GROW_MARGIN && height < MAX_HEIGHT) setHeight(Math.min(MAX_HEIGHT, p.y + GROW_MARGIN * 2));
-    }
-    if (l.points.length > 20000) l.points.length = 20000;
-    schedule();
-  };
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c) return;
 
-  const finish = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (e.pointerType === 'mouse') {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        // ignore
+    const onDown = (e: PointerEvent) => {
+      // If a previous stroke was not finished before this new pointerdown (e.g. rapid pen gestures on iPad),
+      // salvage and commit it so the 1st stroke is never lost!
+      if (live.current && live.current.points.length > 0) {
+        commitLive();
       }
-    }
-    if (scrolling.current?.id === e.pointerId) {
-      scrolling.current = null;
-      return;
-    }
-    if (erasing.current) {
-      const ids = [...erasing.current];
-      erasing.current = null;
-      if (ids.length) {
-        const drop = new Set(ids);
-        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
-        strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
-        onErase?.(ids);
+      rectRef.current = c.getBoundingClientRect();
+      if (e.pointerType === 'pen') markPenSeen();
+
+      const { editable, tool, onActivate, onPenDown } = propsRef.current;
+      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
+
+      if (fingerScroll || !editable) {
+        if (!editable && tool !== 'view') onActivate?.();
+        scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
+        window.addEventListener('pointermove', onMove, { passive: false });
+        window.addEventListener('pointerup', onUp, { passive: false });
+        window.addEventListener('pointercancel', onUp, { passive: false });
+        return;
       }
-      draw();
+
+      // Stylus or drawing: prevent default WebKit gestures (double-tap zoom, text selection, pan) immediately!
+      e.preventDefault();
+      onPenDown?.();
+
+      if (tool === 'eraser') {
+        erasing.current = new Set();
+        eraseAt(e);
+      } else {
+        live.current = { id: e.pointerId, points: [], t0: e.timeStamp };
+        live.current.points.push(local(e, e.timeStamp));
+        schedule();
+      }
+
+      // Track moves and pointer-up globally on window so fast strokes exiting canvas are never dropped!
+      window.addEventListener('pointermove', onMove, { passive: false });
+      window.addEventListener('pointerup', onUp, { passive: false });
+      window.addEventListener('pointercancel', onUp, { passive: false });
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const sc = scrolling.current;
+      if (sc && sc.id === e.pointerId) {
+        if (sc.el) sc.el.scrollTop -= e.clientY - sc.y;
+        sc.y = e.clientY;
+        return;
+      }
+
+      if (erasing.current) {
+        eraseAt(e);
+        return;
+      }
+
+      const l = live.current;
+      if (!l) return;
+      if (l.id !== e.pointerId && e.pointerType !== 'pen') return;
+
+      e.preventDefault();
+
+      const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+      for (const ev of events.length ? events : [e]) {
+        const p = local(ev, l.t0);
+        l.points.push(p);
+        if (p.y > heightRef.current - GROW_MARGIN && heightRef.current < MAX_HEIGHT) {
+          setHeight(Math.min(MAX_HEIGHT, p.y + GROW_MARGIN * 2));
+        }
+      }
+      if (l.points.length > 20000) l.points.length = 20000;
       schedule();
-      return;
-    }
-    const l = live.current;
-    if (!l) return;
-    if (l.id === e.pointerId || e.pointerType === 'pen') {
-      commitLive();
-    }
-    rectRef.current = null;
-    schedule();
-  };
+    };
+
+    const onUp = (e: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+
+      if (scrolling.current?.id === e.pointerId) {
+        scrolling.current = null;
+        return;
+      }
+
+      if (erasing.current) {
+        const ids = [...erasing.current];
+        erasing.current = null;
+        if (ids.length) {
+          const drop = new Set(ids);
+          pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
+          strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
+          propsRef.current.onErase?.(ids);
+        }
+        draw();
+        schedule();
+        return;
+      }
+
+      const l = live.current;
+      if (!l) return;
+      if (l.id === e.pointerId || e.pointerType === 'pen') {
+        commitLive();
+      }
+      rectRef.current = null;
+      schedule();
+    };
+
+    c.addEventListener('pointerdown', onDown, { passive: false });
+
+    return () => {
+      c.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
 
   return (
     <div ref={wrap} className="relative w-full select-none" style={{ height, touchAction: 'none', WebkitUserSelect: 'none' }}>
@@ -251,11 +281,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
           WebkitTouchCallout: 'none',
           cursor: editable ? (tool === 'eraser' ? 'cell' : tool === 'view' ? 'grab' : 'crosshair') : 'default',
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={finish}
-        onPointerCancel={finish}
-        onLostPointerCapture={finish}
         onDoubleClick={(e) => e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
       />
