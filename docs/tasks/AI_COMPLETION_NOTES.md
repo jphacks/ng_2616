@@ -19,6 +19,70 @@
 - ⑤・共有：`package.json`、Playwright 設定、mock provider、`packages/contracts`、`client.ts`、gateway の共通処理
 - 触らない関数でないと実現できない項目は飛ばし、「依頼事項」に書く。
 
+## 段階2：③担当としての補完まわり修正（a〜f）
+
+役割分担（上の「触ってよい／触らない」）が決まったあとの作業。項目ごとに別コミット。**push はしていない。**
+
+### コミット（古い順）
+
+| # | コミット | 内容 | 主な変更ファイル |
+| --- | --- | --- | --- |
+| 0 | `d19344f` | NOTES の担当範囲を縦割り（③）に更新 | NOTES |
+| a | `e62bc88` | `requestSuggestion`／`canSuggest` が `suggestBlockerOf`／`suggestModeOf` を呼ぶ。engine 内の重複判定を削除（動作は不変） | `engine.ts` |
+| b | `647a736` | R22：`rejectedHashes`／`rejectedLatex` を `rejections`（`rejectionKey` ごと）に置換。生成中・検証中の却下は記録しない。空 hash は記録しない | `engine.ts`、`notebook-store.ts`、`candidates/rejection.ts` |
+| c | `e4ff9a6` | R16：送信時に 7 項目のスロットを保持し、`isStale` を `matchesSlot` に置換。文脈指紋は下書きを含まない。古い結果は候補を残さず破棄 | `engine.ts`、`candidates/slot.ts` |
+| d | `ef993cc` | R17：要求の間だけ epoch を購読し、変化で `AbortController` を中断 | `engine.ts`、`candidates/epoch.ts` |
+| e | `17b0464` | R27：手動で押したとき pending／cannot-continue／busy／HELD に短い案内。`canSuggest` をボタンと自動起動で同じ規則に | `engine.ts`、`candidates/blocker.ts`、`i18n/en.ts`・`ja.ts`（キー追加のみ） |
+| f | `7b5335d` | R12：ok だが未検証の祖先に依存する候補に `status.local`（「局所変形は整合・N 行目は未検証」）を表示 | `ghost-line.tsx`、`candidates/label.ts` |
+
+各コミットの前に、単体テスト全体（`--conditions=react-server`）、`tsc --noEmit`、`eslint` を通した（eslint は既存の警告 7 件のみで、エラー 0、今回触ったファイルの警告 0）。
+
+### 設計上の判断（レビューしてほしい点）
+
+- **文脈指紋（c）**：既存の `contextFingerprint`（`cas/payload.ts`）はノート全体の行 version を含むため、他の下書きに 1 画書くだけで変わり、筆記中に届いた結果が HELD ではなく STALE になってしまう。そこで補完専用に `suggestFingerprint`（問題＋文脈の行 id と version＋session＋epoch。下書きは含まない）を `core/candidates/slot.ts` に作り、**サーバーに送る `meta.context_fingerprint` も、これにした**（`MetaSchema` の形は不変）。`payload.ts` は触っていない。
+- **古い結果の後始末（c）**：epoch 以外の理由（文脈行の再検証による version 変化、要求の置き換え）でも古くなるようにしたため、候補を `VERIFYING` のまま残して `busy` で詰まらないよう `discard` を追加した。他の要求が作った候補は消さない（id で判定）。
+- **却下履歴（b）**：キーは `semanticHash(nb, payloadForCandidate(...))` ＋ モード＋対象種別。Undo では消さない（同じ文脈に戻れば同じ却下が効く）。`load` では空にする。履歴はメモリのみ。
+- **`notebook-store.ts` の `undo()` 内の `rejectedHashes: []` 行の削除（b）**は、候補に関する状態の行だけの変更。`undo()` 自体（①）の振る舞いは変えていない。
+- **`canSuggest(manual)`（e）**：HELD 中の手動押下だけ `true` を返していたが、`requestSuggestion` 側が `busy` で戻るため無意味だった。引数は互換のため残し、常に `suggestBlocker() === null`。
+
+### テスト結果
+
+| 対象 | 件数 | 通過 | 失敗 | skip |
+| --- | --- | --- | --- | --- |
+| `tests/unit/suggest/*.test.ts` | 91 | 85 | 0 | 6 |
+| 　内訳 candidate／pure／model／service／client／epoch／pending-fixes | 11／37／10／13／9／5／6 | 11／37／10／13／9／5／0 | 0 | 0／0／0／0／0／0／6 |
+| 既存 `tests/unit/history.test.ts` | 3 | 3 | 0 | 0 |
+| `tsc --noEmit` | — | エラー 0 | | |
+| E2E `checking.spec.ts` 8＋`demo.spec.ts` 2（mock＋実 CAS、ローカル、`7b5335d`） | 10 | 10 | 0 | 0 |
+
+段階1 の 73 件から 91 件に増えた（純関数・epoch のテスト）。skip は 8 件から 6 件に減った（D3 と F3 を有効化、G9 は純関数部分を有効化して engine 配線部分だけ skip を残した）。
+
+### skip のまま残した 6 件と理由
+
+| テスト | 理由 | 待ち |
+| --- | --- | --- |
+| G4（R13）別の下書きに書いても READY→HELD | `addStroke`（①）の条件変更が必要。③の関数では実現できない | ① Canvas・履歴 |
+| G3（R14）筆記が止まったら HELD→READY | 「止まった」の定義が未合意。`maybeReleaseHeld` は③だが、定義（ペンを離してから何秒か、`useIsInking` 相当）は①と合わせる必要がある | ① と定義の合意 |
+| G5（R17）engine 配線 | 中断のルール自体は `epoch.test.ts` で実ストアに対してテスト済み。`NotebookEngine` を組み立てるにはコンストラクタが `getCas()`（Web Worker）を呼ぶため、偽物を差し込めない | ① コンストラクタの注入 |
+| G6（R16）engine 配線 | 同上（照合規則は `pure.test.ts` で網羅） | ① コンストラクタの注入 |
+| G9（R22）engine 配線 | 同上（規則は `pure.test.ts` G9/F3） | ① コンストラクタの注入 |
+| I2（R12）コンポーネントの描画 | データ規則は `pure.test.ts` I2 で検証済み。描画テストには jsdom と React Testing Library が必要で、リポジトリに無い。E2E の `demo.spec.ts` が行側の同じ文言を通している | ⑤ テスト基盤 |
+
+### 飛ばした項目（他担当の関数が必要）
+
+- **R13（別の下書きへの筆記で HELD）**：`addStroke`（①）。依頼事項に追記済み。
+- **R14（筆記停止の定義）**：①と合意が先。
+- **R16 の `Job.meta` 照合**：`client.ts`（⑤）が `Job.meta` を返す必要がある。現状は送信したスロットとの比較。
+- **R28（BRIDGE を 403 に）**：gateway（⑤）。
+- **R30（`Proof.mock` の意味、候補の mock 表示）**：CAS の仕様（②）の確認が先。`verifyCandidate` の `mock:` 式は③の関数だが、意味が決まるまで触らない。
+- **R3（`DOMAIN_CHANGED`）、R10（修正関係を持つ unknown の直接判定）**：`model.ts`（②）。
+
+### 要確認（仮の文言）
+
+- `toast.suggestPending`／`toast.suggestCannotContinue`／`toast.suggestBusy`／`toast.suggestHeld`（en／ja とも**仮の文言**。UI 担当と文言を決める）。
+  - en：「Wait until the line is checked, then try again.」「This line cannot be continued yet. Check it, or fix it first.」「A suggestion is already being prepared or waiting for you.」「A suggestion is ready. It will appear when you stop writing.」
+- R12 の候補ラベルは、行のステータスと同じ既存キー `status.local` を使った（新規キーなし）。アイコンは従来の Sparkles のまま（行は CircleDashed）。UI 担当の判断を仰ぐ。
+
 ## 現在の状態（段階1）
 
 ### 変更したファイル
@@ -109,8 +173,8 @@ odejs` への書き込み権限で EPERM になったため `npm i -g` を使用
 
 ## 依頼事項（他担当へ・現在有効）
 
-- [ ] Canvas・履歴担当：`engine.ts`／`notebook-store.ts` の変更範囲（R13・R14・R16・R17・R22・R27・R30、`getCas()`／`api` の注入、`suggestBlocker` 等の純関数化）の可否と進め方。小さく分けて PR を出す形で合意したい。「筆記が止まった」の定義（R14）。
-- [ ] UI 担当：`ghost-line.tsx` に「局所変形は整合（未検証：行N）」と mock 表示（R12・R30）、HELD 中の案内文（R27）、`i18n` のキー追加。
+- [ ] ① Canvas・履歴担当：(1) `addStroke` の条件を「候補の対象行」から「アクティブな下書き」に（R13。③の関数では実現できない）。(2) 「筆記が止まった」の定義（R14。ペンを離してから何秒か。案は A＝現状維持／B＝最後の pointerup から 1.2 秒）。(3) `NotebookEngine` のコンストラクタで CAS と api を差し替え可能にする（skip の G5・G6・G9 を有効にするため）。
+- [ ] UI 担当：(1) R27 の仮文言 4 件の確認（上の「要確認」）。(2) R12 のラベルのアイコン（Sparkles のまま／CircleDashed）。(3) 候補の mock 表示（R30）。
 - [ ] AI・API 接続担当：`client.ts` で `Job.meta` を呼び出し側に返す（R16）、BRIDGE の 403 化（R28）、AI-S の token／timeout（8192／40s）の根拠（R29）。
 - [ ] CAS 担当：`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`（R3）。`Proof.mock` の意味（R30）。
 - [ ] QA 担当：MT-10／GT-7 の「ok のみ」を ADR 0003 に合わせた読み替え（第1節）の承認。
@@ -184,22 +248,22 @@ odejs` への書き込み権限で EPERM になったため `npm i -g` を使用
 | R9 | 現在の文脈で再確認してから表示する（§11） | 満たす／テストなし | `verifyCandidate`（`this.nb` と `isStale` を毎回確認） | なし |
 | R10 | 未解決 wrong／未解決の修正があれば LLM を呼ばずにローカルでブロック（§11） | 一部 | `suggestBlocker`＋`model.ts`：`hasUnresolvedWrong`（有効行の wrong、`recoveries` の `UNRESOLVED`）。「修正関係を持つ unknown」は `markRecovery` が `UNRESOLVED` にすることに依存（直接判定ではない）。手動時のみ toast。`UNRESOLVED_WRONG` という名前のコードは無い（動作は等価） | なし |
 | R11 | 採用時にガードと input_hash を再確認（§11） | 満たす／テストなし | `engine.ts`：`adopt`（`c.epoch !== s.epoch`、`hasUnresolvedWrong`、`inputHash` 再計算→不一致は `stale`） | なし |
-| R12 | 破線表示＋AI 由来・未採用・検証状態。ok で祖先ありは「局所変形は整合（未検証：行N）」（§11、§10 の表示規則） | 一部 | `components/notebook/ghost-line.tsx`：`GhostLine`（破線、ラベル：検証済み／仮定の提案／未検証・理由）。**候補の `depends_on_unverified`／`unverified_ancestors` を表示しない**（行側は `status.local` を使うが候補側は未使用）。「未採用」の明示文言も無い | E2E（文言のみ） |
+| R12 | 破線表示＋AI 由来・未採用・検証状態。ok で祖先ありは「局所変形は整合（未検証：行N）」（§11、§10 の表示規則） | **修正済み（段階2・f）** | `components/notebook/ghost-line.tsx`：`GhostLine`（破線、ラベル：検証済み／仮定の提案／未検証・理由）。**候補の `depends_on_unverified`／`unverified_ancestors` を表示しない**（行側は `status.local` を使うが候補側は未使用）。「未採用」の明示文言も無い | E2E（文言のみ） |
 | R13 | 筆記中に届いた結果は HELD（表示を出さない）（§11） | 一部 | `verifyCandidate` 末尾：到着時にアクティブな下書きに筆跡があれば `HELD`。一方 `addStroke` は **候補の対象行に書いたときだけ** READY→HELD（別の下書き行に書くと READY の ghost が出たまま） | なし |
 | R14 | 筆記が止まり文脈が同じときだけ READY に戻す（§11） | 一部 | `maybeReleaseHeld`：消しゴム／行クリアで下書きが空になったときだけ READY へ。ペンが止まっただけでは戻らない（筆跡が残る限り HELD のまま、確定すれば STALE）。文脈同一の確認は epoch 変化で候補が消えることに依存 | なし |
 | R15 | 確定・Undo・文脈変更で STALE（§11、§12.1） | 満たす／テストなし | `confirmLine`（`candidate=null`＋`bumpEpoch`）、`store.undo/redo`、`startRevision`、`editProblem`、`load/unload`。STALE という状態値は使わず候補を消す方式（`CandidateState` の `NONE/ADOPTED/REJECTED/STALE` は未使用） | E2E（部分） |
-| R16 | 結果は request_id／notebook_id／client_session_id／client_epoch／line_id／line_version／context_fingerprint が active slot と一致したときだけ反映（§7.3） | 一部 | `engine.isStale` は **epoch と基準行の version の 2 項目だけ**。`request_id`・`context_fingerprint` は比較しない（`runJob` が `result` だけ返すので `Job.meta` も読めない）。エンジンは notebook ごとに 1 つなので notebook／session は実質等価 | なし |
-| R17 | epoch 増加で関連要求を abort、既知ジョブを cancel（§7.3） | 一部 | `undo/redo` は `abortAll()` で abort。**`confirmLine`／`startRevision`／`editProblem`／`load` は suggest の AbortController を中断しない**（結果は捨てるが LLM 呼び出しは継続し、`suggesting` が立ったまま）。direct ではジョブは終端済みで cancel API 不要、クライアント中断はゲートウェイの `request.signal` で伝わる | なし |
+| R16 | 結果は request_id／notebook_id／client_session_id／client_epoch／line_id／line_version／context_fingerprint が active slot と一致したときだけ反映（§7.3） | **一部（段階2・c で 7 項目を照合。`Job.meta` の照合は `client.ts` の変更待ち）** | `engine.isStale` は **epoch と基準行の version の 2 項目だけ**。`request_id`・`context_fingerprint` は比較しない（`runJob` が `result` だけ返すので `Job.meta` も読めない）。エンジンは notebook ごとに 1 つなので notebook／session は実質等価 | なし |
+| R17 | epoch 増加で関連要求を abort、既知ジョブを cancel（§7.3） | **修正済み（段階2・d）** | `undo/redo` は `abortAll()` で abort。**`confirmLine`／`startRevision`／`editProblem`／`load` は suggest の AbortController を中断しない**（結果は捨てるが LLM 呼び出しは継続し、`suggesting` が立ったまま）。direct ではジョブは終端済みで cancel API 不要、クライアント中断はゲートウェイの `request.signal` で伝わる | なし |
 | R18 | 採用は 1 回限り（§11） | 満たす／テストなし | `adopt`：同期的に `candidate=null`。2 回目は `'none'` | なし |
 | R19 | NEXT_STEP は新規行、COMPLETE_RHS は対象の右辺を埋め、AI 由来と元の筆跡を保持（§11） | 満たす／テストなし | `adopt`：`ai_origin`（`unverified_adoption` 付き）、COMPLETE_RHS は `...l`（ink 保持）＋version+1、NEXT_STEP は予約 ID／既存の空下書きを置換 | E2E |
 | R20 | 採用は多段 Undo/Redo の 1 command。before/after に完了済み `segments`・`Verified` を持ち、Redo は再送 0（§12.2） | 満たす／テストなし | `store.commit('ADOPT_CANDIDATE', ...)`（`Snapshot` は `lines` 全体）、`store.undo/redo` | なし |
 | R21 | 却下は確定行を変えない。v2.1：undo 可能な command にしない | 満たす／テストなし | `engine.reject`（`REJECT_CANDIDATE` は `CommandType` に残るが未使用） | E2E（Escape） |
-| R22 | 却下した同一候補は、同じ文脈で再表示しない。履歴は文脈ごと（§11、§7.3） | 一部 | `reject` が `rejectedHashes`／`rejectedLatex` に積み、`requestSuggestion` が送り、`finalizeCandidate` が `REJECTED_BEFORE`。ただし (a) 履歴は **文脈単位ではなく** adopt／undo／load でのみクリア（redo と confirm ではクリアされない）、(b) hash が文章込み（R6b）、(c) **GENERATING／VERIFYING 中の Esc で空文字 `''` の hash を積む**（`reject` が `c.contentHash` を無条件に積む） | なし |
+| R22 | 却下した同一候補は、同じ文脈で再表示しない。履歴は文脈ごと（§11、§7.3） | **修正済み（段階2・b）** | `reject` が `rejectedHashes`／`rejectedLatex` に積み、`requestSuggestion` が送り、`finalizeCandidate` が `REJECTED_BEFORE`。ただし (a) 履歴は **文脈単位ではなく** adopt／undo／load でのみクリア（redo と confirm ではクリアされない）、(b) hash が文章込み（R6b）、(c) **GENERATING／VERIFYING 中の Esc で空文字 `''` の hash を積む**（`reject` が `c.contentHash` を無条件に積む） | なし |
 | R23 | unknown の候補は amber＋二重確認、`unverified_adoption` を記録（ADR 0003） | 満たす／テストなし | `verifyCandidate`（`policy='unverified'`）、`adopt(confirmUnverified)`、`GhostLine`（`ghostConfirm`） | E2E（checking.spec） |
 | R24 | wrong の候補は表示せず「チェッカーが却下」チップ、その hash を除外して 1 回だけ再生成（ADR 0003） | 満たす／テストなし | `verifyCandidate`（`recordCheckerRejection`、`retried`）、`RejectionChip` | E2E（checking.spec、demo.spec） |
 | R25 | none（定義・仮定）は「仮定の提案」で 1 タップ採用（ADR 0003） | 満たす／テストなし | `verifyCandidate`（`policy='assumption'`） | E2E（部分） |
 | R26 | 自動提案は「行が settle し筆記が止まったら」。採用は明示（v2.1） | 満たす／テストなし | `scheduleSuggestion`（1200ms）、`addStroke` で `cancelSuggestion`、`suggestBlocker` の `writing` | E2E（部分） |
-| R27 | 手動ボタンの無反応を作らない（§12.1「すべての処理は着地する」の趣旨） | 一部 | `requestSuggestion`：toast は wrong／cas／empty／writing のみ。`pending`／`cannot-continue`／`busy`（HELD 中含む）は **何も言わず戻る**。`canSuggest` は HELD 中の手動押下を許すが、`requestSuggestion` が `busy` で戻るため効かない（食い違い） | なし |
+| R27 | 手動ボタンの無反応を作らない（§12.1「すべての処理は着地する」の趣旨） | **修正済み（段階2・e。文言は仮）** | `requestSuggestion`：toast は wrong／cas／empty／writing のみ。`pending`／`cannot-continue`／`busy`（HELD 中含む）は **何も言わず戻る**。`canSuggest` は HELD 中の手動押下を許すが、`requestSuggestion` が `busy` で戻るため効かない（食い違い） | なし |
 | R28 | mode=BRIDGE は FEATURE_DISABLED（§14.2、エラー表は 403） | 一部 | `direct/index.ts`：`suggest` が `AiError('FEATURE_DISABLED')`→ゲートウェイは **202 の failed ジョブ**（HTTP 403 ではない）。Must では UI から BRIDGE は送られない | なし |
 | R29 | AI-S の契約：1 行、429/5xx/タイムアウトは 1 回だけ再試行、スキーマ違反は再試行しない、打切り・空応答は成功にしない（§13） | 一部 | `providers/gemini.ts`（1 回再試行、空応答→`UPSTREAM_INVALID`）、`direct/index.ts`（`SuggestWireSchema` 違反→`SCHEMA_INVALID`）。数値は v2.0 の 600 tokens／20s に対し **8192 tokens／40s**（v2.1 に記載なし。根拠は要確認で、仮決めしない） | なし |
 | R30 | mock を UI／保存／ログで明示し、live の検証文脈に混ぜない（§13） | 一部 | `top-bar.tsx`：`top.mock`（capabilities の `llm.mock`）。`Candidate.mock` は保持するが表示しない。`verifyCandidate` の `mock: draft.lines.length > 0 && false` は **常に false**（意図不明の式） | なし |
