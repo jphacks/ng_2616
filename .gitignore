@@ -25,6 +25,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# lean (lean-worker/lean/.lake holds Mathlib's cache and the REPL build, several GB)
+.lake/
+
 # tests
 coverage/
 playwright-report/

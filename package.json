@@ -15,7 +15,10 @@
     "contracts:emit": "pnpm --filter @mn/contracts emit",
     "cas:build": "node packages/cas-core/build.mjs",
     "cas:test": "cd packages/cas-core && uv run pytest",
-    "backend:test": "cd backend && uv run pytest"
+    "backend:test": "cd backend && uv run pytest",
+    "lean:setup": "cd lean-worker/lean && lake exe cache get && lake build repl",
+    "lean:dev": "cd lean-worker && uv run uvicorn lean_worker.main:app --host 127.0.0.1 --port 8100",
+    "lean:test": "cd lean-worker && uv run pytest"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
