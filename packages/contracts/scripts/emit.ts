@@ -19,7 +19,6 @@ writeFileSync(join(root, 'cas-fixtures.json'), `${JSON.stringify(cases, null, 2)
 
 const exported: Record<string, z.ZodType> = {
   Notebook: schemas.NotebookSchema,
-  Problem: schemas.ProblemSchema,
   Line: schemas.LineSchema,
   Proof: schemas.ProofSchema,
   Meta: schemas.MetaSchema,

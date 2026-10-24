@@ -9,12 +9,11 @@ const stroke = (id: string, n = 3): Stroke => ({ id, points: Array.from({ length
 const line = (id: string, ink: Stroke[] = []): Line => ({ id, version: 1, source: 'user', role: 'step', state: 'DRAFT', ink, segments: [] });
 const notebook = (lines: Line[], title = 'T'): Notebook =>
   ({
-    schema_version: '2.0.0',
+    schema_version: '2.2.0',
     id: '33333333-3333-4333-8333-333333333333',
     title,
     mode: 'live',
     domain: 'Reals',
-    problem: { id: 'p', title: 't', statement: [], definitions: [], conditions: [], assumptions: [], unknowns: [] },
     lines,
     recoveries: [],
   }) as unknown as Notebook;

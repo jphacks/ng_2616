@@ -9,10 +9,9 @@ import { useT } from '@/i18n';
 import { useEngine } from './engine-context';
 import { useAutoConfirm, useMultiFingerTap } from './gestures';
 import { LineRow } from './line-row';
-import { ProblemCard } from './problem-card';
 import { resetZoom, usePinchZoom } from './zoom';
 
-/** One ruled page: the problem card, then every line in order. */
+/** One ruled page: every line in order, the given lines that state the problem first. */
 export function NotebookPage() {
   const nb = useNotebook((s) => s.notebook);
   const activeId = useNotebook((s) => s.activeLineId);
@@ -74,8 +73,7 @@ export function NotebookPage() {
     >
       <div style={zoomed ? { width: size.width * zoom, height: size.height * zoom } : undefined}>
       <div ref={content} className="pb-40" style={zoomed ? { width: size.width, transform: `scale(${zoom})`, transformOrigin: '0 0' } : undefined}>
-      <ProblemCard problem={nb.problem} />
-      <div className="mx-4 mt-3 rounded-2xl bg-sheet shadow-card">
+      <div className="mx-4 mt-4 rounded-2xl bg-sheet shadow-card">
         {nb.lines.map((line, i) => {
           const ancestor = line.verified?.proof.unverified_ancestors[0];
           return (

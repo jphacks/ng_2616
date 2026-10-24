@@ -194,6 +194,9 @@ function Gutter({ n, line }: { n: number; line: Line }) {
   return (
     <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-sm tabular-nums text-faint">
       <span>{n}</span>
+      {line.role === 'premise' && (
+        <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>
+      )}
       {line.source === 'ai' && (
         <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-2xs font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
           <Sparkles size={11} />

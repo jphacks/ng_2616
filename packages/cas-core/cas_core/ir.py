@@ -17,6 +17,8 @@ CONSTANTS: dict[str, sp.Expr] = {
     "Infinity": sp.oo,
 }
 INEQUALITIES = {"Less", "LessEqual", "Greater", "GreaterEqual", "NotEqual"}
+RELATION_HEADS = {"Equal", "EqualChain", "And", "Or", "Element"} | INEQUALITIES
+NUMBER_SETS = {"PositiveIntegers", "Integers", "NaturalNumbers", "Reals"}
 
 
 class CasUnsupported(Exception):
@@ -72,6 +74,10 @@ class Env:
             s = sp.Symbol(name, real=True, nonzero=True)
         elif kind == "positive_integer":
             s = sp.Symbol(name, integer=True, positive=True)
+        elif kind == "nonnegative_integer":
+            s = sp.Symbol(name, integer=True, nonnegative=True)
+        elif kind == "integer":
+            s = sp.Symbol(name, integer=True)
         else:
             s = sp.Symbol(name, real=True)
         self._cache[name] = s
@@ -100,7 +106,7 @@ def ir_symbols(e: Any) -> set[str]:
     """Symbol names and function names mentioned anywhere (bound variables included)."""
     out: set[str] = set()
     for x in walk_ir(e):
-        if isinstance(x, str) and x not in CONSTANTS and x not in ("both", "left", "right"):
+        if isinstance(x, str) and x not in CONSTANTS and x not in NUMBER_SETS and x not in ("both", "left", "right"):
             out.add(x)
     return out
 
@@ -279,7 +285,7 @@ def to_rel(e: Any, env: Env, subst: bool = True) -> Rel | None:
         if any(p is None for p in parts):
             raise CasUnsupported("UNSUPPORTED", "list of non-relations")
         return Rel("And", parts=parts)  # type: ignore[arg-type]
-    if h in ("EqualChain", "Or"):
+    if h in ("EqualChain", "Or", "Element"):
         raise CasUnsupported("UNSUPPORTED", f"{h} verification")
     return None
 

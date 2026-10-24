@@ -2,9 +2,9 @@
 
 import type { Evidence, Line, Notebook, Proof } from '@mn/contracts';
 import clsx from 'clsx';
-import { CornerUpLeft, Lightbulb, Search, ShieldAlert } from 'lucide-react';
+import { CornerUpLeft, Flag, Lightbulb, Search, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
-import { findLine, lineNumber } from '@/core/notebook/model';
+import { findLine, isGiven, lineNumber } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button } from '@/ui/button';
@@ -111,7 +111,7 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
 function DetailBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
   const t = useT();
   const src = proof.segment_results.find((r) => r.source_line_id)?.source_line_id;
-  const srcN = src && src !== 'problem' ? lineNumber(nb, src) : null;
+  const srcN = src ? lineNumber(nb, src) : null;
   return (
     <div className="space-y-3 text-base">
       {proof.status === 'ok' && proof.unverified_ancestors.length > 0 && (
@@ -127,7 +127,7 @@ function DetailBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proo
           {t(`method.${proof.method}`)}
         </p>
       )}
-      {(srcN !== null || src === 'problem') && <p className="text-muted">{src === 'problem' ? t('sheet.comparedWithProblem') : t('sheet.comparedWith', { n: srcN! })}</p>}
+      {srcN !== null && <p className="text-muted">{t('sheet.comparedWith', { n: srcN })}</p>}
       {proof.conditions.length > 0 && (
         <div>
           <span className="text-muted">{t('sheet.conditions')}: </span>
@@ -148,7 +148,7 @@ export function ExplanationSheet() {
   const nb = useNotebook((s) => s.notebook);
   const rejection = useNotebook((s) => s.rejection);
   const close = () => useNotebook.getState().set('sheet', null);
-  if (!sheet || !nb || sheet.kind === 'problem') return null;
+  if (!sheet || !nb) return null;
 
   if (sheet.kind === 'rejection') {
     if (!rejection) return null;
@@ -200,6 +200,19 @@ export function ExplanationSheet() {
           <StatusBadge line={line} ancestor={proof.unverified_ancestors[0] ? lineNumber(nb, proof.unverified_ancestors[0]) : null} />
         </div>
         {proof.status === 'wrong' ? <WrongBody line={line} nb={nb} proof={proof} /> : <DetailBody line={line} nb={nb} proof={proof} />}
+        {line.state === 'SETTLED' && (
+          <div className="space-y-2 border-t border-border pt-4">
+            <Button
+              variant={isGiven(line) ? 'secondary' : 'accent-soft'}
+              icon={<Flag size={17} />}
+              aria-pressed={isGiven(line)}
+              onClick={() => engine.setGiven(line.id, !isGiven(line))}
+            >
+              {t(isGiven(line) ? 'sheet.unmarkGiven' : 'sheet.markGiven')}
+            </Button>
+            <p className="text-sm text-muted">{t('sheet.givenHint')}</p>
+          </div>
+        )}
       </div>
     </Sheet>
   );

@@ -1,6 +1,6 @@
 import 'server-only';
-import { printLatex, symbolToLatex, type MathJSON } from '@mn/contracts/ir';
-import type { FunctionDecl, Problem, RecognizeInput, Segment, SuggestInput } from '@mn/contracts';
+import { printLatex, symbolToLatex } from '@mn/contracts/ir';
+import type { FunctionDecl, RecognizeInput, Segment, SuggestInput } from '@mn/contracts';
 import type { Part } from './providers/types';
 
 const LATEX_CONVENTIONS = `LaTeX conventions (the output is read by a strict parser):
@@ -25,7 +25,7 @@ Rules:
 
 ${LATEX_CONVENTIONS}`;
 
-export const SUGGEST_SYSTEM = `You assist a student who is writing a derivation in a handwriting notebook. Propose exactly ONE next line: a small, natural step that follows from the current line (the last line listed), using the problem card, the earlier lines and the reference material.
+export const SUGGEST_SYSTEM = `You assist a student who is writing a derivation in a handwriting notebook. Propose exactly ONE next line: a small, natural step that follows from the current line (the last line listed), using the given lines that state the problem, the earlier lines and the reference material.
 
 Rules:
 - Return {"has_candidate": true, "role": ..., "segments": [...]}, or {"has_candidate": false, "role": "step", "segments": []} when no sensible next step exists (for example when the derivation is complete).
@@ -65,18 +65,10 @@ export function recognizeParts(input: RecognizeInput): Part[] {
   ];
 }
 
-function problemText(p: Problem): string {
-  const ex = (e: MathJSON) => printLatex(e);
-  const lines = [`Title: ${p.title}`];
-  if (p.statement.length) lines.push(`Statement: ${segmentsText(p.statement)}`);
-  if (p.conditions.length) lines.push(`Given: ${p.conditions.map(ex).join(';  ')}`);
-  if (p.definitions.length) lines.push(`Definitions: ${p.definitions.map(ex).join(';  ')}`);
-  if (p.assumptions.length) {
-    lines.push(`Assumptions: ${p.assumptions.map((a) => (a.expr !== undefined ? `${ex(a.expr)} ≠ 0` : `${symbolToLatex(a.symbol)}: ${a.kind}`)).join(', ')}`);
-  }
-  lines.push(`Functions: ${functionsLine(p.functions)}`);
-  if (p.unknowns.length) lines.push(`Unknowns: ${p.unknowns.join(', ')}`);
-  return lines.join('\n');
+/** The lines marked as given state the problem (statement, given equations, assumptions, functions). */
+function givenText(input: SuggestInput): string {
+  const given = input.context.lines.filter((l) => l.role === 'premise').map((l) => segmentsText(l.segments));
+  return [...(given.length ? given : ['none']), `Declared functions: ${functionsLine(input.context.functions)}`].join('\n');
 }
 
 export function suggestParts(input: SuggestInput): Part[] {
@@ -88,7 +80,7 @@ export function suggestParts(input: SuggestInput): Part[] {
       ? `Reference material (uploaded by the student):\n${refs.map((r) => `--- ${r.name}, page ${r.page} ---\n${r.text}`).join('\n')}`
       : 'Reference material: none.',
   });
-  parts.push({ type: 'text', text: `Problem card:\n${problemText(input.context.problem)}` });
+  parts.push({ type: 'text', text: `Given lines (the problem):\n${givenText(input)}` });
   const lines = input.context.lines.slice(-8);
   const listing = lines
     .map((l, i) => {

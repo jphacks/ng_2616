@@ -1,5 +1,5 @@
 import { OPS, POSITIONAL, type MathJSON } from './ops';
-import { SYMBOL_NAME, isConstant } from './symbols';
+import { SYMBOL_NAME, isConstant, isNumberSet } from './symbols';
 
 export const IR_LIMITS = {
   maxNodes: 256,
@@ -41,6 +41,7 @@ export function validateExpr(root: MathJSON): IrIssue | null {
       if (isConstant(e)) {
         return e === 'Infinity' && pos !== 'bound' ? fail('Infinity outside a bound or limit value', path) : null;
       }
+      if (isNumberSet(e)) return fail('a number set outside "\\in"', path);
       return isSymbol(e) ? null : fail(`invalid symbol name "${e}"`, path);
     }
     if (!Array.isArray(e) || e.length === 0 || typeof e[0] !== 'string') return fail('malformed node', path);
@@ -101,6 +102,8 @@ export function validateExpr(root: MathJSON): IrIssue | null {
         if (typeof ex === 'number' && Math.abs(ex) > IR_LIMITS.maxExponent) return fail('exponent magnitude above 100', path);
         return sub(0) ?? sub(1);
       }
+      case 'Element':
+        return isNumberSet(args[1]) ? sub(0) : fail('Element needs a number set', path);
       case 'Equal': {
         if (args[0] === null) return fail('empty LHS', path);
         return sub(0) ?? sub(1, 'rhs');
@@ -145,7 +148,7 @@ export function freeSymbols(e: MathJSON, bound: ReadonlySet<string> = new Set())
       for (const a of args.slice(1)) walk(a as MathJSON, b);
       return;
     }
-    if (h === 'Prime') { walk(args[0] as MathJSON, b); return; }
+    if (h === 'Prime' || h === 'Element') { walk(args[0] as MathJSON, b); return; }
     for (const a of args) walk(a as MathJSON, b);
   };
   walk(e, bound);

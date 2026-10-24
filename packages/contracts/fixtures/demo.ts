@@ -1,9 +1,10 @@
 /**
  * The Schrödinger demo (Stage 1): TDSE → TISE → particle in a box → general solution.
- * Used by the scripted demo provider, the preset problem card and the CAS fixtures.
+ * Used by the scripted demo provider, the Schrödinger template and the CAS fixtures.
  */
-import type { Assumption, FunctionDecl, Role, Status } from '../src/schemas';
+import type { FunctionDecl, Role, Status } from '../src/schemas';
 
+/** How the scripted demo reads Ψ, ψ, φ and V (the template declares them in its given lines). */
 export const SCHRODINGER_FUNCTIONS: FunctionDecl[] = [
   { name: 'Psi', args: ['x', 't'] },
   { name: 'psi', args: ['x'] },
@@ -11,16 +12,21 @@ export const SCHRODINGER_FUNCTIONS: FunctionDecl[] = [
   { name: 'V', args: ['x'] },
 ];
 
-/** Assumptions written as LaTeX for `expr`; emitters parse them into IR. */
-export const SCHRODINGER_ASSUMPTIONS: (Omit<Assumption, 'expr'> & { expr_latex?: string })[] = [
-  { symbol: 'm', kind: 'positive', source: 'user' },
-  { symbol: 'L', kind: 'positive', source: 'user' },
-  { symbol: 'n', kind: 'positive_integer', source: 'user' },
-  { symbol: 'psi', kind: 'nonzero', expr_latex: '\\psi(x)', source: 'user' },
-  { symbol: 'phi', kind: 'nonzero', expr_latex: '\\phi(t)', source: 'user' },
-];
-
 export const TDSE_LATEX = 'i\\hbar \\frac{\\partial \\Psi}{\\partial t} = -\\frac{\\hbar^2}{2m}\\frac{\\partial^2 \\Psi}{\\partial x^2} + V(x)\\Psi';
+
+/** LaTeX of the template's given lines after its statement: the TDSE, the assumptions, the functions. */
+export const SCHRODINGER_GIVEN: string[] = [
+  TDSE_LATEX,
+  'm > 0',
+  'L > 0',
+  'n \\in \\mathbb{Z}^{+}',
+  '\\psi(x) \\neq 0',
+  '\\phi(t) \\neq 0',
+  '\\Psi(x,t)',
+  '\\psi(x)',
+  '\\phi(t)',
+  'V(x)',
+];
 
 export interface DemoStep {
   id: string;

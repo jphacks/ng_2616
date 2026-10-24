@@ -10,12 +10,11 @@ const line = (state: Line['state']): Line =>
   ({ id: 'L1', version: 2, source: 'user', role: 'step', state, ink: [{ id: 's1', points: [{ x: 1, y: 2, t: 0, p: 0.5 }] }], segments: [] }) as unknown as Line;
 const notebook = (title: string, lines: Line[] = []): Notebook =>
   ({
-    schema_version: '2.0.0',
+    schema_version: '2.2.0',
     id: ID,
     title,
     mode: 'live',
     domain: 'Reals',
-    problem: { id: 'p', title: 't', statement: [], definitions: [], conditions: [], assumptions: [], unknowns: [] },
     lines,
     recoveries: [],
   }) as unknown as Notebook;

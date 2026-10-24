@@ -27,6 +27,8 @@ export const OPS: Record<string, readonly [number, number]> = {
   Greater: [2, 2],
   GreaterEqual: [2, 2],
   NotEqual: [2, 2],
+  // [Element, x, NumberSet]: a declaration such as "n \in \mathbb{Z}^{+}"
+  Element: [2, 2],
   And: [2, 16],
   Or: [2, 16],
   PlusMinus: [1, 2],
@@ -49,7 +51,7 @@ export const OPS: Record<string, readonly [number, number]> = {
   LimitSpec: [4, 4],
 };
 
-export const RELATIONS = new Set(['Equal', 'EqualChain', 'Less', 'LessEqual', 'Greater', 'GreaterEqual', 'NotEqual']);
+export const RELATIONS = new Set(['Equal', 'EqualChain', 'Less', 'LessEqual', 'Greater', 'GreaterEqual', 'NotEqual', 'Element']);
 export const LOGIC = new Set(['And', 'Or']);
 export const POSITIONAL = new Set(['Tuple', 'LimitSpec']);
 
