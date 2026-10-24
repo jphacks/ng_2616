@@ -124,7 +124,14 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       <div className="flex w-[11.5rem] shrink-0 flex-col items-end justify-center gap-2 py-2">
         {line.state === 'DRAFT' && active && (
           <div className="flex items-center gap-1">
-            <IconButton label={t('tool.clear')} onClick={() => engine.clearDraft(line.id)} disabled={line.ink.length === 0}>
+            <IconButton
+              label={t('tool.clear')}
+              onClick={() => {
+                engine.clearDraft(line.id);
+                useNotebook.getState().showToast(t('toast.cleared'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+              }}
+              disabled={line.ink.length === 0}
+            >
               <Trash2 size={19} />
             </IconButton>
             <Button variant="primary" icon={<Check size={18} />} disabled={line.ink.length === 0} onClick={() => void engine.confirmLine(line.id)}>

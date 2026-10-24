@@ -7,6 +7,7 @@ import { useT } from '@/i18n';
 import { IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
+import { useHoldRepeat } from './gestures';
 
 const TOOLS: { tool: Tool; icon: typeof PenLine; key: string }[] = [
   { tool: 'pen', icon: PenLine, key: 'tool.pen' },
@@ -22,6 +23,9 @@ export function Toolbar() {
   const canRedo = useNotebook((s) => s.future.length > 0);
   const suggesting = useNotebook((s) => s.suggesting);
   const set = useNotebook((s) => s.set);
+  // holding Undo or Redo keeps stepping through history
+  const undoPress = useHoldRepeat(() => engine.undo(), canUndo);
+  const redoPress = useHoldRepeat(() => engine.redo(), canRedo);
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex justify-center px-4">
       <div className="pointer-events-auto flex items-center gap-1 rounded-2xl bg-sheet/95 p-1.5 shadow-float backdrop-blur">
@@ -31,10 +35,10 @@ export function Toolbar() {
           </IconButton>
         ))}
         <Divider />
-        <IconButton label={t('tool.undo')} disabled={!canUndo} onClick={() => engine.undo()}>
+        <IconButton label={t('tool.undo')} disabled={!canUndo} {...undoPress}>
           <Undo2 size={20} />
         </IconButton>
-        <IconButton label={t('tool.redo')} disabled={!canRedo} onClick={() => engine.redo()}>
+        <IconButton label={t('tool.redo')} disabled={!canRedo} {...redoPress}>
           <Redo2 size={20} />
         </IconButton>
         <Divider />

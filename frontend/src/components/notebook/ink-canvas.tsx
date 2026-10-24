@@ -6,6 +6,7 @@ import { shortId } from '@/core/ids';
 import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
 import { useDevicePrefs } from '@/core/prefs/device';
 import type { Tool } from '@/core/store/notebook-store';
+import { fingersDown, useSecondFinger } from './gestures';
 
 export const LINE_HEIGHT = 140;
 const MAX_HEIGHT = 560;
@@ -47,8 +48,9 @@ interface Props {
 export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const live = useRef<{ id: number; points: StrokePoint[]; t0: number } | null>(null);
+  const live = useRef<{ id: number; points: StrokePoint[]; t0: number; touch: boolean } | null>(null);
   const erasing = useRef<Set<string> | null>(null);
+  const erasingByTouch = useRef(false);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
   const frame = useRef(0);
   // every draw reads the latest strokes from strokesRef.
@@ -111,6 +113,14 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     frame.current = requestAnimationFrame(draw);
   };
 
+  // a second finger means a gesture (undo tap, pinch): drop what the first finger started
+  useSecondFinger(() => {
+    if (live.current?.touch) live.current = null;
+    if (erasingByTouch.current) erasing.current = null;
+    scrolling.current = null;
+    schedule();
+  });
+
   const local = (e: PointerEvent | React.PointerEvent, t0: number): StrokePoint => {
     const r = canvas.current!.getBoundingClientRect();
     const scale = r.width / width || 1;
@@ -120,6 +130,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType === 'pen') markPenSeen();
+    if (e.pointerType === 'touch' && fingersDown() > 1) return;
     const mode = useDevicePrefs.getState().inputMode;
     const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && (mode === 'pen' || (mode === 'auto' && penSeen)));
     if (fingerScroll || !editable) {
@@ -133,10 +144,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     onPenDown?.();
     if (tool === 'eraser') {
       erasing.current = new Set();
+      erasingByTouch.current = e.pointerType === 'touch';
       eraseAt(e);
       return;
     }
-    live.current = { id: e.pointerId, points: [], t0: e.timeStamp };
+    live.current = { id: e.pointerId, points: [], t0: e.timeStamp, touch: e.pointerType === 'touch' };
     live.current.points.push(local(e, e.timeStamp));
     schedule();
   };

@@ -48,6 +48,12 @@ export interface CasStatus {
 
 export type Sheet = { kind: 'line'; lineId: string } | { kind: 'rejection' } | { kind: 'problem' } | null;
 
+/** A button on a toast, such as Undo after a destructive edit. */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface NotebookState {
   notebook: Notebook | null;
   activeLineId: string | null;
@@ -69,7 +75,7 @@ export interface NotebookState {
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
   ghostConfirm: boolean;
-  toast: { id: number; text: string; tone: 'info' | 'error' } | null;
+  toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
 
   load(nb: Notebook, revision: number | null): void;
   unload(): void;
@@ -83,7 +89,7 @@ export interface NotebookState {
   bumpEpoch(): number;
   setActive(id: string | null): void;
   set<K extends keyof NotebookState>(key: K, value: NotebookState[K]): void;
-  showToast(text: string, tone?: 'info' | 'error'): void;
+  showToast(text: string, tone?: 'info' | 'error', action?: ToastAction): void;
   /** The cloud holds `nb` at `revision`. */
   markSaved(nb: Notebook, revision: number): void;
 }
@@ -217,13 +223,14 @@ export const useNotebook = create<NotebookState>((set, get) => ({
     set({ [key]: value } as Partial<NotebookState>);
   },
 
-  showToast(text, tone = 'info') {
+  showToast(text, tone = 'info', action) {
     toastId += 1;
     const id = toastId;
-    set({ toast: { id, text, tone } });
+    set({ toast: { id, text, tone, action } });
+    // a toast that can be acted on stays a little longer
     setTimeout(() => {
       if (get().toast?.id === id) set({ toast: null });
-    }, 4000);
+    }, action ? 5000 : 4000);
   },
 
   markSaved(nb, revision) {

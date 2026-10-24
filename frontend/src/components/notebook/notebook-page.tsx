@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import { useNotebook } from '@/core/store/notebook-store';
+import { useT } from '@/i18n';
+import { useEngine } from './engine-context';
+import { useMultiFingerTap } from './gestures';
 import { LineRow } from './line-row';
 import { ProblemCard } from './problem-card';
 
@@ -15,6 +18,24 @@ export function NotebookPage() {
     (s) => !!s.candidate && s.candidate.mode === 'NEXT_STEP' && !s.notebook?.lines.some((l) => l.id === s.candidate!.targetLineId),
   );
   const scroller = useRef<HTMLDivElement>(null);
+  const t = useT();
+  const engine = useEngine();
+
+  // two fingers tap to undo, three to redo; the toast offers the opposite step
+  useMultiFingerTap(scroller, {
+    2: () => {
+      const s = useNotebook.getState();
+      if (!s.past.length) return;
+      engine.undo();
+      s.showToast(t('toast.undone'), 'info', { label: t('tool.redo'), run: () => engine.redo() });
+    },
+    3: () => {
+      const s = useNotebook.getState();
+      if (!s.future.length) return;
+      engine.redo();
+      s.showToast(t('toast.redone'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+    },
+  });
 
   // keep the active line (and any ghost suggestion on it) clear of the floating toolbar
   useEffect(() => {

@@ -277,6 +277,10 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'res.zoomIn': '拡大',
   'res.zoomOut': '縮小',
 
+  'toast.undone': '元に戻しました',
+  'toast.redone': 'やり直しました',
+  'toast.cleared': '行を消去しました',
+  'toast.erased': '消しました',
   'toast.signInAgain': 'セッションの有効期限が切れました。手書きは保持されています。再度ログインしてください。',
   'toast.recovered': '書き直しが検証されました。元の行は履歴として残ります。',
   'toast.fixWrongFirst': '次の一歩を提案する前に、誤りのある行を書き直してください。',

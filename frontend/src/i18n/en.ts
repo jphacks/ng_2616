@@ -275,6 +275,10 @@ export const en = {
   'res.zoomIn': 'Zoom in',
   'res.zoomOut': 'Zoom out',
 
+  'toast.undone': 'Undone',
+  'toast.redone': 'Redone',
+  'toast.cleared': 'Line cleared',
+  'toast.erased': 'Scratched out',
   'toast.signInAgain': 'Your session expired. Sign in again; your ink is kept.',
   'toast.recovered': 'Revision verified. The earlier line is kept as history.',
   'toast.fixWrongFirst': 'Revise the line marked wrong before asking for the next step.',
