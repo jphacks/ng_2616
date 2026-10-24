@@ -6,8 +6,12 @@ import {
 } from '@mn/contracts/ir';
 import { declaredFunctions, type Line, type Meta, type Notebook, type Proof, type Recovery, type Stroke, type SuggestInput, type UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
+import { blockerToastKey, suggestBlockerOf, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
+import { abortOnEpochChange } from '@/core/candidates/epoch';
+import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
+import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
 import { getCas, type CasController } from '@/core/cas/controller';
-import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine } from '@/core/cas/payload';
+import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine, semanticHash } from '@/core/cas/payload';
 import type { Snapshot } from '@/core/history/history';
 import { shortId, uuid } from '@/core/ids';
 import { rasterizeStrokes } from '@/core/ink/raster';
@@ -37,6 +41,8 @@ import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/
 import { SUGGEST_ATTEMPTS, checkerFeedback, runAttempts, type Attempt } from '@/core/suggest/attempts';
 
 const SUGGEST_IDLE_MS = 1200;
+/** A hidden (HELD) suggestion comes back after this long without a new stroke (R14; same value as C-01's pen-up wait). */
+export const HELD_QUIET_MS = 1200;
 
 const segmentsLatex = (segments: Line['segments']) => segments.map((seg) => (seg.type === 'math' ? printSegmentLatex(seg.expr, seg.notation) : seg.text)).join(' ');
 
@@ -46,19 +52,37 @@ export interface EngineDeps {
   t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
+/** The parts of the CAS controller and API client the engine uses; tests pass fakes for them. */
+export type CasPort = Pick<CasController, 'status' | 'versionString' | 'onChange' | 'start' | 'verify'>;
+export type ApiPort = Pick<typeof api, 'suggest' | 'recognize' | 'ocrPage'>;
+
+/** Optional replacements for the real CAS worker and API client (omitted: the app behaves as before). */
+export interface EngineOverrides {
+  cas?: CasPort;
+  api?: ApiPort;
+}
+
 /** Orchestrates the asynchronous Must flows on top of the store (one engine per open notebook). */
 export class NotebookEngine {
   readonly sessionId = uuid();
-  private cas: CasController = getCas();
+  private cas: CasPort;
+  private api: ApiPort;
   private aborts = new Map<string, AbortController>();
   private suggestTimer: ReturnType<typeof setTimeout> | null = null;
+  private heldTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastStrokeAt = 0;
+  /** the active suggestion request: results are applied only if they still match it (spec §7.3) */
+  private suggestSlot: SlotMeta | null = null;
+  private retried = new Set<string>();
   private cache = new Map<string, Proof>();
   private unsub: (() => void) | null = null;
   private disposed = false;
   private autosave: Autosaver;
   private offAutosave: () => void;
 
-  constructor(private deps: EngineDeps) {
+  constructor(private deps: EngineDeps, overrides: EngineOverrides = {}) {
+    this.cas = overrides.cas ?? getCas();
+    this.api = overrides.api ?? api;
     this.autosave = new Autosaver({
       getState: () => store.getState(),
       subscribe: (fn) => store.subscribe(fn),
@@ -95,6 +119,7 @@ export class NotebookEngine {
     for (const a of this.aborts.values()) a.abort();
     this.aborts.clear();
     this.cancelSuggestion();
+    if (this.heldTimer) clearTimeout(this.heldTimer);
     this.unsub?.();
   }
 
@@ -141,9 +166,11 @@ export class NotebookEngine {
       lineId,
     );
     this.cancelSuggestion();
-    if (s.candidate && s.candidate.state === 'READY' && s.candidate.targetLineId === lineId) {
+    // writing on any draft line hides a ready suggestion (spec §11), not only on the line it is for
+    if (s.candidate && s.candidate.state === 'READY' && findLine(this.nb, lineId)?.state === 'DRAFT') {
       s.set('candidate', { ...s.candidate, state: 'HELD' });
     }
+    this.restartHeldTimer();
   }
 
   eraseStrokes(lineId: string, ids: string[]) {
@@ -169,6 +196,42 @@ export class NotebookEngine {
     const line = findLine(this.nb, lineId);
     if (s.candidate?.state === 'HELD' && emptyDraft(line)) s.set('candidate', { ...s.candidate, state: 'READY' });
     else if (emptyDraft(line)) this.scheduleSuggestion();
+  }
+
+  /** After every stroke the pen is up: count the quiet time again from now (R14). */
+  private restartHeldTimer() {
+    this.lastStrokeAt = Date.now();
+    this.armHeldTimer();
+  }
+
+  /** Wait out the rest of the quiet time since the last stroke, then try to bring a HELD suggestion back. */
+  private armHeldTimer() {
+    if (this.heldTimer) clearTimeout(this.heldTimer);
+    const wait = Math.max(0, HELD_QUIET_MS - (Date.now() - this.lastStrokeAt));
+    this.heldTimer = setTimeout(() => {
+      this.heldTimer = null;
+      this.releaseHeldAfterQuiet();
+    }, wait);
+  }
+
+  /**
+   * HELD -> READY once no stroke has come for HELD_QUIET_MS and the context is still the one the suggestion was made
+   * in (same slot: request, epoch, line version, suggestFingerprint). If the context changed it is STALE and dropped.
+   */
+  private releaseHeldAfterQuiet() {
+    const s = store.getState();
+    const c = s.candidate;
+    if (!c || c.state !== 'HELD' || this.disposed) return;
+    if (Date.now() - this.lastStrokeAt < HELD_QUIET_MS) return this.armHeldTimer();
+    // a NEXT_STEP suggestion lands on its reserved draft line: while that very draft holds the student's ink, showing it
+    // would offer to replace their writing, so it stays hidden until the draft is emptied or confirmed
+    const target = findLine(this.nb, c.targetLineId);
+    if (c.mode === 'NEXT_STEP' && target?.state === 'DRAFT' && target.ink.length > 0) return;
+    if (!this.suggestSlot || this.isStale(this.suggestSlot)) {
+      s.set('candidate', null);
+      return;
+    }
+    s.set('candidate', { ...c, state: 'READY' });
   }
 
   /** New line keeps the current draft and moves to a fresh one without submitting (spec §8.1). */
@@ -223,7 +286,7 @@ export class NotebookEngine {
     const prev = contextLinesFor(nb, lineId).filter(hasMath).pop();
     const userIndex = contextLinesFor(nb, lineId).filter((l) => l.source === 'user' && !isGiven(l) && hasMath(l)).length;
     try {
-      const result = await api.recognize(
+      const result = await this.api.recognize(
         this.meta(lineId, version),
         {
           image,
@@ -421,7 +484,7 @@ export class NotebookEngine {
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 
-  private suggestBlocker(): string | null {
+  private suggestBlocker(): SuggestBlocker | null {
     const s = store.getState();
     const nb = s.notebook;
     if (!nb) return 'none';
@@ -439,24 +502,16 @@ export class NotebookEngine {
     return null;
   }
 
-  canSuggest(manual: boolean): boolean {
-    const b = this.suggestBlocker();
-    return b === null || (manual && b === 'busy' && store.getState().candidate?.state === 'HELD');
+  /** True when pressing the suggest button would start a request (the same rules as the automatic start). */
+  canSuggest(_manual = false): boolean {
+    return this.suggestBlocker() === null;
   }
 
   async requestSuggestion(manual: boolean) {
     const blocker = this.suggestBlocker();
     if (blocker) {
       if (manual) {
-        const keys: Record<string, string> = {
-          wrong: 'toast.fixWrongFirst',
-          cas: 'toast.casLoading',
-          empty: 'toast.writeFirst',
-          writing: 'toast.confirmFirst',
-          pending: 'toast.waitForChecks',
-          'cannot-continue': 'toast.cannotContinue',
-        };
-        const key = keys[blocker];
+        const key = blockerToastKey(blocker, store.getState().candidate?.state ?? null);
         if (key) store.getState().showToast(this.deps.t(key));
       }
       return;
@@ -465,14 +520,16 @@ export class NotebookEngine {
     const nb = this.nb;
     const last = lastSettledMath(nb)!;
     const lastMath = last.segments.find((seg) => seg.type === 'math');
-    const incomplete = proofOf(last)?.reason === 'INCOMPLETE' && lastMath?.type === 'math' && Array.isArray(lastMath.expr) && lastMath.expr[0] === 'Equal';
-    const mode = incomplete ? 'COMPLETE_RHS' : 'NEXT_STEP';
+    const mode = suggestModeOf(last);
     const draftAfter = nb.lines.slice(lineIndex(nb, last.id) + 1).find((l) => emptyDraft(l));
     const targetId = mode === 'COMPLETE_RHS' ? last.id : (draftAfter?.id ?? shortId('L'));
     const epoch = s.epoch;
     // the model always sees the current line (for COMPLETE_RHS that is the incomplete line itself);
     // the CAS checks a completion against the lines before it (verifyCandidate)
     const ctxLines = [...contextLinesFor(nb, last.id), last];
+    // rejections are remembered per context: the same notebook content, mode and kind of target (spec §7.3)
+    const rejectKey = rejectionKey(semanticHash(nb, payloadForCandidate(nb, ctxLines, { id: targetId, role: 'step', segments: [] })), mode);
+    const rejected = rejectionsFor(s.rejections, rejectKey);
     const pending: Candidate = {
       id: uuid(),
       mode,
@@ -484,10 +541,15 @@ export class NotebookEngine {
       lines: [],
       policy: 'unverified',
       mock: false,
+      rejectKey,
     };
     s.set('candidate', pending);
     s.set('suggesting', true);
     const ctl = this.slot('suggest');
+    const slot = this.slotFor(uuid(), last, ctxLines);
+    this.suggestSlot = slot;
+    // any epoch bump (confirm, Undo/Redo, revision, problem edit, notebook switch) cancels this request
+    const stopWatching = abortOnEpochChange(store, ctl);
     // a later request owns the slot (and any candidate in progress) once it has started
     const superseded = () => {
       const cur = this.aborts.get('suggest');
@@ -511,6 +573,7 @@ export class NotebookEngine {
         based_on_line_id: last.id,
         target_line_id: targetId,
         ...(mode === 'COMPLETE_RHS' && lastMath?.type === 'math' ? { lhs_expr: (lastMath.expr as MathJSON[])[1] as MathJSON } : {}),
+
         ...(reference.length ? { reference } : {}),
         ui_lang: this.deps.lang(),
         demo: demoBinding(nb),
@@ -522,11 +585,11 @@ export class NotebookEngine {
         const input: SuggestInput = {
           ...base,
           rejected_hashes: [...new Set([...cur.rejectedHashes, ...tried])].slice(-64),
-          rejected_latex: cur.rejectedLatex.filter((l) => !fed.has(l)).slice(-16),
+          rejected_latex: cur.rejectedLatex.filter((l: string) => !fed.has(l)).slice(-16),
           ...(feedback.length ? { checker_feedback: feedback } : {}),
         };
         if (feedback.length) cur.set('candidate', pending);
-        const res = await api.suggest(this.meta(last.id, last.version), input, ctl.signal);
+        const res = await this.api.suggest(this.meta(last.id, last.version), input, ctl.signal);
         if (this.isStale(epoch, last)) return { kind: 'stale' };
         if (res.state === 'NONE' || !res.candidate) return res.reason === 'REJECTED_BEFORE' || res.reason === 'DUPLICATE' ? { kind: 'repeat' } : { kind: 'none' };
         store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
@@ -542,6 +605,7 @@ export class NotebookEngine {
         const active = cur.activeLineId ? findLine(this.nb, cur.activeLineId) : undefined;
         const writing = active && active.state === 'DRAFT' && active.ink.length > 0;
         cur.set('candidate', { ...result.candidate, state: writing ? 'HELD' : 'READY' });
+        if (writing) this.armHeldTimer();
         return;
       }
       release();
@@ -549,10 +613,11 @@ export class NotebookEngine {
       if (manual && result.rejected === 0) store.getState().showToast(this.deps.t('toast.noSuggestion'));
     } catch (e) {
       release();
-      if ((e as Error).name === 'AbortError') return;
+      if ((e as Error).name === 'AbortError') return this.discard(pending);
       if (manual) store.getState().showToast(this.deps.t('toast.suggestFailed'), 'error');
       console.warn('[suggest]', e);
     } finally {
+      stopWatching();
       if (!superseded()) {
         this.aborts.delete('suggest');
         store.getState().set('suggesting', false);
@@ -560,10 +625,37 @@ export class NotebookEngine {
     }
   }
 
-  private isStale(epoch: number, basedOn: Line): boolean {
+  /** The slot of a suggestion request made now: what its result has to carry to be applied later. */
+  private slotFor(requestId: string, basedOn: Line, ctxLines: readonly Line[]): SlotMeta {
     const s = store.getState();
-    const cur = s.notebook ? findLine(s.notebook, basedOn.id) : undefined;
-    return this.disposed || s.epoch !== epoch || !cur || cur.version !== basedOn.version;
+    const nb = s.notebook!;
+    return {
+      request_id: requestId,
+      notebook_id: nb.id,
+      client_session_id: this.sessionId,
+      client_epoch: s.epoch,
+      line_id: basedOn.id,
+      line_version: basedOn.version,
+      context_fingerprint: suggestFingerprint({ notebookId: nb.id, problem: (nb as { problem?: unknown }).problem ?? null, lines: ctxLines, sessionId: this.sessionId, epoch: s.epoch }),
+    };
+  }
+
+  /** A result is stale unless it carries all seven fields of what the active request would carry now. */
+  private isStale(slotOrEpoch: SlotMeta | number, basedOn?: Line): boolean {
+    if (typeof slotOrEpoch === 'number') {
+      return this.disposed || !basedOn || !findLine(this.nb, basedOn.id) || store.getState().epoch !== slotOrEpoch;
+    }
+    const slot = slotOrEpoch;
+    const nb = store.getState().notebook;
+    const cur = nb ? findLine(nb, slot.line_id!) : undefined;
+    if (this.disposed || !nb || !cur || this.suggestSlot?.request_id !== slot.request_id) return true;
+    return !matchesSlot(this.slotFor(slot.request_id, cur, [...contextLinesFor(nb, cur.id), cur]), slot);
+  }
+
+  /** Drop a candidate that this request created, unless a newer request has already replaced it. */
+  private discard(pending: Candidate, draftId?: string) {
+    const c = store.getState().candidate;
+    if (c && (c.id === pending.id || c.id === draftId)) store.getState().set('candidate', null);
   }
 
   private async verifyCandidate(
@@ -610,8 +702,10 @@ export class NotebookEngine {
 
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
     const s = store.getState();
+    const latex = segmentsLatex(segments);
     s.set('rejectedHashes', [...s.rejectedHashes, draft.content_hash]);
-    s.set('rejectedLatex', [...s.rejectedLatex, segmentsLatex(segments)]);
+    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
+    if (pending.rejectKey) s.set('rejections', addRejection(s.rejections, pending.rejectKey, draft.content_hash, latex));
     s.set('rejection', { id: draft.id, segments, proof, basedOnLineId: pending.basedOnLineId });
   }
 
@@ -689,10 +783,12 @@ export class NotebookEngine {
     const c = s.candidate;
     if (!c) return;
     const latex = c.lines.map((l) => l.segments.map((seg) => (seg.type === 'math' ? seg.latex : seg.text)).join(' ')).join(' ; ');
-    s.set('rejectedHashes', [...s.rejectedHashes, c.contentHash]);
-    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
+    // a candidate that is still being generated or checked was never shown: dismissing it rejects nothing
+    if (isRecordable(c.state)) s.set('rejections', addRejection(s.rejections, c.rejectKey, c.contentHash, latex));
     s.set('candidate', null);
     this.abortSlot('suggest');
+    // the request is over: a check that is still running must not bring the rejected candidate back
+    this.suggestSlot = null;
   }
 
   // ------------------------------------------------------------------ recovery
@@ -788,7 +884,7 @@ export class NotebookEngine {
   /** Lazy OCR for a resource page without a text layer (spec §15.2: only when opened). */
   async ocrPage(image: { mime: 'image/jpeg' | 'image/png'; data: string }): Promise<string | null> {
     try {
-      const res = await api.ocrPage(this.meta(), { image, ui_lang: this.deps.lang() });
+      const res = await this.api.ocrPage(this.meta(), { image, ui_lang: this.deps.lang() });
       return res.text;
     } catch (e) {
       console.warn('[ocr]', e);
