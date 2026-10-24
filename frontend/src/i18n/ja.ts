@@ -160,6 +160,16 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'line.ai': 'AI',
   'line.given': '前提',
   'line.unverifiedAdoption': '未検証のまま採用',
+  'line.plot': 'グラフ',
+
+  'plot.title': 'グラフ描画',
+  'plot.action': 'グラフ',
+  'plot.domain': '表示範囲 (x)',
+  'plot.params': 'パラメータ',
+  'plot.reset': '初期化',
+  'plot.savePng': 'PNG保存',
+  'plot.noLatex': '数式がありません',
+  'plot.unsupported': '描画できません',
 
   'status.verified': '検証済み',
   'status.local': '局所的に整合・{n}行目は未検証',

@@ -158,6 +158,16 @@ export const en = {
   'line.ai': 'AI',
   'line.given': 'Given',
   'line.unverifiedAdoption': 'adopted unverified',
+  'line.plot': 'Plot',
+
+  'plot.title': 'Graph Plot',
+  'plot.action': 'Plot',
+  'plot.domain': 'Domain (x)',
+  'plot.params': 'Parameters',
+  'plot.reset': 'Reset',
+  'plot.savePng': 'Save PNG',
+  'plot.noLatex': 'No formula found',
+  'plot.unsupported': 'Cannot plot this expression',
 
   'status.verified': 'Verified',
   'status.local': 'Local step · unverified line {n}',
