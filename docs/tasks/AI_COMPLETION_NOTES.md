@@ -176,12 +176,12 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 1. 前提を **ふつうの行**として、確認する行の **上**に手書きして確定する（例：行 `L > 0`、`A > 0`）。`x > 0`、`x ≥ 0`、`x ≠ 0`、`x ∈ ℝ`、`lo ≤ x ≤ hi`、カンマ区切りの組み合わせは、**given の印が無くても**形から前提として扱われる（`assumptions_of`）。
 2. 印を付けたいときは、行の状態バッジを押して詳細シートを開き、「Mark as given（given にする）」を押す（`explanation-sheet.tsx` → `engine.setGiven`、role が `premise` になる）。given 行は検証されず（状態「Given」）、後ろの行が使える。「A²L/2 = 1」のような **方程式を問題文として与える**ときは、この印が要る（印が無いと、その行自体も検証される）。
 3. 前提の行が **対象の行より下**にあると効かない（文脈は対象より上の、確定した有効な行だけ。`contextLinesFor`）。
-4. 前提の行を足したり直したりしたあとは、その行以降が再検証される（`setGiven` は `recheckStale`。前提の行を追加した場合は `syncDeclarations` が検出すると `recheckStale`）。
+4. 再検証：`setGiven`（given の印の付け外し）は、その行以降を `recheckStale` で検証し直す。`syncDeclarations` が見るのは **関数宣言**（`Ψ(x, t)`）だけで、`L > 0` のような前提の行を後から足しても、すでに確定した行は自動では検証し直されない（確認していない部分。上の行に前提を足すときは、後ろの行を書き直すか、given の印を付け外しして再検証させる必要があるかもしれない）。
 
 **候補の検証（`verifyCandidate`）は前提を使っているか：使っている**
 - 右辺補完（COMPLETE_RHS）：`payloadForCandidate(nb, contextLinesFor(nb, basedOn.id), target, 'identity')`。**未完成の行の上の、確定した有効な行すべて**（given 行、前提の行、関数宣言の行を含む）が CAS に渡る。CAS 側は `_declare` で前提の行を集めて `env.assumptions` に入れ、given 行の裸の記号は無視する（`build_context`）。
 - 次の一手（NEXT_STEP）：`chain`（上の行＋これまでの候補の行）を渡す。同じく前提を含む。
-- 採用後：`adopt` は候補の `verified` をそのまま行に付ける（再検証しない。前提の行が増えて `syncDeclarations` が検出したときだけ `recheckStale`）。つまり **採用後の行の判定は、候補を検証した時点の判定のまま**。候補の検証と採用後の検証が別の文脈になることは無い（採用時に入力ハッシュを照合し、変わっていれば stale として捨てる）。
+- 採用後：`adopt` は候補の `verified` をそのまま行に付ける（再検証しない。関数宣言が変わって `syncDeclarations` が検出したときだけ `recheckStale`）。つまり **採用後の行の判定は、候補を検証した時点の判定のまま**。候補の検証と採用後の検証が別の文脈になることは無い（採用時に入力ハッシュを照合し、変わっていれば stale として捨てる）。
 
 **live の行2が「未検証」だった理由（推測）**：行1「A²L/2 = 1」だけでは A の符号が決まらない。CAS は `A = √(2/L)` を、方程式 `A²L/2 = 1` の解の一部（`A = ±√(2/L)` の片方）と見て、`SUBSET_OF_SOLUTIONS`（「他の解を除いていない」）で `unknown` にする（`checks.py`）。`A > 0`（と `L > 0`）の前提の行が無いと、この「一部だけ」が解消しない。**前提の行（`A > 0`、`L > 0`）を行1の上に足して再度補完すれば、`ok` になる可能性が高い**が、CAS の実測はしていない。次に確かめること：ブラウザで前提の行を足して、同じ補完を試す（ユーザー）。
 
