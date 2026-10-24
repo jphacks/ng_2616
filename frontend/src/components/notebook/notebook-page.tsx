@@ -24,16 +24,26 @@ export function NotebookPage() {
 
   if (!nb) return null;
   const lastDraftId = [...nb.lines].reverse().find((l) => l.state === 'DRAFT')?.id;
-  let n = 0;
+  const numbers = lineNumbers(nb.lines);
   return (
     <div ref={scroller} data-scroll-container="1" className="scrollbar-thin h-full overflow-y-auto overscroll-contain pb-40">
       <ProblemCard problem={nb.problem} />
       <div className="mx-4 mt-3 rounded-2xl bg-sheet shadow-card">
-        {nb.lines.map((line) => {
-          if (line.state !== 'SUPERSEDED') n += 1;
-          return <LineRow key={line.id} line={line} nb={nb} number={n} isLastDraft={line.id === lastDraftId} />;
-        })}
+        {nb.lines.map((line, i) => (
+          <LineRow key={line.id} line={line} nb={nb} number={numbers[i]!} isLastDraft={line.id === lastDraftId} />
+        ))}
       </div>
     </div>
   );
+}
+
+/** Visible numbering: superseded lines keep the number of the line before them. */
+function lineNumbers(lines: readonly { state: string }[]): number[] {
+  const out: number[] = [];
+  let n = 0;
+  for (const l of lines) {
+    if (l.state !== 'SUPERSEDED') n += 1;
+    out.push(n);
+  }
+  return out;
 }
