@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { DEV_BYPASS, type SessionUser } from '@/core/auth/browser';
-import { signOut, signOutClearsDevice } from '@/core/auth/session';
+import { signOut, signOutClearsDevice, unsyncedCount } from '@/core/auth/session';
 import { isCloudUnavailable } from '@/core/persistence/repo';
 import { useLocale, useT } from '@/i18n';
 import { ConfirmDialog } from '@/ui/dialog';
@@ -21,6 +21,8 @@ export function AccountMenu({ user, unsaved = false, canLeave }: { user: Session
   const router = useRouter();
   const { locale, setLocale } = useLocale();
   const [confirming, setConfirming] = useState(false);
+  // outbox entries and resources this device has not sent yet (signing out tries to send them first)
+  const [unsent, setUnsent] = useState(0);
   const local = DEV_BYPASS || isCloudUnavailable();
 
   return (
@@ -64,7 +66,10 @@ export function AccountMenu({ user, unsaved = false, canLeave }: { user: Session
             <MenuRadioItem value="ja" closeOnClick>{t('lang.ja')}</MenuRadioItem>
           </Menu.RadioGroup>
           <MenuSeparator />
-          <MenuItem danger icon={<LogOut size={18} />} onClick={() => setConfirming(true)}>
+          <MenuItem danger icon={<LogOut size={18} />} onClick={() => {
+            setConfirming(true);
+            void unsyncedCount(user.id).then(setUnsent, () => setUnsent(0));
+          }}>
             {t('account.signOut')}
           </MenuItem>
         </MenuPopup>
@@ -75,7 +80,7 @@ export function AccountMenu({ user, unsaved = false, canLeave }: { user: Session
         title={t('account.signOutTitle')}
         description={
           <>
-            {unsaved && <span className="mb-2 block font-medium text-wrong-strong">{t('account.signOutUnsaved')}</span>}
+            {(unsaved || unsent > 0) && <span className="mb-2 block font-medium text-wrong-strong">{t('sync.signOutUnsent')}</span>}
             {t(signOutClearsDevice() ? 'account.signOutClears' : 'account.signOutKeeps')}
           </>
         }
