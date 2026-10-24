@@ -4,6 +4,7 @@ import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Download, Info, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button } from '@/ui/button';
@@ -117,19 +118,20 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
     return generatePlotData(analysis.targetExpr, analysis.xVar, params, range, 400);
   }, [analysis, params, range]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title={
-        <span className="flex items-center gap-2">
-          <span>{t('plot.title')}</span>
-        </span>
-      }
-    >
-      <div className="space-y-4">
+  return createPortal(
+    <div className="fixed inset-0 z-overlay">
+      <Sheet
+        open={open}
+        onClose={onClose}
+        title={
+          <span className="flex items-center gap-2">
+            <span>{t('plot.title')}</span>
+          </span>
+        }
+      >
+        <div className="space-y-4">
         {/* Expression preview */}
         <div className="rounded-2xl bg-paper px-4 py-3 text-center shadow-card">
           {analysis.latex ? (
@@ -252,5 +254,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
         )}
       </div>
     </Sheet>
+    </div>,
+    document.body,
   );
 }

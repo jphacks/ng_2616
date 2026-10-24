@@ -109,7 +109,7 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
   );
 }
 
-function DetailBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
+function DetailBody({ line: _line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
   const t = useT();
   const src = proof.segment_results.find((r) => r.source_line_id)?.source_line_id;
   const srcN = src ? lineNumber(nb, src) : null;
