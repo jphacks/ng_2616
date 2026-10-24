@@ -813,7 +813,15 @@ export class NotebookEngine {
       'START_REVISION',
       (snap) => {
         const lines = [...snap.lines];
-        lines.splice(lines.findIndex((l) => l.id === source.id) + 1, 0, draft);
+        const srcIdx = lines.findIndex((l) => l.id === source.id);
+        const nextLine = lines[srcIdx + 1];
+        // If an unused empty draft line is sitting right below the source, replace it
+        // so we don't have two empty draft lines stacked on top of each other
+        if (nextLine && nextLine.state === 'DRAFT' && nextLine.ink.length === 0 && !nextLine.revision_of) {
+          lines.splice(srcIdx + 1, 1, draft);
+        } else {
+          lines.splice(srcIdx + 1, 0, draft);
+        }
         const recoveries = snap.recoveries.some((r) => r.root_line_id === root)
           ? snap.recoveries.map((r) => (r.root_line_id === root ? { ...r, phase: 'REVISING' as const, opened_at: { ...r.opened_at, revise: Date.now() } } : r))
           : [...snap.recoveries, { root_line_id: root, current_line_id: source.id, phase: 'REVISING' as const, opened_at: { revise: Date.now() } }];

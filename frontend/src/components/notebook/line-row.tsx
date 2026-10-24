@@ -99,6 +99,11 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       id={line.id}
       actions={swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
+      onPointerDown={() => {
+        if (line.state === 'DRAFT' && !active) {
+          engine.activate(line.id);
+        }
+      }}
     >
       <Gutter n={number} line={line} />
       <div className="min-w-0 flex-1 py-2">

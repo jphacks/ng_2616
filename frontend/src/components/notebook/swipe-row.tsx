@@ -29,7 +29,19 @@ const TONE: Record<NonNullable<SwipeAction['tone']>, string> = {
  * already shows, as in Mail. The shortcuts are a gesture convenience, so they stay out of the
  * accessibility tree and tab order; the row's own buttons remain the accessible path.
  */
-export function SwipeRow({ id, actions, className, children }: { id: string; actions: SwipeAction[]; className?: string; children: ReactNode }) {
+export function SwipeRow({
+  id,
+  actions,
+  className,
+  onPointerDown,
+  children,
+}: {
+  id: string;
+  actions: SwipeAction[];
+  className?: string;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  children: ReactNode;
+}) {
   const x = useMotionValue(0);
   const openId = useOpenRow((s) => s.id);
   const setOpen = useOpenRow((s) => s.setOpen);
@@ -54,14 +66,14 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
 
   if (actions.length === 0) {
     return (
-      <div data-line-id={id} className={className}>
+      <div data-line-id={id} className={className} onPointerDown={onPointerDown}>
         {children}
       </div>
     );
   }
 
   return (
-    <div ref={wrap} data-line-id={id} className="relative overflow-hidden">
+    <div ref={wrap} data-line-id={id} className="relative overflow-hidden" onPointerDown={onPointerDown}>
       <div aria-hidden className="absolute inset-y-0 right-0 flex" style={{ width }}>
         {actions.map((a) => (
           <button
