@@ -118,7 +118,8 @@ export const CapabilitiesSchema = z.object({
   schema_version: z.string(),
   build_id: z.string(),
   features: z.record(FeatureSchema, z.boolean()),
-  cas_runtime: z.literal('pyodide'),
+  // pyodide: the browser's Web Worker; azure: cas-worker on the VM through the gateway (ADR 0009)
+  cas_runtime: z.enum(['pyodide', 'azure']),
   ai_execution: z.enum(['direct', 'relay']),
   llm: z.object({ provider: z.string(), configured: z.boolean(), mock: z.boolean() }),
   lean: z.object({ available: z.boolean(), toolchain: z.string().optional(), mathlib: z.string().optional() }),

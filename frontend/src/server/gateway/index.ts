@@ -74,7 +74,7 @@ function capabilities(): Capabilities {
     schema_version: SCHEMA_VERSION,
     build_id: env.buildId,
     features: enabledFeatures(),
-    cas_runtime: 'pyodide',
+    cas_runtime: env.NEXT_PUBLIC_CAS_RUNTIME,
     ai_execution: env.AI_EXECUTION,
     llm: status,
     lean: { available: leanConfigured() },

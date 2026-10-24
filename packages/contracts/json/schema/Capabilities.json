@@ -39,7 +39,10 @@
     },
     "cas_runtime": {
       "type": "string",
-      "const": "pyodide"
+      "enum": [
+        "pyodide",
+        "azure"
+      ]
     },
     "ai_execution": {
       "type": "string",
