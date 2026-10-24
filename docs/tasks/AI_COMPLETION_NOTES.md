@@ -19,7 +19,7 @@
 - ⑤・共有：`package.json`、Playwright 設定、mock provider、`packages/contracts`、`client.ts`、gateway の共通処理
 - 触らない関数でないと実現できない項目は飛ばし、「依頼事項」に書く。
 
-## 現在の状態（段階2 完了時点）
+## 現在の状態（段階3 完了時点）
 
 ### 構成
 
@@ -34,12 +34,12 @@
 
 | 対象 | 結果 | 日時 | 環境（コミット） |
 | --- | --- | --- | --- |
-| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 147 件：146 通過／0 失敗／1 skip | 2026-10-24 | ローカル、`9ba3c49`（main 取り込み済み） |
+| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 150 件：149 通過／0 失敗／1 skip | 2026-10-24 | ローカル、`b671464`（main は最新で、取り込むものは無かった） |
 | `tsc --noEmit`（frontend） | エラー 0 | 2026-10-24 | 同上 |
 | `eslint`（src、tests） | エラー 0（警告 7 件は今回触っていない既存ファイル） | 2026-10-24 | 同上 |
-| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.4 分） | 2026-10-24 | mock＋実 CAS、ローカル、`9ba3c49` |
+| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分）。1 回目は 9 通過／1 失敗（下の S-04 の注意を参照） | 2026-10-24 | mock＋実 CAS、ローカル、`b671464` ＋ `checking.spec.ts` の 1 箇所の修正 |
 
-`tests/unit/suggest/` の内訳（件数／通過／skip）：candidate 11／11／0、pure 37／37／0、model 10／10／0、service 13／13／0、client 9／9／0、epoch 5／5／0、engine-suggest 36／36／0、engine-held 8／8／0、engine-adopt 14／14／0、pending-fixes 1／0／1（`GhostLine` の描画テスト I2。jsdom と React Testing Library が無い）。`history.test.ts` は 3／3／0。
+`tests/unit/suggest/` の内訳（件数／通過／skip）：candidate 11／11／0、pure 37／37／0、model 10／10／0、service 16／16／0、client 9／9／0、epoch 5／5／0、engine-suggest 36／36／0、engine-held 8／8／0、engine-adopt 14／14／0、pending-fixes 1／0／1（`GhostLine` の描画テスト I2。jsdom と React Testing Library が無い）。`history.test.ts` は 3／3／0。
 過去の試験記録（段階1、コミット `0548c91`）は末尾の「履歴」にある。
 
 ### 実行コマンド
@@ -60,7 +60,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 ### push 前の確認結果
 
 - **main の取り込み**：段階2の前後とも取り込んでいなかった（`Riku_feature` は `f691e79`＝PR #38 のマージ地点から分岐したまま）。push 前に `origin/main` の `b1622c5`（`fix(frontend): eliminate ink drawing latency…`、変更は `ink-canvas.tsx` のみ、作者は他の担当）を取り込んだ。**衝突なし**。取り込み後に単体テスト・`tsc`・E2E を流し直して上の表に反映した。
-- **`canSuggest` と補完ボタン**：`toolbar.tsx` のボタンは `disabled` を持たず、`canSuggest` も使っていない（`onClick` は `engine.requestSuggestion(true)` を呼ぶだけ）。`canSuggest` を呼ぶのは `scheduleSuggestion`（自動起動）だけ。したがって **R27 の案内（pending／cannot-continue／busy／HELD）は表示される**。ボタンが無効化される変更が `toolbar.tsx` に入った場合は、案内が出なくなるので、UI 担当に「補完ボタンは `disabled` にしない」ことを伝える（依頼事項に記載）。
+- **`canSuggest` と補完ボタン**（段階2 時点の確認。**現在は下の S-04 で変わった**）：`toolbar.tsx` のボタンは `disabled` を持たず、`canSuggest` も使っていない（`onClick` は `engine.requestSuggestion(true)` を呼ぶだけ）。`canSuggest` を呼ぶのは `scheduleSuggestion`（自動起動）だけ。したがって R27 の案内（pending／cannot-continue／busy／HELD）は表示される。
 - **`context_fingerprint` を `suggestFingerprint` に変えた影響**：この値を読むコードは、`packages/contracts` のスキーマ（`MetaSchema`、`HashSchema` の形式チェックのみ）と `engine.ts` だけ。gateway は値を読まず（検証は形式のみ）、FastAPI は未実装（`/suggest` は 501）、`recognize`／`ocrPage` は従来どおり `contextFingerprint`（`cas/payload.ts`）を送る。**サーバー側・ほかの機能への影響なし**。ただし将来 `Job.meta` を照合する側（`client.ts`、⑤）は、補完の `context_fingerprint` が `suggestFingerprint` であることを知っておく必要がある（依頼事項に記載）。
 
 ### ③が決めたこと／決めること
@@ -117,8 +117,22 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - [ ] **test script**：`frontend/package.json` の `test` を `tests/unit/**/*.test.ts` に広げ、`--conditions=react-server` を付ける（付けないと `server-only` で失敗する）。
 - [ ] **MT-10／GT-7 の読み替え**：「ok のみ採用」を ADR 0003 に合わせて「wrong は採用不可・非表示、unknown は二重確認でのみ採用、ok／none は 1 タップ」と読むことの承認（QA）。
 - [ ] **I2 の描画テスト基盤**：jsdom と React Testing Library の導入（`GhostLine` のラベルの描画テスト用）。
-- [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンを `disabled` にしない（R27 の案内が出なくなる）。
+- [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンは、wrong の行があるとき **灰色（`aria-disabled`）にするが `disabled` にはしない**（押すと理由を案内する。R27）。③が実装済み（`b671464`）。今後 `disabled` に変えないこと（案内が出なくなる）。
 - [ ] **live の E2E**：実 LLM での通しは未実施。実施者と環境。
+
+## S-04：wrong の行があるあいだのロック（完了）
+
+wrong の行が残っているあいだは補完しない（v2.0 §11、P-06）。ブラウザとサーバーの二重のガード。コミット `b671464`。
+
+| 場所 | 内容 |
+| --- | --- |
+| ブラウザ（既存） | `suggestBlockerOf` が `wrong`（有効行の wrong、または `recoveries` の `UNRESOLVED`）を返し、`requestSuggestion` は何も送らず案内（`toast.fixWrongFirst`）を出す。単体テスト G1 |
+| サーバー（新規） | `server/ai/direct/index.ts` の `suggest`：入力の `context.lines` に `status: 'wrong'` の行があれば、モデルもデモ台本も呼ばずに `NONE`（reason `UNRESOLVED_WRONG`、`mock` はプロバイダーのまま）を返す。BRIDGE の拒否の直後で判定。単体テスト B7（3 件：モード 2 種で呼び出し 0 回、mock／デモ台本でも同じ、wrong 以外・status なしでは止まらない） |
+| 見た目（新規） | `toolbar.tsx` の補完ボタンだけ、`suggestBlockerOf(…) === 'wrong'` のとき `aria-disabled="true"` と灰色（`bg-none-soft text-none`）にする。クリックは受け付け、今までどおり理由を案内する。他のボタンは変えていない |
+
+**E2E への影響（`checking.spec.ts` を 1 箇所修正）**：Playwright は `aria-disabled="true"` の要素を「有効でない」とみなして `click()` を待ち続ける。既存の E2E「wrong step: category first, …」が wrong のときに補完ボタンを押して案内（「Revise the line marked wrong」）を確認していたため、最初の実行で 5 分のタイムアウトになった（9 通過／1 失敗）。実ブラウザでは押せる（押せることが仕様）ので、テストを `expect(suggest).toHaveAttribute('aria-disabled', 'true')` ＋ `click({ force: true })` に直した。他のテストは変えていない。
+
+注意：サーバーが見る `status` はクライアントが送った値（v1.9 のような cache 照合はできない構成。段階0 の Q6）。ブラウザのガードを迂回した要求への「二重の保険」であり、改ざん対策ではない。
 
 ## ①のレビューが必要な変更
 
@@ -159,7 +173,15 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 **変えていない動き**：消しゴム・行クリアで下書きが空になったときの即時 READY（`maybeReleaseHeld`）、確定・Undo などでの候補破棄、`scheduleSuggestion` の 1.2 秒（`SUGGEST_IDLE_MS`、別のタイマー）、筆跡の保存と履歴。
 
-### 4. 同じ作業で直した③側の不具合 — `d4ffffa`
+### 4. `toolbar.tsx` の補完ボタンの見た目 — `b671464`
+
+①の関数ではないが共有の画面部品。補完ボタン（`<button>` 1 つ）に `aria-disabled` と、wrong のときだけの灰色のクラスを足した。`onClick`、他のボタン（ペン・消しゴム・Undo・Redo・新しい行）、レイアウトは変えていない。
+
+### 5. E2E の修正 — 本 PR 内
+
+`tests/e2e/checking.spec.ts` の 1 テスト（補完ロックの確認）で、グレー表示のボタンを `click({ force: true })` で押すように変更した（上の S-04 の節を参照）。
+
+### 6. 同じ作業で直した③側の不具合 — `d4ffffa`
 
 検証中に Esc で却下しても、CAS の検証が終わると却下した候補が再表示された（段階2より前からの不具合。単体テスト G9 で見つかった）。`reject()` で要求のスロットを無効にして防いだ。③の関数のみ。
 
@@ -169,7 +191,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 ## 段階2の記録：③担当としての補完まわり修正（a〜f）
 
-役割分担（上の「触ってよい／触らない」）が決まったあとの作業。項目ごとに別コミット。**push はしていない。**
+役割分担（上の「触ってよい／触らない」）が決まったあとの作業。項目ごとに別コミット。（当時の記述：この時点では push していなかった。その後、段階3 の途中で `Riku_feature` に push 済み。）
 
 ### コミット（古い順）
 

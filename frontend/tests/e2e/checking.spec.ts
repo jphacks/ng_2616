@@ -41,8 +41,11 @@ test('wrong step: category first, then evidence, hints, revision and recovery', 
   await writeAndConfirm(page);
   await expect(statusOf(page, 1)).toHaveAttribute('title', 'Constant term');
 
-  // completion is locked while a wrong line is unresolved
-  await page.getByRole('button', { name: /Suggest next step/ }).click();
+  // completion is locked while a wrong line is unresolved: the button is greyed (aria-disabled) but still takes the
+  // press and explains why; Playwright treats aria-disabled as "not enabled", so the click has to be forced
+  const suggest = page.getByRole('button', { name: /Suggest next step/ });
+  await expect(suggest).toHaveAttribute('aria-disabled', 'true');
+  await suggest.click({ force: true });
   await expect(page.getByText('Revise the line marked wrong')).toBeVisible();
 
   await statusOf(page, 1).click();
