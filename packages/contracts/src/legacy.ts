@@ -1,7 +1,8 @@
 /**
  * Snapshots written before v2.2 carry a problem card. Opening one turns the card into given lines
- * at the top of the page (definitions stay definitions), in the card's order, so nothing a checked
- * line relied on is lost. The new lines have no proof yet: the notebook checks them when it opens.
+ * at the top of the page, laid out like the templates: the statement, each condition and
+ * definition (definitions stay definitions) on its own line, then the functions on one line and
+ * the assumptions on one more, so nothing a checked line relied on is lost. The new lines have no proof yet: the notebook checks them when it opens.
  */
 import type { MathJSON } from './ir/ops';
 import { printLatex } from './ir/print';
@@ -46,7 +47,13 @@ function assumptionExpr(a: LegacyAssumption): MathJSON | null {
   }
 }
 
-/** Rewrites a pre-v2.2 snapshot (one with a `problem`) into the current shape; anything else passes through. */
+/** A line holds at most this many formulas (as the recognizer's wire format does). */
+const PER_LINE = 8;
+
+/**
+ * Rewrites a pre-v2.2 snapshot (one with a `problem`) into the current shape. Anything else,
+ * including a notebook converted earlier, passes through unchanged, so nothing converts twice.
+ */
 export function migrateNotebook(raw: unknown, version: string): unknown {
   if (!raw || typeof raw !== 'object' || !('problem' in raw)) return raw;
   const { problem, ...rest } = raw as { problem?: LegacyProblem; lines?: unknown };
@@ -63,14 +70,15 @@ export function migrateNotebook(raw: unknown, version: string): unknown {
     given.push({ id: `given-${n}`, version: 1, source: pdf ? 'pdf' : 'user', role, state: 'SETTLED', ink: [], segments,
       ...(pdf ? { document_origin: { name: origin.name, page: origin.page ?? 1, has_unreadable: false }, extensions: { pdf_question: { label: origin.question_label, transcription: origin.transcription, corrected: origin.corrected, mock: origin.mock } } } : {}) });
   };
-  const math = (expr: MathJSON) => [{ type: 'math', expr, notation: 'plain', latex: printLatex(expr) }];
+  const math = (expr: MathJSON) => ({ type: 'math', expr, notation: 'plain', latex: printLatex(expr) });
+  // functions share a line, and so do the assumptions, as in the templates
+  const compact = (exprs: MathJSON[]) => {
+    for (let i = 0; i < exprs.length; i += PER_LINE) line('premise', exprs.slice(i, i + PER_LINE).map(math));
+  };
   if (Array.isArray(p.statement) && p.statement.length) line('premise', p.statement);
-  for (const c of p.conditions ?? []) line('premise', math(c));
-  for (const d of p.definitions ?? []) line('definition', math(d));
-  for (const a of p.assumptions ?? []) {
-    const e = assumptionExpr(a);
-    if (e !== null) line('premise', math(e));
-  }
-  for (const f of p.functions ?? []) if (f.args.length) line('premise', math(['Apply', f.name, ...f.args]));
+  for (const c of p.conditions ?? []) line('premise', [math(c)]);
+  for (const d of p.definitions ?? []) line('definition', [math(d)]);
+  compact((p.functions ?? []).filter((f) => f.args.length).map((f): MathJSON => ['Apply', f.name, ...f.args]));
+  compact((p.assumptions ?? []).map(assumptionExpr).filter((e): e is MathJSON => e !== null));
   return { ...rest, schema_version: version, lines: [...given, ...lines] };
 }

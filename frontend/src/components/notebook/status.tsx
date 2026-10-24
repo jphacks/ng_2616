@@ -30,6 +30,7 @@ const NONE_LABEL: Record<string, string> = {
   PREMISE: 'status.premise',
   ASSUMPTION: 'status.assumption',
   FUNCTION: 'status.function',
+  DECLARATION: 'status.declaration',
   TEXT_ONLY: 'status.text',
 };
 
@@ -70,6 +71,7 @@ export function StatusBadge({ line, ancestor, onClick, compact }: { line: Line; 
       onClick={onClick}
       className={clsx('inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full px-3 text-left text-sm font-medium transition-opacity hover:opacity-85', TONE_CLASS[tone])}
       title={detail ? `${text} · ${detail}` : text}
+      data-status={tone}
     >
       <Icon size={16} className="shrink-0" aria-hidden />
       <span className={clsx('truncate', compact && 'max-w-24')}>{text}</span>

@@ -6,8 +6,8 @@ import { shortId } from '@/core/ids';
 import { scratchTargets } from '@/core/ink/scratch';
 import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
 import { INK_WEIGHTS, useDevicePrefs } from '@/core/prefs/device';
-import type { Tool } from '@/core/store/notebook-store';
 import { tokenColor } from '@/ui/tokens';
+import type { Tool } from '@/core/store/notebook-store';
 import { fingersDown, useSecondFinger } from './gestures';
 import { usePageZoom } from './zoom';
 
@@ -18,13 +18,11 @@ const ERASER_RADIUS = 12;
 const MAX_BACKING_SCALE = 3;
 const INK_ALPHA = { erasing: 0.18, dim: 0.55, hover: 0.32 } as const;
 
-// in auto mode, once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
 let penSeen = false;
 const markPenSeen = () => {
   penSeen = true;
 };
 
-/** Height a line needs for its ink (rows grow as you write, spec §8.1). */
 export function inkHeight(strokes: readonly Stroke[]): number {
   const b = strokesBounds(strokes);
   return Math.min(MAX_HEIGHT, Math.max(LINE_HEIGHT, b ? b.maxY + GROW_MARGIN : LINE_HEIGHT));
@@ -50,31 +48,31 @@ interface Props {
 
 interface LiveStroke {
   id: string;
+  pointerId: number;
+  touch: boolean;
   points: StrokePoint[];
   t0: number;
-  touch: boolean;
 }
 
-/**
- * Line-local ink surface. Pointer Events with capture, coalesced events and pressure;
- * logical CSS-pixel coordinates (spec §8.1). Buttons live outside the canvas.
- */
 export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown, onScratchOut }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const backingCanvas = useRef<HTMLCanvasElement | null>(null);
+  const backingDirty = useRef(true);
+
+  // Active stroke currently being drawn
   const activeStrokes = useRef<Map<number, LiveStroke>>(new Map());
-  const erasing = useRef<Set<string> | null>(null);
   const erasingPointer = useRef<number | null>(null);
   const erasingByTouch = useRef(false);
+  const erasing = useRef<Set<string> | null>(null);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
-  const frame = useRef(0);
   const rectRef = useRef<DOMRect | null>(null);
   const hover = useRef<{ x: number; y: number } | null>(null);
+  const scheduled = useRef(false);
+
   const inkSize = INK_WEIGHTS[useDevicePrefs((s) => s.inkWeight)];
   const zoom = usePageZoom((s) => s.settled);
-  // every draw reads the latest strokes from strokesRef.
-  // pendingStrokesRef holds optimistically added strokes that React has not yet passed down in props.strokes.
-  // This prevents fast consecutive strokes from being wiped out by an in-flight React re-render.
+
   const strokesRef = useRef(strokes);
   const pendingStrokesRef = useRef<Stroke[]>([]);
   const [width, setWidth] = useState(0);
@@ -90,42 +88,90 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     heightRef.current = height;
   });
 
-  useEffect(() => setHeight((h) => Math.max(inkHeight(strokes), activeStrokes.current.size > 0 ? h : 0)), [strokes]);
+  useEffect(() => {
+    backingDirty.current = true;
+    setHeight((h) => Math.max(inkHeight(strokes), activeStrokes.current.size ? h : 0));
+  }, [strokes]);
 
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e!.contentRect.width)));
+    const ro = new ResizeObserver(([e]) => {
+      setWidth(Math.floor(e!.contentRect.width));
+      rectRef.current = null;
+      backingDirty.current = true;
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  const updateBacking = useCallback((w: number, h: number, dpr: number) => {
+    if (!backingCanvas.current) {
+      backingCanvas.current = document.createElement('canvas');
+    }
+    const bc = backingCanvas.current;
+    const bw = Math.round(w * dpr);
+    const bh = Math.round(h * dpr);
+    if (bc.width !== bw || bc.height !== bh) {
+      bc.width = bw;
+      bc.height = bh;
+    }
+    const bctx = bc.getContext('2d')!;
+    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bctx.clearRect(0, 0, w, h);
+
+    const hidden = erasing.current;
+    const list = strokesRef.current;
+    const ink = tokenColor('--color-ink');
+    bctx.fillStyle = ink;
+    bctx.strokeStyle = ink;
+    for (const s of list) {
+      bctx.globalAlpha = hidden?.has(s.id) ? INK_ALPHA.erasing : dim ? INK_ALPHA.dim : 1;
+      drawStroke(bctx, s.points, inkSize, true);
+    }
+    backingDirty.current = false;
+  }, [dim, inkSize]);
 
   const draw = useCallback(() => {
     const c = canvas.current;
     if (!c || width === 0) return;
     const dpr = Math.min(MAX_BACKING_SCALE, (window.devicePixelRatio || 1) * zoom);
-    if (c.width !== Math.round(width * dpr) || c.height !== Math.round(height * dpr)) {
-      c.width = Math.round(width * dpr);
-      c.height = Math.round(height * dpr);
+    const pw = Math.round(width * dpr);
+    const ph = Math.round(height * dpr);
+    if (c.width !== pw || c.height !== ph) {
+      c.width = pw;
+      c.height = ph;
+      backingDirty.current = true;
     }
-    const ctx = c.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-    const hidden = erasing.current;
-    const list = strokesRef.current;
-    const ink = tokenColor('--color-ink');
-    ctx.fillStyle = ink;
-    ctx.strokeStyle = ink;
-    for (const s of list) {
-      ctx.globalAlpha = hidden?.has(s.id) ? INK_ALPHA.erasing : dim ? INK_ALPHA.dim : 1;
-      drawStroke(ctx, s.points, inkSize, true);
+
+    if (backingDirty.current) {
+      updateBacking(width, height, dpr);
     }
-    ctx.globalAlpha = 1;
-    for (const live of activeStrokes.current.values()) {
-      drawStroke(ctx, live.points, inkSize, false);
+
+    const ctx = c.getContext('2d', { desynchronized: true })!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, pw, ph);
+
+    // 1. Draw cached finished strokes in a single GPU blit (0.05ms)
+    if (backingCanvas.current) {
+      ctx.drawImage(backingCanvas.current, 0, 0);
     }
+
+    // 2. Draw live stroke
+    for (const l of activeStrokes.current.values()) {
+      if (!l.points.length) continue;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const ink = tokenColor('--color-ink');
+      ctx.fillStyle = ink;
+      ctx.strokeStyle = ink;
+      ctx.globalAlpha = 1;
+      drawStroke(ctx, l.points, inkSize, false);
+    }
+
+    // 3. Hover preview
     const h = hover.current;
-    if (h && editable && !activeStrokes.current.size && !hidden) {
+    if (h && editable && !activeStrokes.current.size && !erasing.current) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.beginPath();
       ctx.globalAlpha = INK_ALPHA.hover;
       if (tool === 'eraser') {
@@ -138,26 +184,48 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
       ctx.globalAlpha = 1;
     }
-  }, [width, height, dim, inkSize, editable, tool, zoom]);
+  }, [width, height, inkSize, editable, tool, zoom, updateBacking]);
+
+  const drawRef = useRef(draw);
+  useLayoutEffect(() => {
+    drawRef.current = draw;
+  });
+
+  // repaint when the size, zoom, weight or dimming changes: a canvas that is only shown (a failed
+  // line, a line being read) gets its width after mount and has no input to trigger a repaint
+  useLayoutEffect(() => {
+    backingDirty.current = true;
+    draw();
+  }, [draw]);
 
   useLayoutEffect(() => {
     const confirmed = new Set(strokes.map((s) => s.id));
     if (pendingStrokesRef.current.length > 0) {
       pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
     }
-    strokesRef.current = [...strokes, ...pendingStrokesRef.current];
-    draw();
-  }, [strokes, draw]);
+    const map = new Map<string, Stroke>();
+    for (const s of strokes) map.set(s.id, s);
+    for (const s of pendingStrokesRef.current) {
+      if (!map.has(s.id)) map.set(s.id, s);
+    }
+    strokesRef.current = Array.from(map.values());
+    backingDirty.current = true;
+    drawRef.current();
+  }, [strokes]);
 
   const schedule = useCallback(() => {
-    cancelAnimationFrame(frame.current);
-    frame.current = requestAnimationFrame(draw);
-  }, [draw]);
+    if (scheduled.current) return;
+    scheduled.current = true;
+    requestAnimationFrame(() => {
+      scheduled.current = false;
+      drawRef.current();
+    });
+  }, []);
 
-  // A second finger starts a gesture; discard finger ink while retaining any pen stroke.
   useSecondFinger(() => {
     for (const [id, stroke] of activeStrokes.current) if (stroke.touch) activeStrokes.current.delete(id);
     if (erasingByTouch.current) { erasing.current = null; erasingPointer.current = null; }
+    backingDirty.current = true;
     scrolling.current = null;
     rectRef.current = null;
     schedule();
@@ -178,33 +246,72 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     return { x: (e.clientX - rLeft) / scale, y: (e.clientY - rTop) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
   }, []);
 
+  const commitLive = useCallback((pointerId: number) => {
+    const l = activeStrokes.current.get(pointerId);
+    if (!l) return;
+    activeStrokes.current.delete(pointerId);
+
+    if (l.points.length === 0) return;
+
+    // Check dynamic row expansion on pen-up instead of inside high-frequency onMove
+    const maxY = l.points.reduce((max, p) => (p.y > max ? p.y : max), 0);
+    if (maxY > heightRef.current - GROW_MARGIN && heightRef.current < MAX_HEIGHT) {
+      setHeight(Math.min(MAX_HEIGHT, maxY + GROW_MARGIN * 2));
+    }
+
+    const duration = l.points.length > 1 ? l.points[l.points.length - 1]!.t - l.points[0]!.t : 0;
+    // Fast writing (< 250ms) should never be treated as scratch-out gesture
+    const scratched = duration >= 250 && useDevicePrefs.getState().scratchToErase && propsRef.current.onScratchOut
+      ? scratchTargets(l.points, strokesRef.current)
+      : null;
+
+    if (scratched) {
+      const drop = new Set(scratched);
+      pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
+      strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
+      backingDirty.current = true;
+      drawRef.current();
+      propsRef.current.onScratchOut?.(scratched);
+    } else {
+      const stroke = { id: l.id, points: l.points };
+      pendingStrokesRef.current.push(stroke);
+      if (!strokesRef.current.some((s) => s.id === stroke.id)) {
+        strokesRef.current = [...strokesRef.current, stroke];
+      }
+      backingDirty.current = true;
+      drawRef.current();
+      propsRef.current.onStroke?.(stroke);
+    }
+    rectRef.current = null;
+    schedule();
+  }, [schedule]);
+
+  const commitLiveRef = useRef(commitLive);
+  useLayoutEffect(() => {
+    commitLiveRef.current = commitLive;
+  });
+
   const eraseAt = useCallback((e: PointerEvent) => {
     const p = local(e, 0);
     for (const id of strokesHit(strokesRef.current, p.x, p.y, ERASER_RADIUS)) erasing.current?.add(id);
+    backingDirty.current = true;
     schedule();
   }, [local, schedule]);
 
+  // Mount native listeners ONCE. Never unbind/rebind on state or props changes!
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
+    const strokesInFlight = activeStrokes.current;
 
-    const onDown = (e: PointerEvent) => {
-      rectRef.current = c.getBoundingClientRect();
-      if (e.pointerType === 'pen') markPenSeen();
-      if (e.pointerType === 'touch' && fingersDown() > 1) return;
+    const startStroke = (e: PointerEvent) => {
+      // 1. SALVAGE: If rapid strokes occur and the previous stroke was not yet committed, commit it immediately!
+      if (activeStrokes.current.has(e.pointerId)) commitLiveRef.current(e.pointerId);
 
-      const { editable, tool, onActivate, onPenDown } = propsRef.current;
-      const mode = useDevicePrefs.getState().inputMode;
-      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && (mode === 'pen' || (mode === 'auto' && penSeen)));
+      if (!rectRef.current) rectRef.current = c.getBoundingClientRect();
+      const { editable, tool, onPenDown } = propsRef.current;
+      if (!editable || tool === 'view') return;
 
-      if (fingerScroll || !editable) {
-        if (!editable && tool !== 'view') onActivate?.();
-        scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
-        return;
-      }
-
-      // Drawing with pen / stylus / touch: prevent default WebKit gestures immediately!
-      e.preventDefault();
       hover.current = null;
       onPenDown?.();
 
@@ -216,18 +323,49 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       } else {
         const strokeId = shortId('s');
         const p = local(e, e.timeStamp);
-        activeStrokes.current.set(e.pointerId, { id: strokeId, points: [p], t0: e.timeStamp, touch: e.pointerType === 'touch' });
+        activeStrokes.current.set(e.pointerId, { id: strokeId, pointerId: e.pointerId, touch: e.pointerType === 'touch', points: [p], t0: e.timeStamp });
         schedule();
       }
     };
 
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerType === 'pen' && e.buttons === 0 && !activeStrokes.current.has(e.pointerId) && erasingPointer.current !== e.pointerId) {
-        if (e.target === c) { rectRef.current = null; hover.current = local(e, 0); }
-        else hover.current = null;
+    const onDown = (e: PointerEvent) => {
+      const isPen = e.pointerType === 'pen' || (e.pointerType === 'touch' && e.pressure > 0 && e.pressure !== 0.5);
+      if (isPen) markPenSeen();
+      // a second finger is a gesture (undo tap, pinch), never a stroke, whatever pressure it reports
+      if (e.pointerType === 'touch' && fingersDown() > 1) return;
+      // its pointerdown can also arrive before fingersDown() counts it: then drop what the first
+      // finger started instead of salvaging it as a stroke
+      if (e.pointerType === 'touch' && [...activeStrokes.current.values()].some(l => l.touch && l.pointerId !== e.pointerId)) {
+        for (const [id, stroke] of activeStrokes.current) if (stroke.touch) activeStrokes.current.delete(id);
         schedule();
         return;
       }
+
+      const { editable, tool, onActivate } = propsRef.current;
+      const mode = useDevicePrefs.getState().inputMode;
+      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && !isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
+
+      if (fingerScroll || !editable) {
+        if (!editable && tool !== 'view') onActivate?.();
+        scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
+        return;
+      }
+
+      e.preventDefault();
+      startStroke(e);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const isContact = (e.buttons & 1) === 1 || (e.pointerType === 'pen' && (e.pressure > 0 || e.buttons > 0));
+
+      // Pen is hovering above the screen without contact
+      if (e.pointerType === 'pen' && !isContact) {
+        if (activeStrokes.current.has(e.pointerId)) commitLiveRef.current(e.pointerId);
+        hover.current = e.target === c ? local(e, 0) : null;
+        schedule();
+        return;
+      }
+
       const sc = scrolling.current;
       if (sc && sc.id === e.pointerId) {
         if (sc.el) sc.el.scrollTop -= e.clientY - sc.y;
@@ -240,8 +378,19 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
+      // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
+      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
+        startStroke(e);
+      }
+
       const l = activeStrokes.current.get(e.pointerId);
       if (!l) return;
+
+      // Contact lost mid-move without pointerup event
+      if (!isContact && e.pointerType === 'pen') {
+        commitLiveRef.current(e.pointerId);
+        return;
+      }
 
       e.preventDefault();
 
@@ -249,9 +398,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       for (const ev of events.length ? events : [e]) {
         const p = local(ev, l.t0);
         l.points.push(p);
-        if (p.y > heightRef.current - GROW_MARGIN && heightRef.current < MAX_HEIGHT) {
-          setHeight(Math.min(MAX_HEIGHT, p.y + GROW_MARGIN * 2));
-        }
       }
       if (l.points.length > 20000) l.points.length = 20000;
       schedule();
@@ -271,54 +417,50 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
           const drop = new Set(ids);
           pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
           strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
+          backingDirty.current = true;
           propsRef.current.onErase?.(ids);
         }
-        draw();
+        drawRef.current();
         schedule();
         return;
       }
 
       const l = activeStrokes.current.get(e.pointerId);
       if (!l) return;
-      activeStrokes.current.delete(e.pointerId);
 
-      const scratchOut = propsRef.current.onScratchOut;
-      const scratched = useDevicePrefs.getState().scratchToErase && scratchOut ? scratchTargets(l.points, strokesRef.current) : null;
-      if (scratched) {
-        const drop = new Set(scratched);
-        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
-        strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
-        draw();
-        scratchOut!(scratched);
-      } else if (l.points.length > 0) {
-        const stroke = { id: l.id, points: l.points };
-        pendingStrokesRef.current.push(stroke);
-        strokesRef.current = [...strokesRef.current, stroke];
-        draw();
-        propsRef.current.onStroke?.(stroke);
-      }
-      if (activeStrokes.current.size === 0) {
-        rectRef.current = null;
-      }
-      schedule();
+      // A delayed pointerup from another stroke must not finish the current pointer.
+      commitLiveRef.current(e.pointerId);
     };
 
-    const onLeave = () => { if (hover.current) { hover.current = null; schedule(); } };
+    // Prevent Safari/iPadOS from intercepting touches for Scribble or native gestures
+    const onTouch = (e: TouchEvent) => {
+      if (e.touches.length <= 1 && propsRef.current.editable && propsRef.current.tool !== 'view') {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    c.addEventListener('touchstart', onTouch, { passive: false });
+    c.addEventListener('touchmove', onTouch, { passive: false });
+    c.addEventListener('touchend', onTouch, { passive: false });
+    c.addEventListener('touchcancel', onTouch, { passive: false });
 
     c.addEventListener('pointerdown', onDown, { passive: false });
-    c.addEventListener('pointerleave', onLeave);
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp, { passive: false });
     window.addEventListener('pointercancel', onUp, { passive: false });
 
     return () => {
+      for (const pointerId of [...strokesInFlight.keys()]) commitLiveRef.current(pointerId);
+      c.removeEventListener('touchstart', onTouch);
+      c.removeEventListener('touchmove', onTouch);
+      c.removeEventListener('touchend', onTouch);
+      c.removeEventListener('touchcancel', onTouch);
       c.removeEventListener('pointerdown', onDown);
-      c.removeEventListener('pointerleave', onLeave);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
-  }, [draw, eraseAt, local, schedule]);
+  }, [eraseAt, local, schedule]);
 
   return (
     <div ref={wrap} className="relative w-full select-none" style={{ height, touchAction: 'none', WebkitUserSelect: 'none' }}>
@@ -334,6 +476,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         }}
         onDoubleClick={(e) => e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
+        onPointerLeave={() => {
+          if (!hover.current) return;
+          hover.current = null;
+          schedule();
+        }}
       />
     </div>
   );

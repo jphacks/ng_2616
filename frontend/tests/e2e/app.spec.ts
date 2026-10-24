@@ -31,8 +31,9 @@ test('edits made just before a reload are recovered from the device outbox', asy
   await openPreset(page, /Expand a polynomial/);
   await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
   await writeAndConfirm(page);
+  // the line is read and checked: its badge shows (not just any titled button in the row)
   await expect(statusOf(page, 1)).toHaveAttribute('title', /./);
-  // reload before the 3 s cloud debounce: pagehide writes the outbox, the next open resumes it
+  // reload before the 3 s cloud debounce: leaving the page writes the outbox, the next open resumes it
   await page.reload();
   await expect(page.getByText('Checker ready')).toBeVisible({ timeout: 120_000 });
   await expect(rows(page)).toHaveCount(3);

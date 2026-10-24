@@ -26,6 +26,8 @@ export interface CasPayload {
   lines: CasContextLine[];
   target: { id: string; role: Role; segments: InputSegment[]; revision_of?: string; recovery_root_id?: string };
   parent_id: string | null;
+  /** "identity": the target completes an "LHS =" line, so its sides must agree as expressions */
+  claim?: 'identity';
 }
 
 /** What cas_core returns; the controller adds input_hash, mock and cas versions. */
@@ -68,9 +70,9 @@ export function payloadForLine(nb: Notebook, lineId: string, extra: Line[] = [])
 }
 
 /** Payload for a suggested line that would be inserted after `afterLines`. */
-export function payloadForCandidate(nb: Notebook, contextLines: Line[], target: CasPayload['target']): CasPayload {
+export function payloadForCandidate(nb: Notebook, contextLines: Line[], target: CasPayload['target'], claim?: CasPayload['claim']): CasPayload {
   const parent = [...contextLines].reverse().find((l) => l.segments.some((s) => s.type === 'math') && proofOf(l)?.status !== 'wrong');
-  return { lines: contextLines.map(contextLine), target, parent_id: parent?.id ?? null };
+  return { lines: contextLines.map(contextLine), target, parent_id: parent?.id ?? null, ...(claim ? { claim } : {}) };
 }
 
 /** Semantic hash (spec §7.3): mathematical content only, no ink, timings or transport ids. */
@@ -84,7 +86,7 @@ export function semanticHash(nb: Notebook, payload: CasPayload): Hash {
 }
 
 export function inputHash(nb: Notebook, payload: CasPayload, casVersion: string): Hash {
-  return hashOf({ rules: RULES_VERSION, cas: casVersion, semantic: semanticHash(nb, payload), target: payload.target, parent_id: payload.parent_id });
+  return hashOf({ rules: RULES_VERSION, cas: casVersion, semantic: semanticHash(nb, payload), target: payload.target, parent_id: payload.parent_id, ...(payload.claim ? { claim: payload.claim } : {}) });
 }
 
 export function contextFingerprint(nb: Notebook, sessionId: string, epoch: number): Hash {

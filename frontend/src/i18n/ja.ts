@@ -167,6 +167,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'status.premise': '前提',
   'status.assumption': '仮定',
   'status.function': '関数',
+  'status.declaration': '宣言',
   'status.text': 'テキスト',
   'status.first': '最初の行',
   'status.unknown': '未検証',
@@ -247,6 +248,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'none.DEFINITION': '定義または仮定を導入しています。検証の対象ではありません。',
   'none.PREMISE': '与えられた条件を述べています。',
   'none.ASSUMPTION': '以降の行で使える仮定を述べています。',
+  'none.DECLARATION': '関数を宣言し、以降の行で使える仮定を述べています。',
   'none.FUNCTION': 'かっこ内の変数の関数として宣言しています（ノート全体に適用されます）。',
   'none.TEXT_ONLY': 'テキストのみです。',
   'none.NO_PARENT': '最初の式なので比較する対象がありません。',
@@ -311,6 +313,11 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.confirmFirst': '書いている行を先に確定してください。',
   'toast.noSuggestion': 'この行に対する提案はありません。',
   'toast.suggestFailed': '提案を生成できませんでした。',
+  // 補完ボタンを押したが何も始まらないときの案内（R27）
+  'toast.suggestPending': '行の確認が終わってから、もう一度押してください。',
+  'toast.suggestCannotContinue': 'この行からはまだ続けられません。先に確認するか、直してください。',
+  'toast.suggestBusy': '提案を作成中か、採用待ちの提案があります。',
+  'toast.suggestHeld': '提案の準備ができています。書き終えると表示されます。',
   'toast.waitForChecks': '現在の検証が終わるまでお待ちください。',
 
   'pdf.method': 'PDFの作成方法',
