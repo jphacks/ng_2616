@@ -2,7 +2,7 @@
 
 **PR マージ済み**：PR #41 は main にマージ済み（マージコミット `47ae591`、2026-10-24）。この NOTES は main の `4f46b73`（PR #54 取り込み時点）から作った `Riku_feature2` で更新している。以下は、マージ後に ③ の Must 部分に残っている作業の整理（詳細は各節）。
 
-1. **S-01 の live 確認**：実 LLM での通しの E2E は未実施。実施者と環境を決めて流す（mock の結果は live の合格に数えない）。
+1. **S-01 の live 確認**：人手で実施済み（下の「live（本物の Gemini）での確認記録」）。S-01 の完了条件は満たした。残りは、採用後の行2が「未検証」になった原因の調査と、自動の live E2E（未実施）。
 2. **②の回答待ち**：R3（`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`）、R10（修正行 unknown の直接判定）、R30（`Proof.mock` の意味。回答後に ③ が `verifyCandidate` と ghost-line の mock 表示を直す）。
 3. **⑤の作業待ち**：R16 の `Job.meta`、R28（BRIDGE の 403）、`test` script、MT-10／GT-7 の読み替えの承認、I2（描画テスト基盤）。
 
@@ -123,6 +123,21 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - [ ] **I2 の描画テスト基盤**：jsdom と React Testing Library の導入（`GhostLine` のラベルの描画テスト用）。
 - [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンは、wrong の行があるとき **灰色（`aria-disabled`）にするが `disabled` にはしない**（押すと理由を案内する。R27）。③が実装済み（`b671464`）。今後 `disabled` に変えないこと（案内が出なくなる）。
 - [ ] **live の E2E**：実 LLM での通しは未実施。実施者と環境。
+
+## live（本物の Gemini）での確認記録
+
+実施者：ユーザー（人手のブラウザ確認）。実施日はユーザーからの報告時（2026-10-25 時点で報告済み）。mock ではなく `LLM_PROVIDER=gemini`。この節の内容はユーザーの報告で、③は再現していない。
+
+| 項目 | 操作 | 結果 |
+| --- | --- | --- |
+| S-01 右辺補完 | 行1「A^2 L/2 = 1」、行2「A =」で補完（COMPLETE_RHS） | 候補「A = √(2/L)」が返り、採用できた。採用後の行2の判定は **「未検証」**。S-01 の完了条件（`A =` に対して `A = √(2/L)` が返る）は **満たした** |
+| 次の一手 | 「1 + 1 = 2」の次で補完（NEXT_STEP） | 「ここで ψ(x) = √(2/L) sin(nπx/L)」という **仮定の提案**が出た。直前の行から離れた提案で、問題カードか参考資料（`reference`）に引っぱられた可能性がある |
+
+- **観察として記録するだけ**：次の一手のプロンプトの調整は今はしない。
+- **使ったモデル**（設定ファイルの値。実行時の環境変数は確認していない）：補完 `LLM_MODEL_SUGGEST=gemini-3.5-flash-lite`、手書き認識 `LLM_MODEL_RECOGNIZE=gemini-3.8-flash`、OCR `LLM_MODEL_OCR=gemini-3.5-flash-lite`（`frontend/.env.example` と `frontend/.env.local` で同じ）。
+- **所要時間**：未計測（ログが残っていない）。
+- **採用後の行2が「未検証」になった原因**：未調査。調査は別途（候補の検証 `verifyCandidate` と採用後の検証の文脈・前提、問題カードの前提の有無）。
+- **E2E の注意**：ここでの live は人手の確認で、自動の E2E ではない。自動 E2E は引き続き mock＋実 CAS のみ。
 
 ## S-04：wrong の行があるあいだのロック（完了）
 
