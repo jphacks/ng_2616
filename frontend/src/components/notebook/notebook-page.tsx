@@ -9,8 +9,10 @@ import { ProblemCard } from './problem-card';
 export function NotebookPage() {
   const nb = useNotebook((s) => s.notebook);
   const activeId = useNotebook((s) => s.activeLineId);
+  const ghost = useNotebook((s) => (s.candidate && ['GENERATING', 'READY'].includes(s.candidate.state) ? s.candidate.state : null));
   const scroller = useRef<HTMLDivElement>(null);
 
+  // keep the active line (and any ghost suggestion on it) clear of the floating toolbar
   useEffect(() => {
     if (!activeId) return;
     const el = scroller.current?.querySelector(`[data-line-id="${activeId}"]`);
@@ -18,7 +20,7 @@ export function NotebookPage() {
     const r = el.getBoundingClientRect();
     const box = scroller.current!.getBoundingClientRect();
     if (r.bottom > box.bottom - 120 || r.top < box.top) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [activeId]);
+  }, [activeId, ghost]);
 
   if (!nb) return null;
   const lastDraftId = [...nb.lines].reverse().find((l) => l.state === 'DRAFT')?.id;

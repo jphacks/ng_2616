@@ -56,9 +56,9 @@ export function LineRow({ line, nb, number, isLastDraft }: { line: Line; nb: Not
             <CornerUpLeft size={14} /> {t('line.revising', { n: revisionOf })}
           </div>
         )}
+        {line.state === 'DRAFT' && showRejection && <RejectionChip />}
         {line.state === 'DRAFT' && (
           <div className="relative">
-            {showRejection && <RejectionChip />}
             {showGhost && candidate ? (
               <div className="absolute inset-x-0 top-1 z-10">
                 <GhostLine candidate={candidate} />
