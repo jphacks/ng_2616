@@ -1,6 +1,6 @@
 # AI数式補完 実装メモ
 
-最終更新：2026-10-24（段階1 完了時点）。担当：AI数式補完（M-06）。
+最終更新：2026-10-24（段階2 完了時点。main の b1622c5 を取り込み済み）。担当：AI数式補完（M-06）。
 
 **方針（人間の決定）**：案A＝Python の suggest は作らない。既存の TypeScript 実装を仕上げる。基準設計書は `docs/design/v2.0-en.md` + `v2.1-deltas.md` + ADR。`docs/tasks/AI_COMPLETION_TASK.md`（v1.9 前提）は担当範囲の考え方と「他担当の領域に触らない」ルールだけを参照する。v1.9 前提の部分は失効しており、末尾の「履歴」にある。
 
@@ -19,7 +19,98 @@
 - ⑤・共有：`package.json`、Playwright 設定、mock provider、`packages/contracts`、`client.ts`、gateway の共通処理
 - 触らない関数でないと実現できない項目は飛ばし、「依頼事項」に書く。
 
-## 段階2：③担当としての補完まわり修正（a〜f）
+## 現在の状態（段階2 完了時点）
+
+### 構成
+
+- **`frontend/src/core/candidates/`**（③の純関数。`engine.ts` が呼んでいる）：`blocker.ts`（`suggestBlockerOf`、`suggestModeOf`、`blockerToastKey`）、`slot.ts`（`matchesSlot`、`suggestFingerprint`）、`rejection.ts`（`rejectionKey`、`addRejection`、`rejectionsFor`、`isRecordable`）、`epoch.ts`（`abortOnEpochChange`）、`label.ts`（`candidateAncestorId`）、`hash.ts`（`lineHash`、`candidateHash`）。
+- **`engine.ts` の補完まわり**はこれらを呼ぶだけ（判定の重複は無い）。`candidate.ts` は `hash.ts` を使う。
+- **ストア**：候補の却下履歴は `rejections`（`rejectionKey` ごと）。`Candidate` に `rejectKey` を追加。
+- **テスト**：`frontend/tests/unit/suggest/`（下表）。
+
+### 最新のテスト結果
+
+環境はすべて **mock（`LLM_PROVIDER=mock`、台本 AI）＋実 CAS（Pyodide 314.0.7 + SymPy、ブラウザ内）、ローカル（Windows 11、Chromium 1248、`next dev` :3100、認証はバイパス）**。live の LLM では未実施なので、live の合格としては数えない。
+
+| 対象 | 結果 | 日時 | 環境（コミット） |
+| --- | --- | --- | --- |
+| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 94 件：88 通過／0 失敗／6 skip | 2026-10-24 | mock（LLM 呼び出しなし）、ローカル、141a417（main 取り込み後） |
+| `tsc --noEmit`（frontend） | エラー 0 | 2026-10-24 | 同上 |
+| `eslint`（src、tests） | エラー 0（警告 7 件は今回触っていない既存ファイル） | 2026-10-24 | 同上 |
+| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分） | 2026-10-24 | mock＋実 CAS、ローカル、141a417（main 取り込み後） |
+
+ファイル別の内訳（`tests/unit/suggest/`）：candidate 11／pure 37／model 10／service 13／client 9／epoch 5／pending-fixes 6（すべて skip）＝ 91 件（85 通過、6 skip）。`history.test.ts` 3 件（3 通過）。skip の理由は下の「段階2の記録」に書いた。
+過去の試験記録（段階1 時点、コミット `0548c91`）は末尾の「履歴」にある。
+
+### 実行コマンド
+
+```sh
+cd frontend
+npx tsx --test --conditions=react-server tests/unit/suggest/*.test.ts      # 約20秒（デモ台本の通しが約18秒）
+npx tsx --test tests/unit/history.test.ts
+npx tsc --noEmit
+npx eslint src tests
+npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約2分、pnpm と Chromium が必要
+```
+
+### `server-only` の回避
+
+`npx tsx --test --conditions=react-server <ファイル>` で通る。条件なしだと `candidate.ts`・`direct/index.ts` を import するテストは読み込み時に例外で失敗する（`server-only` が投げる）。`@/…` の別名は tsx が `tsconfig.json` の `paths` で解決するので追加設定は不要。`package.json` の `test` script は変更していない（`history.test.ts` 固定のまま）。グロブ指定への変更は管理者の許可待ち。**`--conditions=react-server` を付けないと失敗する** 点を、script を変えるときに必ず反映すること。
+
+### push 前の確認結果
+
+- **main の取り込み**：段階2の前後とも取り込んでいなかった（`Riku_feature` は `f691e79`＝PR #38 のマージ地点から分岐したまま）。push 前に `origin/main` の `b1622c5`（`fix(frontend): eliminate ink drawing latency…`、変更は `ink-canvas.tsx` のみ、作者は他の担当）を取り込んだ。**衝突なし**。取り込み後に単体テスト・`tsc`・E2E を流し直して上の表に反映した。
+- **`canSuggest` と補完ボタン**：`toolbar.tsx` のボタンは `disabled` を持たず、`canSuggest` も使っていない（`onClick` は `engine.requestSuggestion(true)` を呼ぶだけ）。`canSuggest` を呼ぶのは `scheduleSuggestion`（自動起動）だけ。したがって **R27 の案内（pending／cannot-continue／busy／HELD）は表示される**。ボタンが無効化される変更が `toolbar.tsx` に入った場合は、案内が出なくなるので、UI 担当に「補完ボタンは `disabled` にしない」ことを伝える（依頼事項に記載）。
+- **`context_fingerprint` を `suggestFingerprint` に変えた影響**：この値を読むコードは、`packages/contracts` のスキーマ（`MetaSchema`、`HashSchema` の形式チェックのみ）と `engine.ts` だけ。gateway は値を読まず（検証は形式のみ）、FastAPI は未実装（`/suggest` は 501）、`recognize`／`ocrPage` は従来どおり `contextFingerprint`（`cas/payload.ts`）を送る。**サーバー側・ほかの機能への影響なし**。ただし将来 `Job.meta` を照合する側（`client.ts`、⑤）は、補完の `context_fingerprint` が `suggestFingerprint` であることを知っておく必要がある（依頼事項に記載）。
+
+### ③が決めること
+
+私（③）が決める項目。UI 担当などに「確認」はするが、決定権は③にある。
+
+1. **R27 の案内文言（仮）**：下記 4 件を確定する。en／ja とも仮。
+   | キー | en（仮） | ja（仮） |
+   | --- | --- | --- |
+   | `toast.suggestPending` | Wait until the line is checked, then try again. | 行の確認が終わってから、もう一度押してください。 |
+   | `toast.suggestCannotContinue` | This line cannot be continued yet. Check it, or fix it first. | この行からはまだ続けられません。先に確認するか、直してください。 |
+   | `toast.suggestBusy` | A suggestion is already being prepared or waiting for you. | 提案を作成中か、採用待ちの提案があります。 |
+   | `toast.suggestHeld` | A suggestion is ready. It will appear when you stop writing. | 提案の準備ができています。書き終えると表示されます。 |
+2. **R12 のアイコン**：候補ラベルは `status.local` の文言にしたが、アイコンは従来の Sparkles のまま（確定行は CircleDashed）。そろえるか。
+3. **R29 AI-S の token／timeout**：現状 `maxOutputTokens: 8192`、`timeoutMs: 40_000`。v2.0 は 600 tokens／20 秒、v2.1 に記載なし（thinking の token を含むための差と推測しているだけで、根拠は未確認）。現状維持か変更か。変更するなら `direct/index.ts`（③の範囲）。
+4. **R30 の候補の mock 表示**：`ghost-line.tsx`（③）に出すか。`Proof.mock` の意味（②の回答）が先。
+
+### 次にやること
+
+1. ①の回答待ち：R13（`addStroke`）、R14（筆記停止の定義）、コンストラクタの差し替え口。回答が来たら skip の G3・G4・G5・G6・G9 を有効にする。
+2. ⑤の回答待ち：`Job.meta` の照合（R16）、BRIDGE の 403（R28）、`test` script、描画テスト基盤（I2）。
+3. ③が決める項目（上）を決めて反映する。
+4. E2E を live の LLM で一度流す（live の記録はまだ無い）。
+
+## 依頼事項（縦割りの役割ごと・現在有効）
+
+**① 筆記・Canvas・履歴担当**
+- [ ] **R13**：`engine.ts` の `addStroke` が候補を HELD にする条件を「候補の対象行に書いたとき」から「アクティブな下書きに書いたとき」に。③の関数では実現できない。
+- [ ] **R14**：「筆記が止まった」の定義。案 A＝現状維持（下書きに筆跡がある間は書いている扱い。消しゴム・行クリアで空になったら READY）／案 B＝最後の pointerup から 1.2 秒（C-01 と同じ値）。決まったら③が `maybeReleaseHeld` を直す。
+- [ ] **コンストラクタの差し替え口**：`NotebookEngine` のコンストラクタが `getCas()`（Web Worker）を直接呼ぶため、偽物の CAS と api を差し込めない。差し込めれば skip の G5・G6・G9 を有効にできる。
+- [ ] **連絡（事後報告）**：`notebook-store.ts` の次の変更は③が行った。(1) `rejectedHashes`／`rejectedLatex` を `rejections`（文脈ごとの却下履歴）に置換し、`Candidate` に `rejectKey` を追加。(2) `undo()` の中の候補用の 2 行（`rejectedHashes: []`、`rejectedLatex: []`）を削除（`rejections` は文脈ごとなので Undo で消さない）。`load()` の同じリセットは `rejections: {}` に置換。`undo()` の振る舞い（行・epoch・履歴）は変えていない。
+
+**② CAS・復帰（修正）担当**
+- [ ] **R3**：`model.ts` の `CONTINUABLE_UNKNOWN` に `DOMAIN_CHANGED` が入っている根拠（v2.0 §11 は 4 種、v2.1 は `SUBSET_OF_SOLUTIONS` の追加のみ）。意図的なら残し、コメントに根拠を。変更するなら `model.test.ts` C1 も同時に。
+- [ ] **R10**：`hasUnresolvedWrong` は、修正行が単独で unknown なだけでは検出せず、`recoveries` の `UNRESOLVED` に頼っている。`markRecovery` が修正行 unknown のとき確実に `UNRESOLVED` にする保証があるかの確認。
+- [ ] **R30**：`Proof.mock` の意味（LLM が mock か、ノートが mock か）。`verifyCandidate` の `mock:` の式が常に false になっている。決まったら③が直す。
+
+**④ 問題カード・PDF・LaTeX 担当**
+- [ ] 依頼なし。
+
+**⑤ 共有基盤・QA 担当**
+- [ ] **R16**：`client.ts` が `Job.meta` を呼び出し側に返す。補完の `context_fingerprint` は `suggestFingerprint`（`core/candidates/slot.ts`）で、`contextFingerprint`（`cas/payload.ts`）ではない。この値でスロットを照合する。
+- [ ] **R28**：BRIDGE を gateway で 403 `FEATURE_DISABLED` にする（現状は 202 の failed ジョブ）。Must では UI から送られない。
+- [ ] **test script**：`frontend/package.json` の `test` を `tests/unit/**/*.test.ts` に広げ、`--conditions=react-server` を付ける（付けないと `server-only` で失敗する）。
+- [ ] **MT-10／GT-7 の読み替え**：「ok のみ採用」を ADR 0003 に合わせて「wrong は採用不可・非表示、unknown は二重確認でのみ採用、ok／none は 1 タップ」と読むことの承認（QA）。
+- [ ] **I2 の描画テスト基盤**：jsdom と React Testing Library の導入（`GhostLine` のラベルの描画テスト用）。
+- [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンを `disabled` にしない（R27 の案内が出なくなる）。
+- [ ] **live の E2E**：実 LLM での通しは未実施。実施者と環境。
+
+## 段階2の記録：③担当としての補完まわり修正（a〜f）
 
 役割分担（上の「触ってよい／触らない」）が決まったあとの作業。項目ごとに別コミット。**push はしていない。**
 
@@ -77,109 +168,7 @@
 - **R30（`Proof.mock` の意味、候補の mock 表示）**：CAS の仕様（②）の確認が先。`verifyCandidate` の `mock:` 式は③の関数だが、意味が決まるまで触らない。
 - **R3（`DOMAIN_CHANGED`）、R10（修正関係を持つ unknown の直接判定）**：`model.ts`（②）。
 
-### 要確認（仮の文言）
-
-- `toast.suggestPending`／`toast.suggestCannotContinue`／`toast.suggestBusy`／`toast.suggestHeld`（en／ja とも**仮の文言**。UI 担当と文言を決める）。
-  - en：「Wait until the line is checked, then try again.」「This line cannot be continued yet. Check it, or fix it first.」「A suggestion is already being prepared or waiting for you.」「A suggestion is ready. It will appear when you stop writing.」
-- R12 の候補ラベルは、行のステータスと同じ既存キー `status.local` を使った（新規キーなし）。アイコンは従来の Sparkles のまま（行は CircleDashed）。UI 担当の判断を仰ぐ。
-
-## 現在の状態（段階1）
-
-### 変更したファイル
-
-| ファイル | 種別 | 内容 |
-| --- | --- | --- |
-| `frontend/src/server/ai/direct/candidate.ts` | 修正 | R6b：重複判定と `content_hash` を数式セグメントの `expr`＋`notation` だけで計算（`lineHash`／`candidateHash` を使用）。他の挙動は不変 |
-| `frontend/src/core/candidates/hash.ts` | 新規 | `mathKey`、`lineHash`、`candidateHash` |
-| `frontend/src/core/candidates/blocker.ts` | 新規 | `suggestBlockerOf`（`NotebookEngine.suggestBlocker` と同じ判定。入力は `notebook`・`casReady`・`candidate` の状態・`activeLine`）、`suggestModeOf`（`requestSuggestion` のモード選択。依頼外の追加で、テスト D2 のため） |
-| `frontend/src/core/candidates/slot.ts` | 新規 | `matchesSlot`／`mismatchedFields`（`request_id`・`notebook_id`・`client_session_id`・`client_epoch`・`line_id`・`line_version`・`context_fingerprint` の 7 項目） |
-| `frontend/src/core/candidates/rejection.ts` | 新規 | `rejectionKey(semanticHash, mode, target)`、`targetKindOf` |
-| `frontend/tests/unit/suggest/` | 新規 | `fixtures.ts`、`candidate.test.ts`（A）、`service.test.ts`（B ＋ デモ台本の回帰）、`model.test.ts`（C）、`client.test.ts`（H）、`pure.test.ts`（上の純関数）、`pending-fixes.test.ts`（skip） |
-
-`engine.ts` からは **まだ呼んでいない**（`core/candidates/` の純関数は未使用のまま。`candidate.ts` だけが `hash.ts` を使う）。
-
-### テスト結果
-
-| ファイル | 件数 | 通過 | 失敗 | skip |
-| --- | --- | --- | --- | --- |
-| `candidate.test.ts` | 11 | 11 | 0 | 0 |
-| `pure.test.ts` | 22 | 22 | 0 | 0 |
-| `model.test.ts` | 10 | 10 | 0 | 0 |
-| `service.test.ts` | 13 | 13 | 0 | 0 |
-| `client.test.ts` | 9 | 9 | 0 | 0 |
-| `pending-fixes.test.ts` | 8 | 0 | 0 | 8 |
-| **合計（`tests/unit/suggest/*.test.ts`）** | **73** | **65** | **0** | **8** |
-| 既存 `tests/unit/history.test.ts`（変更なし） | 3 | 3 | 0 | 0 |
-
-`tsc --noEmit`（frontend）はエラーなし。`eslint`（新規・変更ファイル）は警告・エラーなし。
-
-**R6b の確認**：`candidate.ts` を変更前に戻すと `A6`・`A7b`・`A8` の 3 件が失敗し、変更後は通る（`git stash` で確認済み）。
-
-**skip の 8 件**（`pending-fixes.test.ts`）：D3、G3、G4、G5、G6、G9、F3、I2。理由は各 `it.skip` の上のコメントに、どのファイルの誰の許可待ちかを含めて書いてある。
-
-### 実行したコマンド
-
-```sh
-# 依存が無かったので一度だけ（lockfile は変わらない。node_modules は .gitignore 済み）
-npx -y pnpm@10 install --frozen-lockfile --ignore-scripts
-
-cd frontend
-npx tsx --test --conditions=react-server tests/unit/suggest/*.test.ts      # 73 件（所要 約18秒）
-npx tsx --test tests/unit/history.test.ts                                   # 既存 3 件
-npx tsc --noEmit
-npx eslint src/core/candidates tests/unit/suggest src/server/ai/direct/candidate.ts
-```
-
-### 試験結果
-
-環境はすべて **mock（`LLM_PROVIDER=mock`、台本 AI）＋実 CAS（Pyodide 314.0.7 + SymPy、ブラウザ内）、ローカル（Windows 11、Chromium 1248、`next dev` :3100、認証はバイパス）**。コミット＝`0548c91`（`Riku_feature`）。live の LLM では未実施なので、live の合格としては数えない。
-
-| ID | 結果 | 日時 | 環境（live / mock、provider/model、コミット） |
-| --- | --- | --- | --- |
-| `tests/unit/suggest/*.test.ts` 73 件（A・B・C・H・純関数・skip 8） | 65 通過／0 失敗／8 skip | 2026-10-24 | mock（単体、LLM 呼び出しなし）、ローカル、`0548c91` の作業ツリー |
-| `tests/unit/history.test.ts` 3 件 | 3 通過 | 2026-10-24 | 同上 |
-| E2E `checking.spec.ts` 8 件（再認識失敗、パーサー外の読み、Back to ink、wrong の復帰、右辺補完 `1 + 1 =`、wrong 候補の非表示、unknown の二重確認、Esc で却下） | 8 通過 | 2026-10-24 | mock、ローカル、`0548c91` |
-| E2E `demo.spec.ts` 2 件（Schrödinger 台本の通し：誤ったステップの却下と訂正、unverified 採用、Undo/Redo） | 2 通過 | 2026-10-24 | mock、ローカル、`0548c91` |
-| E2E 合計（`npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts`） | **10 通過／0 失敗**（2.5 分） | 2026-10-24 | mock、ローカル、`0548c91` |
-
-R6b（重複判定と `content_hash`）の変更後も、台本の通し（`demo.spec.ts`）と候補まわりの E2E は崩れていない。実行のために PC へ導入したもの：Playwright の Chromium、`pnpm@10.20.0`（`corepack enable` は `C:\Program Files
-odejs` への書き込み権限で EPERM になったため `npm i -g` を使用）。
-
-### `server-only` の回避
-
-`npx tsx --test --conditions=react-server <ファイル>` で通る。条件なしだと `candidate.ts`・`direct/index.ts` を import するテストは読み込み時に例外で失敗する（`server-only` が投げる）。`@/…` の別名は tsx が `tsconfig.json` の `paths` で解決するので追加設定は不要。`package.json` の `test` script は変更していない（`history.test.ts` 固定のまま）。グロブ指定への変更は管理者の許可待ち。**`--conditions=react-server` を付けないと失敗する** 点を、script を変えるときに必ず反映すること。
-
-### E2E への影響の確認
-
-静的に確認した結果（実機の実行結果は下の「試験結果」）：
-- `tests/e2e/helpers.ts` の `mockSuggestions` は `/api/v1/suggest` を丸ごと差し替え、`content_hash` も自前で作る。`finalizeCandidate` を通らないので影響なし。
-- `tests/e2e/api.spec.ts` は mock プロバイダー経路（`MOCK_PROVIDER`）で、`finalizeCandidate` を呼ばない。影響なし。
-- `tests/e2e/demo.spec.ts` だけが台本経路（`scriptedSuggestion` → `finalizeCandidate`）を通る。代わりに単体テストで台本を最後まで再現した（`service.test.ts` の「scripted demo」）：学生の 2 行を文脈に置き、AI の各ステップを採用していき、誤ったステップ（`rejected`）はハッシュを `rejected_hashes` に返す。結果は「全 AI ステップが 1 回ずつ、台本の順に出る。誤ったステップが先に出て、却下後に訂正版が出る」。`demo.ts` 自体の重複判定（`lineHashes`）は文章込みの別実装で、今回は変更していない。
-- `demo.spec.ts` は後から実際に流して通過を確認した（下の「試験結果」）。
-
-### 今回見つかったこと（コードは直していない）
-
-- **R6a は確認済み**：IR 上限は提案にも効く（17 項の和、16×16 項で 256 ノード超のどちらも `NONE/IR_INVALID`）。
-- **R10 の限界**：`hasUnresolvedWrong` は、修正行が単独で unknown なだけでは検出しない。`recoveries` の `UNRESOLVED` に依存する（`model.test.ts` C2 に明記）。
-- **R3 の固定**：`DOMAIN_CHANGED` が継続可になっている現状をテストで固定した（`model.test.ts` C1）。CAS 担当の回答が出たら、変更と同時にテストも直す。
-- テストが **`model.ts`（他担当）の現状を固定** している箇所は C1・C2 の 2 テストのみ。
-
-### 次にやること（すべて許可待ち）
-
-1. Canvas・履歴担当の許可 → `engine.ts`／`notebook-store.ts` の小さな PR（abort、HELD、空 hash）。その後、`suggestBlockerOf` 等を engine から呼ぶ PR。skip の D3・G3〜G6・G9・F3 を実テストにする（engine への fake CAS／api の注入が前提）。
-2. UI 担当 → R12（未検証祖先の表示）、R27（HELD 中の案内）、R30（mock 表示）。I2 を有効化。
-3. AI・API 接続担当 → `client.ts` で `Job.meta` を返す（R16）、BRIDGE の 403 化（R28）、AI-S の token／timeout の根拠（R29）。
-4. 管理者 → `package.json` の `test` script をグロブ指定に（`--conditions=react-server` 付き）。
-
-## 依頼事項（他担当へ・現在有効）
-
-- [ ] ① Canvas・履歴担当：(1) `addStroke` の条件を「候補の対象行」から「アクティブな下書き」に（R13。③の関数では実現できない）。(2) 「筆記が止まった」の定義（R14。ペンを離してから何秒か。案は A＝現状維持／B＝最後の pointerup から 1.2 秒）。(3) `NotebookEngine` のコンストラクタで CAS と api を差し替え可能にする（skip の G5・G6・G9 を有効にするため）。
-- [ ] UI 担当：(1) R27 の仮文言 4 件の確認（上の「要確認」）。(2) R12 のラベルのアイコン（Sparkles のまま／CircleDashed）。(3) 候補の mock 表示（R30）。
-- [ ] AI・API 接続担当：`client.ts` で `Job.meta` を呼び出し側に返す（R16）、BRIDGE の 403 化（R28）、AI-S の token／timeout（8192／40s）の根拠（R29）。
-- [ ] CAS 担当：`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`（R3）。`Proof.mock` の意味（R30）。
-- [ ] QA 担当：MT-10／GT-7 の「ok のみ」を ADR 0003 に合わせた読み替え（第1節）の承認。
-- [ ] リポジトリ管理者：`frontend/package.json` の `test` script をグロブ指定に変更、`server-only` のテスト時の扱い。
-- [x] `demo.spec.ts`・`checking.spec.ts` の実行（この PC で実施済み。結果は「試験結果」）。
+（仮文言・アイコン・R29 は上の「③が決めること」へ移した。）
 
 ## 参照：部品の対応表（現行リポジトリの事実）
 
@@ -373,7 +362,100 @@ odejs` への書き込み権限で EPERM になったため `npm i -g` を使用
 
 ---
 
+---
+
 # 履歴（失効した記述。参照用・編集しない）
+
+## 段階1（記録・当時の状態）
+
+> 以下は段階1 完了時点の記述。「engine.ts から純関数をまだ呼んでいない」「次にやることはすべて許可待ち」は **段階2 で解消済み**（上の「現在の状態」が最新）。
+
+
+#### 変更したファイル
+
+| ファイル | 種別 | 内容 |
+| --- | --- | --- |
+| `frontend/src/server/ai/direct/candidate.ts` | 修正 | R6b：重複判定と `content_hash` を数式セグメントの `expr`＋`notation` だけで計算（`lineHash`／`candidateHash` を使用）。他の挙動は不変 |
+| `frontend/src/core/candidates/hash.ts` | 新規 | `mathKey`、`lineHash`、`candidateHash` |
+| `frontend/src/core/candidates/blocker.ts` | 新規 | `suggestBlockerOf`（`NotebookEngine.suggestBlocker` と同じ判定。入力は `notebook`・`casReady`・`candidate` の状態・`activeLine`）、`suggestModeOf`（`requestSuggestion` のモード選択。依頼外の追加で、テスト D2 のため） |
+| `frontend/src/core/candidates/slot.ts` | 新規 | `matchesSlot`／`mismatchedFields`（`request_id`・`notebook_id`・`client_session_id`・`client_epoch`・`line_id`・`line_version`・`context_fingerprint` の 7 項目） |
+| `frontend/src/core/candidates/rejection.ts` | 新規 | `rejectionKey(semanticHash, mode, target)`、`targetKindOf` |
+| `frontend/tests/unit/suggest/` | 新規 | `fixtures.ts`、`candidate.test.ts`（A）、`service.test.ts`（B ＋ デモ台本の回帰）、`model.test.ts`（C）、`client.test.ts`（H）、`pure.test.ts`（上の純関数）、`pending-fixes.test.ts`（skip） |
+
+`engine.ts` からは **まだ呼んでいない**（`core/candidates/` の純関数は未使用のまま。`candidate.ts` だけが `hash.ts` を使う）。
+
+#### テスト結果
+
+| ファイル | 件数 | 通過 | 失敗 | skip |
+| --- | --- | --- | --- | --- |
+| `candidate.test.ts` | 11 | 11 | 0 | 0 |
+| `pure.test.ts` | 22 | 22 | 0 | 0 |
+| `model.test.ts` | 10 | 10 | 0 | 0 |
+| `service.test.ts` | 13 | 13 | 0 | 0 |
+| `client.test.ts` | 9 | 9 | 0 | 0 |
+| `pending-fixes.test.ts` | 8 | 0 | 0 | 8 |
+| **合計（`tests/unit/suggest/*.test.ts`）** | **73** | **65** | **0** | **8** |
+| 既存 `tests/unit/history.test.ts`（変更なし） | 3 | 3 | 0 | 0 |
+
+`tsc --noEmit`（frontend）はエラーなし。`eslint`（新規・変更ファイル）は警告・エラーなし。
+
+**R6b の確認**：`candidate.ts` を変更前に戻すと `A6`・`A7b`・`A8` の 3 件が失敗し、変更後は通る（`git stash` で確認済み）。
+
+**skip の 8 件**（`pending-fixes.test.ts`）：D3、G3、G4、G5、G6、G9、F3、I2。理由は各 `it.skip` の上のコメントに、どのファイルの誰の許可待ちかを含めて書いてある。
+
+#### 実行したコマンド
+
+```sh
+# 依存が無かったので一度だけ（lockfile は変わらない。node_modules は .gitignore 済み）
+npx -y pnpm@10 install --frozen-lockfile --ignore-scripts
+
+cd frontend
+npx tsx --test --conditions=react-server tests/unit/suggest/*.test.ts      # 73 件（所要 約18秒）
+npx tsx --test tests/unit/history.test.ts                                   # 既存 3 件
+npx tsc --noEmit
+npx eslint src/core/candidates tests/unit/suggest src/server/ai/direct/candidate.ts
+```
+
+#### 試験結果
+
+環境はすべて **mock（`LLM_PROVIDER=mock`、台本 AI）＋実 CAS（Pyodide 314.0.7 + SymPy、ブラウザ内）、ローカル（Windows 11、Chromium 1248、`next dev` :3100、認証はバイパス）**。コミット＝`0548c91`（`Riku_feature`）。live の LLM では未実施なので、live の合格としては数えない。
+
+| ID | 結果 | 日時 | 環境（live / mock、provider/model、コミット） |
+| --- | --- | --- | --- |
+| `tests/unit/suggest/*.test.ts` 73 件（A・B・C・H・純関数・skip 8） | 65 通過／0 失敗／8 skip | 2026-10-24 | mock（単体、LLM 呼び出しなし）、ローカル、`0548c91` の作業ツリー |
+| `tests/unit/history.test.ts` 3 件 | 3 通過 | 2026-10-24 | 同上 |
+| E2E `checking.spec.ts` 8 件（再認識失敗、パーサー外の読み、Back to ink、wrong の復帰、右辺補完 `1 + 1 =`、wrong 候補の非表示、unknown の二重確認、Esc で却下） | 8 通過 | 2026-10-24 | mock、ローカル、`0548c91` |
+| E2E `demo.spec.ts` 2 件（Schrödinger 台本の通し：誤ったステップの却下と訂正、unverified 採用、Undo/Redo） | 2 通過 | 2026-10-24 | mock、ローカル、`0548c91` |
+| E2E 合計（`npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts`） | **10 通過／0 失敗**（2.5 分） | 2026-10-24 | mock、ローカル、`0548c91` |
+
+R6b（重複判定と `content_hash`）の変更後も、台本の通し（`demo.spec.ts`）と候補まわりの E2E は崩れていない。実行のために PC へ導入したもの：Playwright の Chromium、`pnpm@10.20.0`（`corepack enable` は `C:\Program Files
+odejs` への書き込み権限で EPERM になったため `npm i -g` を使用）。
+
+#### `server-only` の回避
+
+`npx tsx --test --conditions=react-server <ファイル>` で通る。条件なしだと `candidate.ts`・`direct/index.ts` を import するテストは読み込み時に例外で失敗する（`server-only` が投げる）。`@/…` の別名は tsx が `tsconfig.json` の `paths` で解決するので追加設定は不要。`package.json` の `test` script は変更していない（`history.test.ts` 固定のまま）。グロブ指定への変更は管理者の許可待ち。**`--conditions=react-server` を付けないと失敗する** 点を、script を変えるときに必ず反映すること。
+
+#### E2E への影響の確認
+
+静的に確認した結果（実機の実行結果は下の「試験結果」）：
+- `tests/e2e/helpers.ts` の `mockSuggestions` は `/api/v1/suggest` を丸ごと差し替え、`content_hash` も自前で作る。`finalizeCandidate` を通らないので影響なし。
+- `tests/e2e/api.spec.ts` は mock プロバイダー経路（`MOCK_PROVIDER`）で、`finalizeCandidate` を呼ばない。影響なし。
+- `tests/e2e/demo.spec.ts` だけが台本経路（`scriptedSuggestion` → `finalizeCandidate`）を通る。代わりに単体テストで台本を最後まで再現した（`service.test.ts` の「scripted demo」）：学生の 2 行を文脈に置き、AI の各ステップを採用していき、誤ったステップ（`rejected`）はハッシュを `rejected_hashes` に返す。結果は「全 AI ステップが 1 回ずつ、台本の順に出る。誤ったステップが先に出て、却下後に訂正版が出る」。`demo.ts` 自体の重複判定（`lineHashes`）は文章込みの別実装で、今回は変更していない。
+- `demo.spec.ts` は後から実際に流して通過を確認した（下の「試験結果」）。
+
+#### 今回見つかったこと（コードは直していない）
+
+- **R6a は確認済み**：IR 上限は提案にも効く（17 項の和、16×16 項で 256 ノード超のどちらも `NONE/IR_INVALID`）。
+- **R10 の限界**：`hasUnresolvedWrong` は、修正行が単独で unknown なだけでは検出しない。`recoveries` の `UNRESOLVED` に依存する（`model.test.ts` C2 に明記）。
+- **R3 の固定**：`DOMAIN_CHANGED` が継続可になっている現状をテストで固定した（`model.test.ts` C1）。CAS 担当の回答が出たら、変更と同時にテストも直す。
+- テストが **`model.ts`（他担当）の現状を固定** している箇所は C1・C2 の 2 テストのみ。
+
+#### 次にやること（すべて許可待ち）
+
+1. Canvas・履歴担当の許可 → `engine.ts`／`notebook-store.ts` の小さな PR（abort、HELD、空 hash）。その後、`suggestBlockerOf` 等を engine から呼ぶ PR。skip の D3・G3〜G6・G9・F3 を実テストにする（engine への fake CAS／api の注入が前提）。
+2. UI 担当 → R12（未検証祖先の表示）、R27（HELD 中の案内）、R30（mock 表示）。I2 を有効化。
+3. AI・API 接続担当 → `client.ts` で `Job.meta` を返す（R16）、BRIDGE の 403 化（R28）、AI-S の token／timeout の根拠（R29）。
+4. 管理者 → `package.json` の `test` script をグロブ指定に（`--conditions=react-server` 付き）。
 
 以下は段階0（指示書 `AI_COMPLETION_TASK.md` ＝ v1.9 前提）と段階0' の途中までの記述。方針（案A・v2.x 基準）が決まったことで、**v1.9 前提の部分は失効** した。事実としての調査結果（部品の対応表など）は上の「参照」にも残してある。
 
