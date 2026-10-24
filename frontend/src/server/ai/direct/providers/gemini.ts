@@ -46,7 +46,8 @@ export class GeminiProvider implements LlmProvider {
         generation_config: { thinking_level: req.thinking, max_output_tokens: req.maxOutputTokens },
         store: false,
       },
-      { timeout_ms: Math.max(1000, timeoutMs), fetchOptions: { signal: req.signal } },
+      // our generateJson owns the retry policy; SDK retries on 429 would outlive the job deadline
+      { timeout_ms: Math.max(1000, timeoutMs), fetchOptions: { signal: req.signal }, retries: { strategy: 'none' } },
     );
     const text = interaction.output_text;
     if (!text) throw new AiError('UPSTREAM_INVALID', 'empty model output', true);
@@ -63,7 +64,14 @@ export class GeminiProvider implements LlmProvider {
     if (signal.aborted) return new AiError('UPSTREAM_TIMEOUT', 'request aborted');
     const status = (e as { status?: number; statusCode?: number }).status ?? (e as { statusCode?: number }).statusCode;
     const message = e instanceof Error ? e.message : String(e);
-    if (status === 429) return new AiError('UPSTREAM_429', 'provider rate limit', true);
+    if (status === 429) {
+      // e.g. "limit: 20 requests per day on Free Tier … Please retry in 2h9m51s": a quota, not a blip
+      const limit = /limit:[^)]*\)?/i.exec(message)?.[0];
+      const wait = /retry in ([0-9hms.]+)/i.exec(message)?.[1];
+      const daily = /per day/i.test(message) || (wait !== undefined && /h|[0-9]{2,}m/.test(wait));
+      const detail = ['Gemini quota reached', limit && `(${limit.replace(/\)$/, '')})`, wait && `retry in ${wait}`].filter(Boolean).join(' ');
+      return new AiError('UPSTREAM_429', daily ? `${detail}. Enable billing or set LLM_MODEL_* to another model.` : detail, !daily);
+    }
     if (status === 401 || status === 403) return new AiError('UPSTREAM_AUTH', 'provider rejected the API key');
     if (status && status >= 500) return new AiError('UPSTREAM_INVALID', `provider error ${status}`, true);
     if (status && status >= 400) return new AiError('UPSTREAM_INVALID', `provider rejected the request (${status}): ${message.slice(0, 200)}`);
