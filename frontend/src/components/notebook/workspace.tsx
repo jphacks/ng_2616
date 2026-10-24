@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import { AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -31,12 +32,14 @@ export function Workspace({ notebookId }: { notebookId: string }) {
   const tab = useNotebook((s) => s.tab);
   const loaded = useNotebook((s) => s.notebook?.id === notebookId);
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     let alive = true;
     let created: NotebookEngine | null = null;
     const tr = (k: string, v?: Record<string, string | number>) => translate(currentLocale(), k, v);
-    openNotebook(user.id, notebookId, (title) => tr('sync.copyTitle', { title }))
+    openNotebook(userId, notebookId, (title) => tr('sync.copyTitle', { title }))
       .then((res) => {
         if (!alive) return;
         if (!res) {
@@ -47,7 +50,7 @@ export function Workspace({ notebookId }: { notebookId: string }) {
         s.load(res.notebook, res.revision);
         // edits this device had not sent yet: autosave picks them up
         if (res.dirty) s.set('dirty', true);
-        created = new NotebookEngine({ ownerId: user.id, lang: currentLocale, t: tr });
+        created = new NotebookEngine({ ownerId: userId, lang: currentLocale, t: tr });
         setEngine(created);
         if (res.offline) s.showToast(tr('sync.openedOffline'));
         else if (res.recoveredCopy) s.showToast(tr('sync.recoveredCopy', { title: res.recoveredCopy }));
@@ -60,7 +63,15 @@ export function Workspace({ notebookId }: { notebookId: string }) {
       setEngine(null);
       useNotebook.getState().unload();
     };
-  }, [user, notebookId]);
+  }, [userId, notebookId]);
+
+  // save right away when switching to the resources tab (hiding the browser tab is handled by the autosave)
+  useEffect(() => {
+    if (!engine) return;
+    if (tab === 'resources' && useNotebook.getState().dirty) {
+      void engine.save();
+    }
+  }, [tab, engine]);
 
   useEffect(() => {
     if (!engine) return;
@@ -126,14 +137,13 @@ export function Workspace({ notebookId }: { notebookId: string }) {
       <OrientationProvider className="relative flex h-full flex-col overflow-hidden bg-paper">
         <TopBar mockAi={mockAi} user={user!} />
         <main className="relative min-h-0 flex-1">
-          {tab === 'canvas' ? (
-            <>
-              <NotebookPage />
-              <Toolbar />
-            </>
-          ) : (
-            <ResourcesView ownerId={user!.id} />
-          )}
+          <div className={clsx('h-full w-full', tab === 'canvas' ? 'block' : 'hidden')}>
+            <NotebookPage />
+            <Toolbar />
+          </div>
+          <div className={clsx('h-full w-full', tab === 'resources' ? 'block' : 'hidden')}>
+            {user && <ResourcesView ownerId={user.id} />}
+          </div>
         </main>
         <ExplanationSheet />
         <Toast />

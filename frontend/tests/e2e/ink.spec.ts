@@ -18,6 +18,17 @@ test.describe('ink', () => {
     expect(await inkPixels(row)).toBe(last);
   });
 
+  test('fast consecutive strokes are not lost by React re-renders', async ({ page }) => {
+    const row = rows(page).last();
+    for (let i = 0; i < 8; i++) {
+      await draw(page, row, [[[30 + i * 35, 40], [55 + i * 35, 110]]]);
+    }
+    await page.waitForTimeout(600);
+    const n = await inkPixels(row);
+    expect(n).toBeGreaterThan(1000);
+    await expect(page.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+  });
+
   test('the eraser removes a whole stroke and Undo brings it back', async ({ page }) => {
     const row = rows(page).last();
     await draw(page, row, [[[60, 40], [60, 110]], [[200, 40], [200, 110]]]);
