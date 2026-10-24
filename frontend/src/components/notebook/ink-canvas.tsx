@@ -6,6 +6,7 @@ import { shortId } from '@/core/ids';
 import { scratchTargets } from '@/core/ink/scratch';
 import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
 import { INK_WEIGHTS, useDevicePrefs } from '@/core/prefs/device';
+import { tokenColor } from '@/ui/tokens';
 import type { Tool } from '@/core/store/notebook-store';
 import { fingersDown, useSecondFinger } from './gestures';
 import { usePageZoom } from './zoom';
@@ -15,6 +16,8 @@ const MAX_HEIGHT = 560;
 const GROW_MARGIN = 36;
 const ERASER_RADIUS = 12;
 const MAX_BACKING_SCALE = 3;
+// ink is drawn in the --color-ink token; these fade it for each state
+const INK_ALPHA = { erasing: 0.18, dim: 0.55, hover: 0.32 } as const;
 
 // in auto mode, once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
 let penSeen = false;
@@ -95,27 +98,28 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     ctx.clearRect(0, 0, width, height);
     const hidden = erasing.current;
     const list = strokesRef.current;
+    const ink = tokenColor('--color-ink');
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
     for (const s of list) {
-      ctx.fillStyle = hidden?.has(s.id) ? 'rgba(26,32,48,0.18)' : dim ? 'rgba(26,32,48,0.55)' : '#1a2030';
+      ctx.globalAlpha = hidden?.has(s.id) ? INK_ALPHA.erasing : dim ? INK_ALPHA.dim : 1;
       drawStroke(ctx, s.points, inkSize, true);
     }
-    if (live.current) {
-      ctx.fillStyle = '#1a2030';
-      drawStroke(ctx, live.current.points, inkSize, false);
-    }
+    ctx.globalAlpha = 1;
+    if (live.current) drawStroke(ctx, live.current.points, inkSize, false);
     const h = hover.current;
     if (h && editable && !live.current && !hidden) {
       ctx.beginPath();
+      ctx.globalAlpha = INK_ALPHA.hover;
       if (tool === 'eraser') {
-        ctx.strokeStyle = 'rgba(26,32,48,0.35)';
         ctx.lineWidth = 1;
         ctx.arc(h.x, h.y, ERASER_RADIUS, 0, Math.PI * 2);
         ctx.stroke();
       } else if (tool === 'pen') {
-        ctx.fillStyle = 'rgba(26,32,48,0.3)';
         ctx.arc(h.x, h.y, inkSize / 2 + 0.5, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
     }
   }, [width, height, dim, inkSize, editable, tool, zoom]);
 

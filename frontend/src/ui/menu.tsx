@@ -25,11 +25,11 @@ export function MenuPopup({
 }) {
   return (
     <BaseMenu.Portal>
-      <BaseMenu.Positioner anchor={anchor} side={side} align={align} sideOffset={sideOffset} collisionPadding={12} className="z-50 outline-none">
+      <BaseMenu.Positioner anchor={anchor} side={side} align={align} sideOffset={sideOffset} collisionPadding={12} className="z-popover outline-none">
         <BaseMenu.Popup
           className={clsx(
             'min-w-56 origin-[var(--transform-origin)] rounded-2xl bg-sheet p-1.5 text-ink shadow-float outline-none ring-1 ring-ink/5',
-            'transition-[scale,opacity] duration-150 ease-out motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0',
+            'transition-[scale,opacity] duration-fast ease-out motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0',
             className,
           )}
         >
@@ -42,15 +42,15 @@ export function MenuPopup({
 
 const itemClass = (danger?: boolean) =>
   clsx(
-    'flex min-h-11 cursor-default select-none items-center gap-3 rounded-xl px-3 text-[15px] outline-none',
-    danger ? 'text-wrong-strong data-highlighted:bg-wrong-soft' : 'text-ink data-highlighted:bg-black/5',
+    'flex min-h-11 cursor-default select-none items-center gap-3 rounded-xl px-3 text-base outline-none',
+    danger ? 'text-danger data-highlighted:bg-danger-soft' : 'text-ink data-highlighted:bg-hover',
     'data-disabled:text-faint',
   );
 
 export function MenuItem({ icon, danger, children, ...rest }: ComponentProps<typeof BaseMenu.Item> & { icon?: ReactNode; danger?: boolean }) {
   return (
     <BaseMenu.Item className={itemClass(danger)} {...rest}>
-      {icon && <span className={clsx('shrink-0', danger ? 'text-wrong-strong' : 'text-ink-soft')}>{icon}</span>}
+      {icon && <span className={clsx('shrink-0', danger ? 'text-danger' : 'text-ink-soft')}>{icon}</span>}
       {children}
     </BaseMenu.Item>
   );
@@ -79,7 +79,7 @@ export function MenuRadioItem({ children, ...rest }: ComponentProps<typeof BaseM
 }
 
 export function MenuLabel({ children }: { children: ReactNode }) {
-  return <BaseMenu.GroupLabel className="px-3 pt-2 pb-1 text-[12px] font-medium text-muted">{children}</BaseMenu.GroupLabel>;
+  return <BaseMenu.GroupLabel className="px-3 pt-2 pb-1 text-xs font-medium text-muted">{children}</BaseMenu.GroupLabel>;
 }
 
 export function MenuSeparator() {

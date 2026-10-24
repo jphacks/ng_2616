@@ -32,8 +32,8 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
       {scale !== null && (
         <div className="absolute top-0 left-0 origin-top-left p-4" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
           <div className="rounded-2xl bg-sheet px-5 py-4 shadow-card">
-            <div className="truncate text-[17px] font-semibold">{preview?.problemTitle}</div>
-            {!!preview?.statement.length && <InlineSegments segments={preview.statement} className="mt-1.5 line-clamp-3 text-[15px] text-ink-soft" />}
+            <div className="truncate text-xl font-semibold">{preview?.problemTitle}</div>
+            {!!preview?.statement.length && <InlineSegments segments={preview.statement} className="mt-1.5 line-clamp-3 text-base text-ink-soft" />}
           </div>
           <div className="mt-3 rounded-2xl bg-sheet shadow-card">
             {lines.map((line, i) => (
@@ -49,7 +49,7 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
 function PreviewRow({ number, line }: { number: number; line: PreviewLine | null }) {
   return (
     <div className="ruled flex h-[84px] items-center gap-3 overflow-hidden pr-5">
-      <span className="w-10 shrink-0 self-start pt-3 text-right text-[12px] text-faint tabular-nums">{number}</span>
+      <span className="w-10 shrink-0 self-start pt-3 text-right text-xs text-faint tabular-nums">{number}</span>
       <div className="min-w-0 flex-1 overflow-hidden">
         {line?.segments.length ? (
           <div className="flex items-center gap-x-4 whitespace-nowrap">
@@ -57,7 +57,7 @@ function PreviewRow({ number, line }: { number: number; line: PreviewLine | null
               s.type === 'math' ? (
                 <Tex key={i} latex={s.latex} className="shrink-0" />
               ) : (
-                <span key={i} className="shrink-0 text-[17px] text-ink-soft">
+                <span key={i} className="shrink-0 text-xl text-ink-soft">
                   {s.text}
                 </span>
               ),

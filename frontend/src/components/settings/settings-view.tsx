@@ -59,12 +59,12 @@ export function SettingsView() {
 
   return (
     <div className="scrollbar-thin h-full overflow-y-auto">
-      <header className="sticky top-0 z-30 flex min-h-16 items-center gap-2 border-b border-border bg-paper/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <Link href="/notebooks" className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-[15px] text-ink-soft hover:bg-black/5">
+      <header className="sticky top-0 z-sticky flex min-h-16 items-center gap-2 border-b border-border bg-paper/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur">
+        <Link href="/notebooks" className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-base text-ink-soft hover:bg-hover">
           <ChevronLeft size={20} aria-hidden />
           {t('top.notebooks')}
         </Link>
-        <h1 className="flex-1 text-center text-[16px] font-semibold">{t('settings.title')}</h1>
+        <h1 className="flex-1 text-center text-lg font-semibold">{t('settings.title')}</h1>
         <AccountMenu user={user} />
       </header>
 
@@ -92,7 +92,7 @@ export function SettingsView() {
 
         <Section title={t('settings.writing')}>
           <div>
-            <div aria-hidden className="px-5 pt-4 text-[13px] font-medium text-muted">
+            <div aria-hidden className="px-5 pt-4 text-sm font-medium text-muted">
               {t('settings.input')}
             </div>
             <Choices
@@ -135,10 +135,10 @@ export function SettingsView() {
         <Section title={t('settings.data')}>
           <div className="flex items-center gap-4 px-5 py-4">
             <div className="min-w-0 flex-1">
-              <div className="text-[15px] font-medium">{t('settings.export')}</div>
-              <div className="text-[13px] text-pretty text-muted">{t('settings.exportDesc')}</div>
+              <div className="text-base font-medium">{t('settings.export')}</div>
+              <div className="text-sm text-pretty text-muted">{t('settings.exportDesc')}</div>
               {exportError && (
-                <div role="alert" className="mt-1 text-[13px] text-wrong-strong">
+                <div role="alert" className="mt-1 text-sm text-danger">
                   {exportError}
                 </div>
               )}
@@ -162,7 +162,7 @@ export function SettingsView() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-muted">{title}</h2>
+      <h2 className="px-1 text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
       <div className="divide-y divide-border overflow-hidden rounded-3xl bg-sheet shadow-card">{children}</div>
     </section>
   );
@@ -170,7 +170,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-14 items-center gap-4 px-5 py-3 text-[15px]">
+    <div className="flex min-h-14 items-center gap-4 px-5 py-3 text-base">
       <span className="shrink-0 font-medium">{label}</span>
       <span className="flex min-w-0 flex-1 justify-end">{children}</span>
     </div>
@@ -194,10 +194,10 @@ function Choices({
     <fieldset className="divide-y divide-border">
       <legend className="sr-only">{label}</legend>
       {options.map((o) => (
-        <label key={o.value} className="flex min-h-14 cursor-pointer items-center gap-4 px-5 py-3 hover:bg-black/[0.02]">
+        <label key={o.value} className="flex min-h-14 cursor-pointer items-center gap-4 px-5 py-3 hover:bg-hover-soft">
           <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-medium">{o.label}</span>
-            {o.description && <span className="block text-[13px] text-pretty text-muted">{o.description}</span>}
+            <span className="block text-base font-medium">{o.label}</span>
+            {o.description && <span className="block text-sm text-pretty text-muted">{o.description}</span>}
           </span>
           <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="peer sr-only" />
           <span
@@ -207,7 +207,7 @@ function Choices({
               value === o.value ? 'bg-accent ring-accent' : 'ring-border',
             )}
           >
-            {value === o.value && <span className="size-2 rounded-full bg-white" />}
+            {value === o.value && <span className="size-2 rounded-full bg-on-solid" />}
           </span>
         </label>
       ))}
@@ -219,13 +219,13 @@ function Choices({
 function Segmented({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   const name = useId();
   return (
-    <fieldset className="inline-flex rounded-xl bg-black/[0.05] p-1">
+    <fieldset className="inline-flex rounded-xl bg-fill p-1">
       <legend className="sr-only">{label}</legend>
       {options.map((o) => (
         <label
           key={o.value}
           className={clsx(
-            'relative flex min-h-9 cursor-pointer items-center rounded-lg px-3 text-[14px] font-medium has-focus-visible:outline-2 has-focus-visible:outline-accent',
+            'relative flex min-h-9 cursor-pointer items-center rounded-lg px-3 text-md font-medium has-focus-visible:outline-2 has-focus-visible:outline-accent',
             value === o.value ? 'bg-sheet text-ink shadow-card' : 'text-muted hover:text-ink',
           )}
         >
@@ -241,15 +241,15 @@ function Toggle({ label, description, checked, onChange }: { label: string; desc
   return (
     <label className="flex min-h-14 cursor-pointer items-center gap-4 px-5 py-3">
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-medium">{label}</span>
-        {description && <span className="block text-[13px] text-pretty text-muted">{description}</span>}
+        <span className="block text-base font-medium">{label}</span>
+        {description && <span className="block text-sm text-pretty text-muted">{description}</span>}
       </span>
       <Switch.Root
         checked={checked}
         onCheckedChange={onChange}
-        className="flex h-7 w-12 shrink-0 rounded-full bg-black/10 p-0.5 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 data-checked:bg-accent"
+        className="flex h-7 w-12 shrink-0 rounded-full bg-fill-strong p-0.5 transition-colors duration-fast outline-none focus-visible:ring-2 focus-visible:ring-accent/50 data-checked:bg-accent"
       >
-        <Switch.Thumb className="size-6 rounded-full bg-white shadow-card transition-transform duration-150 data-checked:translate-x-5" />
+        <Switch.Thumb className="size-6 rounded-full bg-on-solid shadow-card transition-transform duration-fast data-checked:translate-x-5" />
       </Switch.Root>
     </label>
   );

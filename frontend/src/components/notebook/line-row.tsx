@@ -49,7 +49,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         <div className="min-w-0 flex-1 line-through decoration-wrong/50">
           <Segments segments={line.segments} />
         </div>
-        <span className="shrink-0 text-[13px] text-muted">{t('line.superseded')}</span>
+        <span className="shrink-0 text-sm text-muted">{t('line.superseded')}</span>
       </div>
     );
   }
@@ -79,7 +79,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       <Gutter n={number} line={line} />
       <div className="min-w-0 flex-1 py-2">
         {revisionOf !== null && (
-          <div className="mb-1 inline-flex items-center gap-1 text-[13px] font-medium text-unknown">
+          <div className="mb-1 inline-flex items-center gap-1 text-sm font-medium text-unknown">
             <CornerUpLeft size={14} /> {t('line.revising', { n: revisionOf })}
           </div>
         )}
@@ -87,13 +87,13 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'DRAFT' && (
           <div className="relative">
             {showGhost && candidate ? (
-              <div className="absolute inset-x-0 top-1 z-10">
+              <div className="absolute inset-x-0 top-1 z-raised">
                 <GhostLine candidate={candidate} />
               </div>
             ) : (
               active &&
               line.ink.length === 0 &&
-              tool === 'pen' && <div className="pointer-events-none absolute left-2 top-12 text-[15px] text-faint">{t('line.writeHere')}</div>
+              tool === 'pen' && <div className="pointer-events-none absolute left-2 top-12 text-base text-faint">{t('line.writeHere')}</div>
             )}
             <InkCanvas
               strokes={line.ink}
@@ -112,7 +112,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'RECOGNIZING' && (
           <div className="relative">
             <InkCanvas strokes={line.ink} editable={false} tool={tool} dim />
-            <div className="shimmer absolute inset-0 flex items-end rounded-xl p-2 text-[13px] text-accent">
+            <div className="shimmer absolute inset-0 flex items-end rounded-xl p-2 text-sm text-accent">
               <span className="inline-flex items-center gap-2 rounded-full bg-sheet/90 px-3 py-1 shadow-card">
                 <Spinner size={14} /> {t('line.reading')}
               </span>
@@ -122,7 +122,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'RECOGNIZE_FAILED' && (
           <div>
             {line.ink.length > 0 ? <InkCanvas strokes={line.ink} editable={false} tool={tool} dim /> : <Segments segments={line.segments} />}
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[14px] text-wrong-strong">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-md text-danger">
               <TriangleAlert size={16} />
               <span>
                 {t(line.failure?.stage === 'verify' ? 'line.verifyFailed' : 'line.failed')}
@@ -174,7 +174,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </div>
         )}
         {line.state === 'VERIFYING' && (
-          <span className="inline-flex items-center gap-2 text-[13px] text-muted">
+          <span className="inline-flex items-center gap-2 text-sm text-muted">
             <Spinner size={14} /> {t('line.checking')}
           </span>
         )}
@@ -192,10 +192,10 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
 function Gutter({ n, line }: { n: number; line: Line }) {
   const t = useT();
   return (
-    <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-[13px] tabular-nums text-faint">
+    <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-sm tabular-nums text-faint">
       <span>{n}</span>
       {line.source === 'ai' && (
-        <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-[11px] font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
+        <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-2xs font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
           <Sparkles size={11} />
           {t('line.ai')}
         </span>

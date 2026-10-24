@@ -32,18 +32,18 @@ export function AccountMenu({ user, unsaved = false, canLeave }: { user: Session
           aria-label={t('account.menu')}
           className="inline-flex size-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
-          <span className="flex size-9 items-center justify-center rounded-full bg-black/[0.06] text-ink-soft ring-1 ring-ink/5 transition-transform duration-150 active:scale-95">
+          <span className="flex size-9 items-center justify-center rounded-full bg-fill text-ink-soft ring-1 ring-ink/5 transition-transform duration-fast active:scale-95">
             <UserRound size={19} aria-hidden />
           </span>
         </Menu.Trigger>
         <MenuPopup className="w-72">
           <div className="flex items-center gap-3 px-3 pt-2 pb-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-ink-soft">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-fill text-ink-soft">
               <UserRound size={20} aria-hidden />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[15px] font-medium">{user.name ?? user.email}</span>
-              <span className="flex items-center gap-1.5 text-[12px] text-muted">
+              <span className="block truncate text-base font-medium">{user.name ?? user.email}</span>
+              <span className="flex items-center gap-1.5 text-xs text-muted">
                 {local ? <HardDrive size={13} aria-hidden /> : <Cloud size={13} aria-hidden />}
                 {t(local ? 'account.storage.local' : 'account.storage.cloud')}
               </span>
@@ -80,7 +80,7 @@ export function AccountMenu({ user, unsaved = false, canLeave }: { user: Session
         title={t('account.signOutTitle')}
         description={
           <>
-            {(unsaved || unsent > 0) && <span className="mb-2 block font-medium text-wrong-strong">{t('sync.signOutUnsent')}</span>}
+            {(unsaved || unsent > 0) && <span className="mb-2 block font-medium text-danger">{t('sync.signOutUnsent')}</span>}
             {t(signOutClearsDevice() ? 'account.signOutClears' : 'account.signOutKeeps')}
           </>
         }

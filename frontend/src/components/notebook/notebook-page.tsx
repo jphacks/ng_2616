@@ -99,7 +99,7 @@ export function NotebookPage() {
         type="button"
         onClick={() => resetZoom(scroller.current)}
         aria-label={t('zoom.reset')}
-        className="absolute top-3 right-3 z-20 inline-flex min-h-9 items-center gap-1.5 rounded-full bg-sheet/95 pr-2 pl-3 text-[13px] font-medium text-ink-soft tabular-nums shadow-float"
+        className="absolute top-3 right-3 z-lifted inline-flex min-h-9 items-center gap-1.5 rounded-full bg-sheet/95 pr-2 pl-3 text-sm font-medium text-ink-soft tabular-nums shadow-float"
       >
         {Math.round(zoom * 100)}%
         <X size={14} aria-hidden />

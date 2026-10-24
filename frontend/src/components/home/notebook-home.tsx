@@ -20,6 +20,7 @@ import { Spinner } from '@/ui/spinner';
 import { NotebookCardSkeleton } from './notebook-card';
 import { NotebookGrid, type GridActions } from './notebook-grid';
 import { PULL_THRESHOLD, usePullToRefresh } from './use-pull-refresh';
+import { enter } from '@/ui/motion';
 
 const PRESET_ICON: Record<PresetId, typeof Atom> = { blank: Plus, schrodinger: Atom, integral: Sigma, expansion: Variable, solutions: SquareFunction };
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
@@ -217,7 +218,7 @@ export function NotebookHome() {
     <MotionConfig reducedMotion="user">
       <div ref={scroller} className="scrollbar-thin relative h-full overflow-y-auto overscroll-y-contain">
         {(pull > 0 || refreshing) && (
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-16 z-20 flex justify-center">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-16 z-lifted flex justify-center">
             <span
               className="mt-2 flex size-9 items-center justify-center rounded-full bg-sheet text-accent shadow-float"
               style={{ transform: `translateY(${refreshing ? PULL_THRESHOLD / 2 : pull / 2}px)`, opacity: refreshing ? 1 : Math.min(1, pull / PULL_THRESHOLD) }}
@@ -226,41 +227,41 @@ export function NotebookHome() {
             </span>
           </div>
         )}
-        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-6 pt-[env(safe-area-inset-top)] backdrop-blur">
+        <header className="sticky top-0 z-sticky flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-6 pt-[env(safe-area-inset-top)] backdrop-blur">
           <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Sigma size={19} aria-hidden />
           </span>
-          <h1 className="flex-1 text-[16px] font-semibold">{t('app.name')}</h1>
+          <h1 className="flex-1 text-lg font-semibold">{t('app.name')}</h1>
           <AccountMenu user={user} />
         </header>
 
         <main className={clsx('mx-auto max-w-5xl space-y-10 px-6 py-8', selected ? 'pb-28' : 'pb-[max(2rem,env(safe-area-inset-bottom))]')}>
           {(local || DEV_BYPASS) && (
-            <p className="flex items-start gap-2 rounded-2xl bg-unknown-soft p-4 text-[14px] text-unknown">
+            <p className="flex items-start gap-2 rounded-2xl bg-unknown-soft p-4 text-md text-unknown">
               <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
               {t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}
             </p>
           )}
           {syncNotice && (
-            <p className="flex items-start gap-2 rounded-2xl bg-accent-soft p-4 text-[14px] text-accent-strong">
+            <p className="flex items-start gap-2 rounded-2xl bg-accent-soft p-4 text-md text-accent-strong">
               <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
               <span className="flex-1">{syncNotice}</span>
-              <button type="button" aria-label={t('common.close')} onClick={() => setSyncNotice(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-black/5">
+              <button type="button" aria-label={t('common.close')} onClick={() => setSyncNotice(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-hover">
                 <X size={16} aria-hidden />
               </button>
             </p>
           )}
           {error && (
-            <p role="alert" className="flex items-start gap-2 rounded-2xl bg-wrong-soft p-4 text-[14px] text-wrong-strong">
+            <p role="alert" className="flex items-start gap-2 rounded-2xl bg-danger-soft p-4 text-md text-danger">
               <span className="flex-1">{t('home.loadFailed', { msg: error })}</span>
-              <button type="button" aria-label={t('common.close')} onClick={() => setError(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-black/5">
+              <button type="button" aria-label={t('common.close')} onClick={() => setError(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-hover">
                 <X size={16} aria-hidden />
               </button>
             </p>
           )}
 
           <section className="space-y-4">
-            <h2 className="text-[13px] font-semibold text-balance uppercase tracking-wide text-muted">{t('home.choose')}</h2>
+            <h2 className="text-sm font-semibold text-balance uppercase tracking-wide text-muted">{t('home.choose')}</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {PRESET_IDS.map((id) => (
                 <PresetCard key={id} id={id} busy={creating === id} disabled={!!creating} onCreate={() => void create(id)} />
@@ -270,7 +271,7 @@ export function NotebookHome() {
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="flex-1 text-[13px] font-semibold text-balance uppercase tracking-wide text-muted">{t('home.title')}</h2>
+              <h2 className="flex-1 text-sm font-semibold text-balance uppercase tracking-wide text-muted">{t('home.title')}</h2>
               <SearchField value={query} onChange={setQuery} />
               <SortMenu value={prefs.sort} onChange={prefs.setSort} />
             </div>
@@ -282,7 +283,7 @@ export function NotebookHome() {
               </ul>
             ) : visible.length === 0 ? (
               <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border p-8 text-center">
-                <p className="text-[15px] text-pretty text-muted">{query.trim() ? t('home.noMatches', { q: query.trim() }) : t('home.empty')}</p>
+                <p className="text-base text-pretty text-muted">{query.trim() ? t('home.noMatches', { q: query.trim() }) : t('home.empty')}</p>
                 {query.trim() ? (
                   <Button variant="secondary" icon={<X size={16} aria-hidden />} onClick={() => setQuery('')}>
                     {t('home.clearSearch')}
@@ -308,13 +309,13 @@ export function NotebookHome() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-2xl bg-sheet p-1.5 shadow-float"
+              transition={enter}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-overlay mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-2xl bg-sheet p-1.5 shadow-float"
             >
-              <button type="button" aria-label={t('home.doneSelecting')} onClick={() => setSelected(null)} className="inline-flex size-10 items-center justify-center rounded-xl text-ink-soft hover:bg-black/5">
+              <button type="button" aria-label={t('home.doneSelecting')} onClick={() => setSelected(null)} className="inline-flex size-10 items-center justify-center rounded-xl text-ink-soft hover:bg-hover">
                 <X size={18} aria-hidden />
               </button>
-              <span className="min-w-24 px-1 text-[15px] font-medium tabular-nums">{t('home.selected', { n: picked.length })}</span>
+              <span className="min-w-24 px-1 text-base font-medium tabular-nums">{t('home.selected', { n: picked.length })}</span>
               <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(visible?.map((n) => n.id)))}>
                 {t('home.selectAll')}
               </Button>
@@ -350,11 +351,11 @@ export function NotebookHome() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-wrong-strong py-2 pr-2 pl-4 text-[15px] text-white shadow-float"
+              transition={enter}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-overlay mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-danger py-2 pr-2 pl-4 text-base text-on-solid shadow-float"
             >
               <span className="text-pretty">{actionError}</span>
-              <button type="button" onClick={() => setActionError(null)} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold hover:bg-white/10">
+              <button type="button" onClick={() => setActionError(null)} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold hover:bg-on-solid/10">
                 {t('home.dismiss')}
               </button>
             </motion.div>
@@ -366,11 +367,11 @@ export function NotebookHome() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-ink py-2 pr-2 pl-4 text-[15px] text-white shadow-float"
+              transition={enter}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-overlay mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-ink py-2 pr-2 pl-4 text-base text-on-solid shadow-float"
             >
               <span className="truncate">{deleted.length === 1 ? t('home.deleted', { title: deleted[0]!.title }) : t('home.deletedMany', { n: deleted.length })}</span>
-              <button type="button" onClick={undoDelete} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold text-accent-soft hover:bg-white/10">
+              <button type="button" onClick={undoDelete} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold text-accent-soft hover:bg-on-solid/10">
                 {t('home.undo')}
               </button>
             </motion.div>
@@ -392,23 +393,23 @@ function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: bool
       disabled={disabled}
       onClick={onCreate}
       className={clsx(
-        'flex min-h-32 flex-col items-start gap-3 rounded-3xl p-4 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-not-allowed',
+        'flex min-h-32 flex-col items-start gap-3 rounded-3xl p-4 text-left transition-transform duration-fast active:scale-[0.98] disabled:cursor-not-allowed',
         primary ? 'border border-dashed border-accent/40 bg-accent-soft/40 hover:bg-accent-soft/70' : 'bg-sheet shadow-card hover:-translate-y-0.5',
       )}
     >
-      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-accent text-white' : 'bg-accent-soft text-accent')}>
+      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-accent text-on-solid' : 'bg-accent-soft text-accent')}>
         {busy ? <Spinner size={18} /> : <Icon size={19} aria-hidden />}
       </span>
       <span className="space-y-1">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] leading-snug font-semibold">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base leading-snug font-semibold">
           {presetText(id, locale).title}
           {id === 'schrodinger' && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-strong">
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-2xs font-medium text-accent-strong">
               <Sparkles size={11} aria-hidden /> {t('home.demo')}
             </span>
           )}
         </span>
-        <span className="line-clamp-2 block text-[13px] leading-snug text-pretty text-muted">{t(`preset.${id}.desc`)}</span>
+        <span className="line-clamp-2 block text-sm leading-snug text-pretty text-muted">{t(`preset.${id}.desc`)}</span>
       </span>
     </button>
   );
@@ -426,7 +427,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (v: string)
         onKeyDown={(e) => e.key === 'Escape' && onChange('')}
         placeholder={t('home.search')}
         aria-label={t('home.search')}
-        className="min-h-11 w-full rounded-xl bg-sheet pr-11 pl-9 text-[15px] shadow-card outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/40 [&::-webkit-search-cancel-button]:hidden"
+        className="min-h-11 w-full rounded-xl bg-sheet pr-11 pl-9 text-base shadow-card outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/40 [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button type="button" aria-label={t('home.clearSearch')} onClick={() => onChange('')} className="absolute right-0 inline-flex size-11 items-center justify-center text-muted hover:text-ink">
@@ -441,7 +442,7 @@ function SortMenu({ value, onChange }: { value: LibrarySort; onChange: (v: Libra
   const t = useT();
   return (
     <Menu.Root>
-      <Menu.Trigger className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-[14px] font-medium text-ink-soft outline-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent/50 data-popup-open:bg-black/5">
+      <Menu.Trigger className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-md font-medium text-ink-soft outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/50 data-popup-open:bg-hover">
         <ArrowDownUp size={16} aria-hidden />
         {t(`home.sort.${value}`)}
       </Menu.Trigger>
