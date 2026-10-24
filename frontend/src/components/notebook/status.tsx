@@ -1,9 +1,9 @@
 'use client';
 
-import type { Line, Notebook } from '@mn/contracts';
+import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { CircleCheck, CircleDashed, CircleHelp, CircleMinus, CircleX } from 'lucide-react';
-import { lineNumber, proofOf } from '@/core/notebook/model';
+import { proofOf } from '@/core/notebook/model';
 import { useT } from '@/i18n';
 
 export type Tone = 'ok' | 'local' | 'wrong' | 'unknown' | 'none';
@@ -27,15 +27,13 @@ const ICON: Record<Tone, typeof CircleCheck> = { ok: CircleCheck, local: CircleD
 
 export function useStatusLabel() {
   const t = useT();
-  return (line: Line, nb: Notebook): { label: string; detail?: string } => {
+  /** `ancestor` is the visible number of the first unverified line this one depends on. */
+  return (line: Line, ancestor: number | null): { label: string; detail?: string } => {
     const p = proofOf(line);
     if (!p) return { label: '' };
     switch (p.status) {
       case 'ok':
-        if (p.unverified_ancestors.length) {
-          const n = lineNumber(nb, p.unverified_ancestors[0]!) ?? '?';
-          return { label: t('status.local', { n }) };
-        }
+        if (p.unverified_ancestors.length) return { label: t('status.local', { n: ancestor ?? '?' }) };
         return { label: t('status.verified') };
       case 'wrong':
         return { label: t(`cat.${p.category ?? 'UNCLASSIFIED'}`) };
@@ -52,11 +50,11 @@ export function useStatusLabel() {
 }
 
 /** Status uses colour + icon + text together (spec §8.1, Q-12). */
-export function StatusBadge({ line, nb, onClick, compact }: { line: Line; nb: Notebook; onClick?: () => void; compact?: boolean }) {
+export function StatusBadge({ line, ancestor, onClick, compact }: { line: Line; ancestor: number | null; onClick?: () => void; compact?: boolean }) {
   const label = useStatusLabel();
   const tone = toneOf(line);
   if (!tone) return null;
-  const { label: text, detail } = label(line, nb);
+  const { label: text, detail } = label(line, ancestor);
   const Icon = ICON[tone];
   return (
     <button

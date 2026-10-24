@@ -4,7 +4,7 @@ import type { Assumption, Problem } from '@mn/contracts';
 import { printLatex, symbolToLatex } from '@mn/contracts/ir';
 import clsx from 'clsx';
 import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { useT } from '@/i18n';
 import { Tex } from '@/ui/tex';
 import { InlineSegments } from './segments';
@@ -27,7 +27,7 @@ function assumptionLatex(a: Assumption): string {
   }
 }
 
-export function ProblemCard({ problem }: { problem: Problem }) {
+export const ProblemCard = memo(function ProblemCard({ problem }: { problem: Problem }) {
   const t = useT();
   const [open, setOpen] = useState(true);
   const fns = problem.functions ?? [];
@@ -81,7 +81,7 @@ export function ProblemCard({ problem }: { problem: Problem }) {
       )}
     </section>
   );
-}
+});
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

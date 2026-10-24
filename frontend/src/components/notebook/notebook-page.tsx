@@ -10,6 +10,10 @@ export function NotebookPage() {
   const nb = useNotebook((s) => s.notebook);
   const activeId = useNotebook((s) => s.activeLineId);
   const ghost = useNotebook((s) => (s.candidate && ['GENERATING', 'READY'].includes(s.candidate.state) ? s.candidate.state : null));
+  // a NEXT_STEP suggestion whose target line does not exist yet is shown on the last draft
+  const targetMissing = useNotebook(
+    (s) => !!s.candidate && s.candidate.mode === 'NEXT_STEP' && !s.notebook?.lines.some((l) => l.id === s.candidate!.targetLineId),
+  );
   const scroller = useRef<HTMLDivElement>(null);
 
   // keep the active line (and any ghost suggestion on it) clear of the floating toolbar
@@ -25,13 +29,27 @@ export function NotebookPage() {
   if (!nb) return null;
   const lastDraftId = [...nb.lines].reverse().find((l) => l.state === 'DRAFT')?.id;
   const numbers = lineNumbers(nb.lines);
+  const numberOf = new Map(nb.lines.map((l, i) => [l.id, numbers[i]!]));
+  // rows are memoized and receive only primitives about other lines, so a stroke on one
+  // line re-renders that row alone instead of the whole page
   return (
     <div ref={scroller} data-scroll-container="1" className="scrollbar-thin h-full overflow-y-auto overscroll-contain pb-40">
       <ProblemCard problem={nb.problem} />
       <div className="mx-4 mt-3 rounded-2xl bg-sheet shadow-card">
-        {nb.lines.map((line, i) => (
-          <LineRow key={line.id} line={line} nb={nb} number={numbers[i]!} isLastDraft={line.id === lastDraftId} />
-        ))}
+        {nb.lines.map((line, i) => {
+          const ancestor = line.verified?.proof.unverified_ancestors[0];
+          return (
+            <LineRow
+              key={line.id}
+              line={line}
+              number={numbers[i]!}
+              isLastDraft={line.id === lastDraftId}
+              revisionOf={line.revision_of ? (numberOf.get(line.revision_of) ?? null) : null}
+              ancestor={ancestor ? (numberOf.get(ancestor) ?? null) : null}
+              ghostWithoutTarget={targetMissing && line.id === lastDraftId}
+            />
+          );
+        })}
       </div>
     </div>
   );

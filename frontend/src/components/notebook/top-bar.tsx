@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { ChevronLeft, CircleAlert, Cpu, Languages, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { demoBinding } from '@/core/presets';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useLocale, useT } from '@/i18n';
@@ -15,7 +16,8 @@ import { useEngine } from './engine-context';
 export function TopBar({ mockAi }: { mockAi: boolean }) {
   const t = useT();
   const engine = useEngine();
-  const nb = useNotebook((s) => s.notebook);
+  // select only what the bar shows, so ink edits do not re-render it
+  const nb = useNotebook(useShallow((s) => (s.notebook ? { title: s.notebook.title, demo: !!demoBinding(s.notebook) } : null)));
   const tab = useNotebook((s) => s.tab);
   const cas = useNotebook((s) => s.cas);
   const dirty = useNotebook((s) => s.dirty);
@@ -24,7 +26,7 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
   const { locale, setLocale } = useLocale();
   const [editing, setEditing] = useState(false);
   if (!nb) return null;
-  const demo = !!demoBinding(nb);
+  const demo = nb.demo;
 
   return (
     <header className="relative z-20 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">

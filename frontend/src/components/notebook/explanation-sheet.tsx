@@ -197,7 +197,7 @@ export function ExplanationSheet() {
       <div className="space-y-5">
         <div className="space-y-2 rounded-2xl bg-paper p-4">
           <Segments segments={line.segments} />
-          <StatusBadge line={line} nb={nb} />
+          <StatusBadge line={line} ancestor={proof.unverified_ancestors[0] ? lineNumber(nb, proof.unverified_ancestors[0]) : null} />
         </div>
         {proof.status === 'wrong' ? <WrongBody line={line} nb={nb} proof={proof} /> : <DetailBody line={line} nb={nb} proof={proof} />}
       </div>

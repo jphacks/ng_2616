@@ -1,9 +1,9 @@
 'use client';
 
-import type { Line, Notebook } from '@mn/contracts';
+import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Check, CornerUpLeft, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
-import { lineNumber } from '@/core/notebook/model';
+import { memo } from 'react';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
@@ -14,7 +14,18 @@ import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
 import { StatusBadge } from './status';
 
-export function LineRow({ line, nb, number, isLastDraft }: { line: Line; nb: Notebook; number: number; isLastDraft: boolean }) {
+interface RowProps {
+  line: Line;
+  number: number;
+  isLastDraft: boolean;
+  /** number of the line this one revises */
+  revisionOf: number | null;
+  /** number of the first unverified line this one depends on */
+  ancestor: number | null;
+  ghostWithoutTarget: boolean;
+}
+
+export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisionOf, ancestor, ghostWithoutTarget }: RowProps) {
   const t = useT();
   const engine = useEngine();
   const tool = useNotebook((s) => s.tool);
@@ -26,10 +37,8 @@ export function LineRow({ line, nb, number, isLastDraft }: { line: Line; nb: Not
     candidate &&
     ((candidate.mode === 'NEXT_STEP' && candidate.targetLineId === line.id && line.state === 'DRAFT' && line.ink.length === 0) ||
       (candidate.mode === 'COMPLETE_RHS' && candidate.targetLineId === line.id));
-  const ghostNoTarget = candidate && candidate.mode === 'NEXT_STEP' && !nb.lines.some((l) => l.id === candidate.targetLineId) && isLastDraft;
-  const showGhost = (ghostHere || ghostNoTarget) && line.ink.length === 0;
+  const showGhost = (ghostHere || ghostWithoutTarget) && line.ink.length === 0;
   const showRejection = rejection && line.state === 'DRAFT' && isLastDraft;
-  const revisionOf = line.revision_of ? lineNumber(nb, line.revision_of) : null;
   const openDetails = () => engine.openLine(line.id);
 
   if (line.state === 'SUPERSEDED') {
@@ -140,7 +149,7 @@ export function LineRow({ line, nb, number, isLastDraft }: { line: Line; nb: Not
             <Spinner size={14} /> {t('line.checking')}
           </span>
         )}
-        {line.state === 'SETTLED' && <StatusBadge line={line} nb={nb} onClick={openDetails} />}
+        {line.state === 'SETTLED' && <StatusBadge line={line} ancestor={ancestor} onClick={openDetails} />}
         {line.state === 'SETTLED' && line.verified?.proof.status === 'wrong' && (
           <Button size="sm" variant="ghost" icon={<CornerUpLeft size={15} />} onClick={() => engine.startRevision(line.id)}>
             {t('line.revise')}
@@ -149,7 +158,7 @@ export function LineRow({ line, nb, number, isLastDraft }: { line: Line; nb: Not
       </div>
     </div>
   );
-}
+});
 
 function Gutter({ n, line }: { n: number; line: Line }) {
   const t = useT();
