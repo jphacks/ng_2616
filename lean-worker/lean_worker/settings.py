@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -40,7 +41,9 @@ class Settings(BaseSettings):
     lake_path: str = "lake"
     # comma list of modules every check starts from
     lean_imports: str = DEFAULT_IMPORTS
-    # optional shared secret with the Next.js gateway (required whenever it is set)
+    # local: loopback development, where the key is optional; anything else requires it
+    app_env: Literal["local", "preview", "production"] = "local"
+    # shared secret with the Next.js gateway (checked whenever it is set)
     lean_worker_key: str = ""
     # spec §14.4: twenty seconds per check
     check_timeout_s: float = 20.0

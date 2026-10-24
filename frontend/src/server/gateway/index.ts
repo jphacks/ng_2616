@@ -55,7 +55,9 @@ const JOB_ROUTES: Record<string, JobRoute> = {
   'lean/check': {
     kind: 'lean_check',
     input: LeanCheckInputSchema,
-    deadlineMs: 300_000,
+    // below the route's maxDuration (app/api/v1/lean/check), so the job ends with UPSTREAM_TIMEOUT
+    // instead of the platform killing the function
+    deadlineMs: 280_000,
     run: (input, user, signal) => getLeanService().check(input, { userId: user.id, signal }),
   },
 };

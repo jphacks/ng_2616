@@ -51,6 +51,23 @@ pinned together in `lean-worker/lean/` (`lean-toolchain`, `lakefile.toml`, `lake
 check that false statements and `sorry` never pass, skip until step 2 is done. For a container
 instead: `cd lean-worker && docker compose up --build`. The image includes the Mathlib cache.
 
+### On the Azure VM (not done yet)
+`backend/compose.azure.yaml` marks where Lean joins. The worker needs no internet at run time, so
+it fits on `compiler-private`:
+- Service `lean-worker` with `build: { context: ../lean-worker }` on `compiler-private`. Copy the
+  hardening from `lean-worker/compose.yaml`. The build downloads Mathlib's cache (about 5 GB of
+  disk; the build needs egress, running does not).
+- Environment: `APP_ENV=production` and a `LEAN_WORKER_KEY` of at least 32 random bytes. Without
+  a key, `/check` answers 503 outside `APP_ENV=local`.
+- `Caddyfile.azure`: `handle_path /lean/* { reverse_proxy lean-worker:8100 }`, with a response
+  timeout above the worker's 20 s per check. The worker's own paths are `/health` and `/check`.
+- Vercel: `NEXT_PUBLIC_ENABLED_FEATURES` gains `lean`, plus
+  `LEAN_WORKER_URL=https://<vm-host>/lean` and the same `LEAN_WORKER_KEY`. `POST /api/v1/lean/check`
+  has its own route with `maxDuration = 300` (one hard step took 110 s of model time).
+- Untested in a container: the image runs the REPL through `lake env` with a read-only root
+  filesystem. If Lake needs to write there, mount the project's `.lake` writable or drop
+  `read_only` for this service.
+
 ## Supabase setup
 1. Run the migrations in order (SQL editor or `npx supabase db push`):
    `0001_mn_notebooks.sql`, then `0002_mn_cloud_sync.sql` (autosave RPC, ink table, resources,

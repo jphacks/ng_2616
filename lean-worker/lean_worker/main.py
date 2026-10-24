@@ -57,6 +57,10 @@ class CheckInput(BaseModel):
 
 def require_key(x_lean_key: str = Header(default=""), settings: Settings = Depends(get_settings)) -> None:
     expected = settings.lean_worker_key
+    # off loopback development, a worker without a key would run anyone's proofs: refuse instead
+    if not expected and settings.app_env != "local":
+        detail = {"code": "LEAN_KEY_NOT_CONFIGURED", "message": "set LEAN_WORKER_KEY outside APP_ENV=local"}
+        raise HTTPException(status_code=503, detail=detail)
     if expected and not hmac.compare_digest(x_lean_key.encode(), expected.encode()):
         raise HTTPException(status_code=403, detail={"code": "LEAN_KEY_INVALID", "message": "invalid worker key"})
 
