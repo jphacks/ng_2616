@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import { AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -30,11 +31,13 @@ export function Workspace({ notebookId }: { notebookId: string }) {
   const tab = useNotebook((s) => s.tab);
   const loaded = useNotebook((s) => s.notebook?.id === notebookId);
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     let alive = true;
     let created: NotebookEngine | null = null;
-    getRepository(user.id)
+    getRepository(userId)
       .load(notebookId)
       .then((res) => {
         if (!alive) return;
@@ -43,7 +46,7 @@ export function Workspace({ notebookId }: { notebookId: string }) {
           return;
         }
         useNotebook.getState().load(res.notebook, res.revision);
-        created = new NotebookEngine({ ownerId: user.id, lang: currentLocale, t: (k, v) => translate(currentLocale(), k, v) });
+        created = new NotebookEngine({ ownerId: userId, lang: currentLocale, t: (k, v) => translate(currentLocale(), k, v) });
         setEngine(created);
       })
       .catch((e: Error) => alive && setError(e.message));
@@ -54,7 +57,26 @@ export function Workspace({ notebookId }: { notebookId: string }) {
       setEngine(null);
       useNotebook.getState().unload();
     };
-  }, [user, notebookId]);
+  }, [userId, notebookId]);
+
+  // auto-save when switching to the resources tab or when the browser tab is hidden
+  useEffect(() => {
+    if (!engine) return;
+    if (tab === 'resources' && useNotebook.getState().dirty) {
+      void engine.save();
+    }
+  }, [tab, engine]);
+
+  useEffect(() => {
+    if (!engine) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && useNotebook.getState().dirty) {
+        void engine.save();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [engine]);
 
   useEffect(() => {
     if (!engine) return;
@@ -118,14 +140,13 @@ export function Workspace({ notebookId }: { notebookId: string }) {
       <OrientationProvider className="relative flex h-full flex-col overflow-hidden bg-paper">
         <TopBar mockAi={mockAi} />
         <main className="relative min-h-0 flex-1">
-          {tab === 'canvas' ? (
-            <>
-              <NotebookPage />
-              <Toolbar />
-            </>
-          ) : (
-            <ResourcesView ownerId={user!.id} />
-          )}
+          <div className={clsx('h-full w-full', tab === 'canvas' ? 'block' : 'hidden')}>
+            <NotebookPage />
+            <Toolbar />
+          </div>
+          <div className={clsx('h-full w-full', tab === 'resources' ? 'block' : 'hidden')}>
+            {user && <ResourcesView ownerId={user.id} />}
+          </div>
         </main>
         <ExplanationSheet />
         <Toast />
