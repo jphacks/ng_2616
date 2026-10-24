@@ -41,10 +41,21 @@ export interface EngineDeps {
   t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
+/** The parts of the CAS controller and API client the engine uses; tests pass fakes for them. */
+export type CasPort = Pick<CasController, 'status' | 'versionString' | 'onChange' | 'start' | 'verify'>;
+export type ApiPort = Pick<typeof api, 'suggest' | 'recognize' | 'ocrPage'>;
+
+/** Optional replacements for the real CAS worker and API client (omitted: the app behaves as before). */
+export interface EngineOverrides {
+  cas?: CasPort;
+  api?: ApiPort;
+}
+
 /** Orchestrates the asynchronous Must flows on top of the store (one engine per open notebook). */
 export class NotebookEngine {
   readonly sessionId = uuid();
-  private cas: CasController = getCas();
+  private cas: CasPort;
+  private api: ApiPort;
   private aborts = new Map<string, AbortController>();
   private suggestTimer: ReturnType<typeof setTimeout> | null = null;
   /** the active suggestion request: results are applied only if they still match it (spec §7.3) */
@@ -54,7 +65,9 @@ export class NotebookEngine {
   private unsub: (() => void) | null = null;
   private disposed = false;
 
-  constructor(private deps: EngineDeps) {
+  constructor(private deps: EngineDeps, overrides: EngineOverrides = {}) {
+    this.cas = overrides.cas ?? getCas();
+    this.api = overrides.api ?? api;
     this.unsub = this.cas.onChange((state, detail) => {
       store.getState().set('cas', { state, detail, version: this.cas.versionString });
       if (state === 'ready') {
@@ -199,7 +212,7 @@ export class NotebookEngine {
     const prev = contextLinesFor(nb, lineId).filter(hasMath).pop();
     const userIndex = contextLinesFor(nb, lineId).filter((l) => l.source === 'user' && hasMath(l)).length;
     try {
-      const result = await api.recognize(
+      const result = await this.api.recognize(
         this.meta(lineId, version),
         {
           image,
@@ -449,7 +462,7 @@ export class NotebookEngine {
         ui_lang: this.deps.lang(),
         demo: demoBinding(nb),
       };
-      const res = await api.suggest(slot, input, ctl.signal);
+      const res = await this.api.suggest(slot, input, ctl.signal);
       if (this.isStale(slot)) return this.discard(pending);
       if (res.state === 'NONE' || !res.candidate) {
         store.getState().set('candidate', null);
@@ -715,7 +728,7 @@ export class NotebookEngine {
   /** Lazy OCR for a resource page without a text layer (spec §15.2: only when opened). */
   async ocrPage(image: { mime: 'image/jpeg' | 'image/png'; data: string }): Promise<string | null> {
     try {
-      const res = await api.ocrPage(this.meta(), { image, ui_lang: this.deps.lang() });
+      const res = await this.api.ocrPage(this.meta(), { image, ui_lang: this.deps.lang() });
       return res.text;
     } catch (e) {
       console.warn('[ocr]', e);
