@@ -28,6 +28,10 @@ export function sha256Hex(text: string): string {
   return bytesToHex(sha256(utf8ToBytes(text)));
 }
 
+export function sha256HexBytes(bytes: Uint8Array): string {
+  return bytesToHex(sha256(bytes));
+}
+
 export function hashOf(value: unknown): Hash {
   return `sha256:${sha256Hex(canonicalJson(value))}`;
 }

@@ -67,6 +67,8 @@ export const SuggestInputSchema = z.object({
   target_line_id: z.string(),
   lhs_expr: MathJSONSchema.optional(),
   rejected_hashes: z.array(z.string()).max(64),
+  /** v2.1: LaTeX of rejected candidates so the model can avoid repeating them */
+  rejected_latex: z.array(z.string().max(4000)).max(16).optional(),
   reference: z.array(ReferenceExcerptSchema).max(16).optional(),
   ui_lang: UiLangSchema,
   demo: DemoBindingSchema.optional(),
