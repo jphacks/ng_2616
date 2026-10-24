@@ -11,6 +11,19 @@ test('a failed recognition keeps the ink, offers Retry and Back to ink', async (
   await expect(statusOf(page, 0)).toHaveAttribute('title', 'Starting line');
 });
 
+test('a read outside the parser grammar is kept as written and marked not checkable', async ({ page }) => {
+  const latex = String.raw`\begin{pmatrix} 1 \\ 2 \end{pmatrix}`;
+  await mockRecognition(page, [{ unparsed: latex }, '$x + 1$']);
+  await mockSuggestions(page, []);
+  await openPreset(page, /Untitled notebook/);
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 0)).toHaveAttribute('title', 'Not checkable · the checker cannot read this notation yet');
+  await expect(page.getByText('Could not read this line')).toBeHidden();
+  await expect(rows(page).first().locator('.katex')).toBeVisible();
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Not verified · the line above could not be checked');
+});
+
 test('Back to ink turns a failed line into an editable draft', async ({ page }) => {
   await mockRecognition(page, [{ fail: 'IR_INVALID' }]);
   await openPreset(page, /Untitled notebook/);

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseMathLatex, printLatex, printSegmentLatex, validateExpr, type MathJSON, type ParseOptions } from '../src/ir';
 import { canonicalJson, hashOf } from '../src/hash';
+import { freeSymbols } from '../src/ir/validate';
+import { hasUnparsed, wireToSegments } from '../src/segments';
 
 const PHYS: ParseOptions = {
   functions: [
@@ -177,5 +179,30 @@ describe('hashing', () => {
     assert.equal(canonicalJson({ b: 1, a: [2, { d: 1, c: 2 }] }), '{"a":[2,{"c":2,"d":1}],"b":1}');
     assert.equal(hashOf({ a: 1, b: 2 }), hashOf({ b: 2, a: 1 }));
     assert.match(hashOf({ a: 1 }), /^sha256:[0-9a-f]{64}$/);
+  });
+});
+
+describe('unparsed math', () => {
+  const pmatrix = String.raw`\begin{pmatrix} 1 \ 2 \end{pmatrix}`;
+
+  it('fails by default, so suggestions stay strict', () => {
+    const r = wireToSegments([{ type: 'math', content: pmatrix }]);
+    assert.equal(r.ok, false);
+  });
+
+  it('keeps the LaTeX as written when allowed', () => {
+    const r = wireToSegments([{ type: 'text', content: 'so' }, { type: 'math', content: pmatrix }, { type: 'math', content: 'x + 1' }], { allowUnparsed: true });
+    assert.ok(r.ok);
+    assert.deepEqual(r.segments[1], { type: 'math', expr: ['Unparsed', pmatrix], notation: 'plain', latex: pmatrix });
+    assert.deepEqual(r.segments[2]!.type === 'math' && r.segments[2]!.expr, ['Add', 'x', 1]);
+    assert.ok(hasUnparsed(r.segments));
+  });
+
+  it('is valid IR, prints its source and has no free symbols', () => {
+    const e: MathJSON = ['Equal', 'y', ['Unparsed', pmatrix]];
+    assert.equal(validateExpr(e), null);
+    assert.equal(printLatex(e), `y = {${pmatrix}}`);
+    assert.deepEqual([...freeSymbols(e)], ['y']);
+    assert.notEqual(validateExpr(['Unparsed', 3]), null);
   });
 });

@@ -161,6 +161,8 @@ function render(e: MathJSON): Out {
       return [`\\left\\{${a.map((x) => p(x, ADD)).join(', ')}\\right\\}`, ATOM];
     case 'Unreadable':
       return ['\\square', ATOM];
+    case 'Unparsed':
+      return [`{${a0 as string}}`, ATOM];
     default:
       return [`\\mathrm{${h}}`, ATOM];
   }

@@ -76,7 +76,7 @@ function job(meta: unknown, kind: string, extra: Record<string, unknown>) {
   return { ok: true, request_id: crypto.randomUUID(), data: { job: { id: crypto.randomUUID(), kind, phase: 'done', meta, created_at: now, expires_at: now, ...extra } } };
 }
 
-export type Recognition = string | { fail: string };
+export type Recognition = string | { fail: string } | { unparsed: string };
 
 /** Scripted transcriptions: "$...$" marks math (contracts' segmentsFromSource). */
 export async function mockRecognition(page: Page, script: Recognition[]) {
@@ -84,6 +84,11 @@ export async function mockRecognition(page: Page, script: Recognition[]) {
   await page.route('**/api/v1/recognize', async (route) => {
     const { meta } = route.request().postDataJSON();
     const next = queue.shift() ?? { fail: 'RECOGNIZE_UNREADABLE' };
+    if (typeof next === 'object' && 'unparsed' in next) {
+      const segments = [{ type: 'math', expr: ['Unparsed', next.unparsed], notation: 'plain', latex: next.unparsed }];
+      await route.fulfill({ status: 202, json: job(meta, 'recognize', { state: 'succeeded', result: { segments, unreadable: false, mock: true, transcription: next.unparsed } }) });
+      return;
+    }
     if (typeof next !== 'string') {
       await route.fulfill({ status: 202, json: job(meta, 'recognize', { state: 'failed', error: { code: next.fail, message: 'scripted failure', retryable: true } }) });
       return;

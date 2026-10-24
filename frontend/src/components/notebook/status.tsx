@@ -38,7 +38,7 @@ export function useStatusLabel() {
       case 'wrong':
         return { label: t(`cat.${p.category ?? 'UNCLASSIFIED'}`) };
       case 'unknown':
-        return { label: t('status.unknown'), detail: p.reason ? t(`reason.${p.reason}`) : undefined };
+        return { label: t(p.reason === 'UNPARSED' ? 'status.notCheckable' : 'status.unknown'), detail: p.reason ? t(`reason.${p.reason}`) : undefined };
       case 'none':
         return {
           label: t(

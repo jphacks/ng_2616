@@ -34,11 +34,13 @@ export function buildProblem(p: FixtureProblem, id = 'P') {
   };
 }
 
+const unparsedSegments = (latex: string) => [{ type: 'math' as const, expr: ['Unparsed', latex] as MathJSON, notation: 'plain' as const }];
+
 /** Payload in the exact shape the browser CAS controller sends to the worker. */
 export function buildCasPayload(c: CasCase) {
   const opts: ParseOptions = { functions: c.problem.functions ?? [] };
   const lines = c.lines.map((l) => {
-    const segments = toInputSegments(segmentsFromSource(l.src, opts));
+    const segments = l.unparsed !== undefined ? unparsedSegments(l.unparsed) : toInputSegments(segmentsFromSource(l.src, opts));
     return {
       id: l.id,
       role: l.role ?? 'step',
@@ -52,7 +54,9 @@ export function buildCasPayload(c: CasCase) {
   });
   const targetSegments = c.target.text !== undefined
     ? [{ type: 'text' as const, text: c.target.text }]
-    : toInputSegments(segmentsFromSource(c.target.src ?? '', opts));
+    : c.target.unparsed !== undefined
+      ? unparsedSegments(c.target.unparsed)
+      : toInputSegments(segmentsFromSource(c.target.src ?? '', opts));
   return {
     problem: buildProblem(c.problem),
     lines,

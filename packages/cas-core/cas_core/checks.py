@@ -99,6 +99,8 @@ def conv_rel(ir: Any, ctx: Context) -> tuple[Rel | None, set[str]]:
 def verify_segment(ir: Any, notation: str, role: str, ctx: Context) -> SegResult:
     if role == "premise":
         return _none("PREMISE", "PREMISE")
+    if ir_has(ir, {"Unparsed"}):
+        return _unknown("UNPARSED")
     if ir_has(ir, {"Unreadable"}):
         return _unknown("UNREADABLE")
     if is_node(ir) and ir[0] == "Equal" and ir[2] is None:
@@ -201,6 +203,13 @@ def _same_ir(a: Any, b: Any) -> bool:
 
 
 # ---------------------------------------------------------------- expressions
+
+
+def _no_parent(goal: str, ctx: Context) -> SegResult:
+    """Nothing to compare with. After a not-checkable line that is "cannot check", not "first line"."""
+    if any(f.line_id == ctx.parent_id and ir_has(f.ir, {"Unparsed"}) for f in ctx.facts):
+        return _unknown("PARENT_UNPARSED", goal)
+    return _none("NO_PARENT", goal)
 
 
 def _parent_expression(ctx: Context) -> tuple[Fact, Any] | None:
@@ -327,8 +336,10 @@ def _integration_category(c_ir: Any, w_ir: Any, ctx: Context) -> str | None:
 def expression_equivalence(ir: Any, ctx: Context) -> SegResult:
     src = _parent_expression(ctx)
     if src is None:
-        return _none("NO_PARENT", "EXPRESSION_EQUIVALENCE")
+        return _no_parent("EXPRESSION_EQUIVALENCE", ctx)
     fact, c_ir = src
+    if ir_has(c_ir, {"Unparsed"}):
+        return _unknown("PARENT_UNPARSED", "EXPRESSION_EQUIVALENCE")
     C, u1 = conv_expr(c_ir, ctx)
     W, u2 = conv_expr(ir, ctx)
     res = compare_values(C, W, ctx, c_ir, ir, "EXPRESSION_EQUIVALENCE", fact.line_id)
@@ -567,7 +578,7 @@ def relation_compare(ir: Any, ctx: Context) -> SegResult:
             continue
         ranked.append(((f.line_id == ctx.parent_id, f_overlap, s_overlap, f.order), f, S, us))
     if not ranked:
-        return _none("NO_PARENT", "SOLUTION_SET_EQUIVALENCE")
+        return _no_parent("SOLUTION_SET_EQUIVALENCE", ctx)
     ranked.sort(key=lambda r: r[0], reverse=True)
     fallback: SegResult | None = None
     for _, f, S, us in ranked:

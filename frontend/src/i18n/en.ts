@@ -97,6 +97,7 @@ export const en = {
   'status.text': 'Text',
   'status.first': 'Starting line',
   'status.unknown': 'Not verified',
+  'status.notCheckable': 'Not checkable',
 
   'cat.SIGN': 'Sign error',
   'cat.COEFFICIENT': 'Coefficient error',
@@ -113,6 +114,8 @@ export const en = {
   'reason.UNSUPPORTED': 'beyond what the checker supports',
   'reason.DOMAIN_CHANGED': 'the domain changed',
   'reason.UNREADABLE': 'contains an unreadable symbol',
+  'reason.UNPARSED': 'the checker cannot read this notation yet',
+  'reason.PARENT_UNPARSED': 'the line above could not be checked',
   'reason.INCOMPLETE': 'incomplete',
   'reason.CAS_ERROR': 'checker error',
   'reason.SUBSET_OF_SOLUTIONS': 'keeps only some solutions',

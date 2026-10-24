@@ -54,6 +54,8 @@ export function validateExpr(root: MathJSON): IrIssue | null {
     const sub = (i: number, p: Pos = 'math') => walk(args[i] as MathJSON, depth + 1, `${path}/${i + 1}`, p);
 
     switch (h) {
+      case 'Unparsed':
+        return typeof args[0] === 'string' && args[0].length <= 2000 ? null : fail('Unparsed needs its LaTeX source', path);
       case 'Apply': {
         if (!isSymbol(args[0])) return fail('Apply needs a function name', path);
         for (let i = 1; i < args.length; i++) { const r = sub(i); if (r) return r; }
@@ -124,6 +126,7 @@ export function freeSymbols(e: MathJSON, bound: ReadonlySet<string> = new Set())
     }
     if (!Array.isArray(x)) return;
     const [h, ...args] = x;
+    if (h === 'Unparsed') return;
     if (h === 'Integrate' || h === 'Evaluate' || h === 'Sum') {
       const t = args[1] as MathJSON[];
       const v = t[1] as string;

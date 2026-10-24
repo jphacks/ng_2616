@@ -17,6 +17,8 @@ export interface FixtureProblem {
 export interface FixtureLine {
   id: string;
   src: string;
+  /** LaTeX kept as an Unparsed node instead of parsing `src` */
+  unparsed?: string;
   role?: Role;
   status: Status;
   reason?: string;
@@ -29,7 +31,7 @@ export interface CasCase {
   note: string;
   problem: FixtureProblem;
   lines: FixtureLine[];
-  target: { id: string; src?: string; text?: string; role?: Role };
+  target: { id: string; src?: string; text?: string; unparsed?: string; role?: Role };
   parent?: string;
   expect: {
     status: Status;
@@ -102,6 +104,20 @@ export const CAS_CASES: CasCase[] = [
     target: T('$I(a) = \\int_0^a (3x^2 + 2x) \\, dx$'), expect: { status: 'none', reason: 'DEFINITION' },
   },
   { id: 'CF-11a', note: 'unreadable', problem: {}, lines: first('$x + 1$'), target: T('$= \\square + 1$'), expect: { status: 'unknown', reason: 'UNREADABLE' } },
+  {
+    id: 'CF-11d', note: 'notation outside the parser grammar is not checkable', problem: {}, lines: first('$x + 1$'),
+    target: { id: 'T', unparsed: '\\begin{pmatrix} 1 \\\\ 2 \\end{pmatrix}' }, expect: { status: 'unknown', reason: 'UNPARSED' },
+  },
+  {
+    id: 'CF-11e', note: 'a step after a not-checkable line cannot be justified by it', problem: {},
+    lines: [{ id: 'L1', src: '', unparsed: 'x \\overset{!}{=} 2', status: 'unknown', reason: 'UNPARSED' }],
+    target: T('$x + 1 = 3$'), expect: { status: 'unknown', reason: 'PARENT_UNPARSED' },
+  },
+  {
+    id: 'CF-11f', note: 'an expression after a not-checkable line', problem: {},
+    lines: [{ id: 'L1', src: '', unparsed: '\\begin{pmatrix} 1 \\\\ 2 \\end{pmatrix}', status: 'unknown', reason: 'UNPARSED' }],
+    target: T('$x + 1$'), expect: { status: 'unknown', reason: 'PARENT_UNPARSED' },
+  },
   {
     id: 'CF-11b', note: 'empty RHS', problem: { functions: [{ name: 'I', args: ['a'] }] }, lines: [], target: T('$I(a) =$'),
     expect: { status: 'unknown', reason: 'INCOMPLETE' },

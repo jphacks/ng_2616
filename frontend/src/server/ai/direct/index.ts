@@ -56,7 +56,8 @@ export class DirectAiService implements AiService {
       if (wire.data.unreadable) throw new AiError('RECOGNIZE_UNREADABLE', 'nothing in the line could be read');
       throw new AiError('SCHEMA_INVALID', 'empty transcription');
     }
-    const parsed = wireToSegments(wire.data.segments, { functions: input.functions, symbols: input.symbols });
+    // a read the parser cannot handle is kept as written and marked not checkable, never failed
+    const parsed = wireToSegments(wire.data.segments, { functions: input.functions, symbols: input.symbols, allowUnparsed: true });
     if (!parsed.ok) throw new AiError('IR_INVALID', `${parsed.message} — read as: ${parsed.latex}`.slice(0, 400));
     return { segments: parsed.segments, unreadable: wire.data.unreadable, mock: false, transcription };
   }

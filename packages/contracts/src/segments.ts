@@ -11,8 +11,13 @@ export type SegmentsResult =
 const MAX_MATH_SEGMENTS = 8;
 const MAX_PROSE = 4000;
 
+export interface WireOptions extends ParseOptions {
+  /** keep math the parser cannot handle as an Unparsed node (shown as written, never checked) */
+  allowUnparsed?: boolean;
+}
+
 /** Parse wire segments; math LaTeX is parsed to IR and re-printed so display == IR. */
-export function wireToSegments(wire: readonly WireSegment[], options: ParseOptions = {}): SegmentsResult {
+export function wireToSegments(wire: readonly WireSegment[], options: WireOptions = {}): SegmentsResult {
   const out: Segment[] = [];
   let prose = 0;
   let math = 0;
@@ -28,7 +33,13 @@ export function wireToSegments(wire: readonly WireSegment[], options: ParseOptio
     math += 1;
     if (math > MAX_MATH_SEGMENTS) return { ok: false, code: 'IR_INVALID', message: 'more than eight formulas in one line', segment_index: i, latex: content };
     const r = parseMathLatex(content, options);
-    if (!r.ok) return { ok: false, code: r.error.code, message: r.error.message, segment_index: i, latex: content };
+    if (!r.ok) {
+      if (options.allowUnparsed && content.length <= 2000) {
+        out.push({ type: 'math', expr: ['Unparsed', content], notation: 'plain', latex: content });
+        continue;
+      }
+      return { ok: false, code: r.error.code, message: r.error.message, segment_index: i, latex: content };
+    }
     out.push({ type: 'math', expr: r.expr, notation: r.notation, latex: printSegmentLatex(r.expr, r.notation) });
   }
   if (out.length > 16) return { ok: false, code: 'IR_INVALID', message: 'more than 16 segments', segment_index: 16, latex: '' };
@@ -55,6 +66,10 @@ export function segmentsFromSource(source: string, options: ParseOptions = {}): 
 
 export function toInputSegments(segments: readonly Segment[]): InputSegment[] {
   return segments.map((s) => (s.type === 'text' ? { type: 'text', text: s.text } : { type: 'math', expr: s.expr, notation: s.notation }));
+}
+
+export function hasUnparsed(segments: readonly Segment[]): boolean {
+  return segments.some((s) => s.type === 'math' && Array.isArray(s.expr) && s.expr[0] === 'Unparsed');
 }
 
 export function hasUnreadable(segments: readonly Segment[]): boolean {

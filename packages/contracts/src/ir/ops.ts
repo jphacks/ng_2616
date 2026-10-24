@@ -42,6 +42,8 @@ export const OPS: Record<string, readonly [number, number]> = {
   Sum: [2, 2],
   Limit: [2, 2],
   Unreadable: [0, 0],
+  // [Unparsed, latex]: recognised LaTeX outside the parser's grammar; shown as written, never checked
+  Unparsed: [1, 1],
   // positional only
   Tuple: [3, 3],
   LimitSpec: [4, 4],

@@ -87,7 +87,7 @@ def is_node(e: Any) -> bool:
 
 def walk_ir(e: Any):
     yield e
-    if is_node(e):
+    if is_node(e) and e[0] != "Unparsed":
         for a in e[1:]:
             yield from walk_ir(a)
 
@@ -134,6 +134,8 @@ def to_sympy(e: Any, env: Env, subst: bool = True, dvars: tuple[str, ...] = (), 
 
     if h == "Unreadable":
         raise CasUnreadable()
+    if h == "Unparsed":
+        raise CasUnsupported("UNPARSED")
     if h == "Add":
         return sp.Add(*[c(a) for a in args])
     if h == "Multiply":

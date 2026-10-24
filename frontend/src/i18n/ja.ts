@@ -99,6 +99,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'status.text': 'テキスト',
   'status.first': '最初の行',
   'status.unknown': '未検証',
+  'status.notCheckable': '検証不可',
 
   'cat.SIGN': '符号の誤り',
   'cat.COEFFICIENT': '係数の誤り',
@@ -115,6 +116,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'reason.UNSUPPORTED': 'チェッカーの対応範囲外です',
   'reason.DOMAIN_CHANGED': '定義域が変わりました',
   'reason.UNREADABLE': '読み取れない記号があります',
+  'reason.UNPARSED': 'この書き方はまだチェッカーが読めません',
+  'reason.PARENT_UNPARSED': '前の行が検証できませんでした',
   'reason.INCOMPLETE': '式が未完成です',
   'reason.CAS_ERROR': 'チェッカーのエラー',
   'reason.SUBSET_OF_SOLUTIONS': '一部の解だけが残っています',
