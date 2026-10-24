@@ -15,6 +15,8 @@ export class MockProvider implements LlmProvider {
         return { has_candidate: false, role: 'step', segments: [] };
       case 'ocr':
         return { text: '(mock transcription)' };
+      case 'lean':
+        return { scope: 'theorem', statement: '', steps: [], hint: '' };
     }
   }
 }

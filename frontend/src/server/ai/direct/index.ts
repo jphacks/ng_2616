@@ -59,7 +59,7 @@ export class DirectAiService implements AiService {
     // a read the parser cannot handle is kept as written and marked not checkable, never failed
     const parsed = wireToSegments(wire.data.segments, { functions: input.functions, symbols: input.symbols, allowUnparsed: true });
     if (!parsed.ok) throw new AiError('IR_INVALID', `${parsed.message} — read as: ${parsed.latex}`.slice(0, 400));
-    return { segments: parsed.segments, unreadable: wire.data.unreadable, mock: false, transcription };
+    return { segments: parsed.segments, unreadable: wire.data.unreadable, mock: false, transcription, ...(wire.data.route ? { route: wire.data.route } : {}) };
   }
 
   async suggest(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult> {
@@ -86,12 +86,15 @@ export class DirectAiService implements AiService {
     if (!wire.success) throw new AiError('SCHEMA_INVALID', 'suggestion output did not match the schema');
     if (process.env.NODE_ENV === 'development') console.info('[suggest]', input.mode, JSON.stringify(raw).slice(0, 600));
     if (!wire.data.has_candidate) return { state: 'NONE', reason: 'MODEL_DECLINED', mock: false };
-    const parsed = wireToSegments(wire.data.segments, { functions: input.context.functions ?? [] });
+    const strict = wireToSegments(wire.data.segments, { functions: input.context.functions ?? [] });
+    // a proof step keeps notation the CAS cannot read: Lean checks it instead (ADR 0007)
+    const proofStep = wire.data.route === 'lean' && input.mode === 'NEXT_STEP';
+    const parsed = proofStep ? wireToSegments(wire.data.segments, { functions: input.context.functions ?? [], allowUnparsed: true }) : strict;
     if (!parsed.ok) {
       if (process.env.NODE_ENV === 'development') console.info('[suggest] unparsable', parsed.message, parsed.latex);
       return { state: 'NONE', reason: 'IR_INVALID', mock: false };
     }
-    return finalizeCandidate(input, parsed.segments, wire.data.role, false);
+    return finalizeCandidate(input, parsed.segments, wire.data.role, false, proofStep ? 'lean' : undefined);
   }
 
   async ocrPage(input: OcrPageInput, ctx: CallCtx): Promise<OcrPageResult> {

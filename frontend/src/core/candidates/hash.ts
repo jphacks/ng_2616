@@ -21,3 +21,19 @@ export function lineHash(segments: readonly (Segment | InputSegment)[]): Hash {
 export function candidateHash(mode: SuggestMode, lines: readonly (readonly (Segment | InputSegment)[])[]): Hash {
   return hashOf({ mode, lines: lines.map(mathKey) });
 }
+
+/**
+ * A proof step is mostly words ("Let ε > 0 be given"), so its identity keeps the prose, compared
+ * without case or extra spaces (ADR 0007). Used for Lean-routed suggestions only.
+ */
+function proofKey(segments: readonly (Segment | InputSegment)[]) {
+  return segments.map((s) => (s.type === 'math' ? { expr: s.expr, notation: s.notation } : s.text.toLowerCase().replace(/\s+/g, ' ').trim()));
+}
+
+export function proofLineHash(segments: readonly (Segment | InputSegment)[]): Hash {
+  return hashOf(proofKey(segments));
+}
+
+export function proofCandidateHash(mode: SuggestMode, lines: readonly (readonly (Segment | InputSegment)[])[]): Hash {
+  return hashOf({ mode, route: 'lean', lines: lines.map(proofKey) });
+}

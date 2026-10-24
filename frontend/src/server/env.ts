@@ -14,8 +14,14 @@ const schema = z.object({
   LLM_THINKING_RECOGNIZE: thinking.default('medium'),
   LLM_THINKING_SUGGEST: thinking.default('medium'),
   LLM_THINKING_OCR: thinking.default('minimal'),
+  // ADR 0007: Lean translation needs the strongest model and real thinking
+  LLM_MODEL_LEAN: z.string().default('gemini-3.8-flash'),
+  LLM_THINKING_LEAN: thinking.default('high'),
   BACKEND_URL: z.string().optional(),
   BACKEND_API_KEY: z.string().optional(),
+  /** lean-worker (ADR 0007): loopback HTTP in development, HTTPS or a private network otherwise */
+  LEAN_WORKER_URL: z.string().optional(),
+  LEAN_WORKER_KEY: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().default(''),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().default(''),
   NEXT_PUBLIC_AUTH_DEV_BYPASS: z.string().default('false'),
@@ -36,6 +42,11 @@ export function serverEnv(): ServerEnv {
     const local = parsed.APP_ENV === 'local' && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url);
     if (!url.startsWith('https://') && !local) throw new Error('BACKEND_URL must be HTTPS (loopback HTTP only with APP_ENV=local)');
     if (!parsed.BACKEND_API_KEY || parsed.BACKEND_API_KEY.length < 43) throw new Error('BACKEND_API_KEY must hold at least 32 random bytes');
+  }
+  if (parsed.LEAN_WORKER_URL) {
+    const url = parsed.LEAN_WORKER_URL;
+    const local = parsed.APP_ENV === 'local' && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url);
+    if (!url.startsWith('https://') && !local) throw new Error('LEAN_WORKER_URL must be HTTPS (loopback HTTP only with APP_ENV=local)');
   }
   cached = { ...parsed, devBypass, buildId: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev' };
   return cached;

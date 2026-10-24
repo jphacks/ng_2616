@@ -4,6 +4,8 @@ import type {
   CandidateDraftResult,
   Capabilities,
   Job,
+  LeanCheckInput,
+  LeanCheckResult,
   Meta,
   OcrPageInput,
   OcrPageResult,
@@ -79,4 +81,5 @@ export const api = {
   recognize: (meta: Meta, input: RecognizeInput, signal?: AbortSignal) => runJob<RecognizeResult>('recognize', meta, input, signal),
   suggest: (meta: Meta, input: SuggestInput, signal?: AbortSignal) => runJob<CandidateDraftResult>('suggest', meta, input, signal),
   ocrPage: (meta: Meta, input: OcrPageInput, signal?: AbortSignal) => runJob<OcrPageResult>('resources/page', meta, input, signal),
+  leanCheck: (meta: Meta, input: LeanCheckInput, signal?: AbortSignal) => runJob<LeanCheckResult>('lean/check', meta, input, signal),
 };
