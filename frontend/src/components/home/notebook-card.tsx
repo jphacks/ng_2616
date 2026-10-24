@@ -112,24 +112,24 @@ export function NotebookCard({
         exit={{ opacity: 0, scale: 0.96, transition: exit }}
         transition={{ ...enter, delay: stagger ? Math.min(index, 8) * 0.03 : 0, scale: exit }}
         className={clsx(
-          'group relative overflow-hidden rounded-3xl bg-sheet',
+          'group relative aspect-page overflow-hidden rounded-3xl bg-sheet',
           lifted ? 'shadow-float' : 'shadow-card',
           selection && 'ring-2 ring-accent',
         )}
       >
+        {/* the page fills the card, with its title on a solid band along the bottom */}
         <button
           type="button"
           aria-pressed={selecting ? selection : undefined}
           onClick={() => (selecting ? handlers.onToggle(nb.id) : handlers.onOpen(nb.id))}
-          className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-inset"
+          className="absolute inset-0 block text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-inset"
         >
           <NotebookPreview preview={nb.preview} />
-          <span className="block space-y-1 border-t border-border px-4 pt-3 pb-4">
-            <span className="line-clamp-2 text-base leading-snug font-medium text-balance">{nb.title}</span>
-            <span className="flex items-center gap-2 text-xs text-muted tabular-nums">
-              <span className="truncate">{edited}</span>
-              {nb.demo && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-2xs font-medium text-accent-strong">{t('home.demo')}</span>}
+          <span className="absolute inset-x-0 bottom-0 block bg-ink/90 px-4 pt-2.5 pb-3">
+            <span data-card-title className="block truncate text-base font-semibold text-on-solid">
+              {nb.title}
             </span>
+            <span className="block truncate text-xs text-on-solid/70 tabular-nums">{edited}</span>
           </span>
         </button>
         {selecting ? (
@@ -165,9 +165,9 @@ export function NotebookCard({
 /** Same shape as a card, shown while the list loads. */
 export function NotebookCardSkeleton() {
   return (
-    <li aria-hidden className="overflow-hidden rounded-3xl bg-sheet shadow-card">
-      <Bone className="aspect-[4/3]" />
-      <div className="space-y-2.5 border-t border-border px-4 pt-3.5 pb-4">
+    <li aria-hidden className="relative aspect-page overflow-hidden rounded-3xl bg-sheet shadow-card">
+      <Bone className="absolute inset-0" />
+      <div className="absolute inset-x-0 bottom-0 space-y-2 bg-fill px-4 pt-3 pb-3.5">
         <Bone className="h-3.5 w-3/4 rounded-full" />
         <Bone className="h-3 w-1/3 rounded-full" />
       </div>

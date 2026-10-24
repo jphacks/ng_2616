@@ -1,20 +1,21 @@
 'use client';
 
 import clsx from 'clsx';
-import { ArrowDownUp, Atom, Copy, Info, Plus, RefreshCw, Search, Sigma, Sparkles, SquareFunction, Trash2, Variable, X } from 'lucide-react';
+import { ArrowDownUp, Atom, Copy, Info, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { DEV_BYPASS, useSessionUser } from '@/core/auth/browser';
 import { duplicateNotebook, renameNotebook } from '@/core/persistence/library';
 import { pushAllPending } from '@/core/persistence/outbox';
 import { getRepository, importDeviceNotebooks, isCloudUnavailable, RepoError, type NotebookSummary } from '@/core/persistence/repo';
 import { arrange, useLibraryPrefs, type LibrarySort } from '@/core/prefs/library';
-import { buildNotebook, presetText, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
+import { buildNotebook, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
 import { addBuiltinResource } from '@/core/resources/service';
 import { useLocale, useT } from '@/i18n';
 import { AccountMenu } from '@/components/account/account-menu';
 import { Button } from '@/ui/button';
+import { IntegralIcon } from '@/ui/icons';
 import { Menu, MenuPopup, MenuRadioItem } from '@/ui/menu';
 import { Spinner } from '@/ui/spinner';
 import { NotebookCardSkeleton } from './notebook-card';
@@ -22,7 +23,7 @@ import { NotebookGrid, type GridActions } from './notebook-grid';
 import { PULL_THRESHOLD, usePullToRefresh } from './use-pull-refresh';
 import { enter } from '@/ui/motion';
 
-const PRESET_ICON: Record<PresetId, typeof Atom> = { blank: Plus, schrodinger: Atom, integral: Sigma, expansion: Variable, solutions: SquareFunction };
+const PRESET_ICON: Record<PresetId, ComponentType<LucideProps>> = { blank: Plus, schrodinger: Atom, integral: IntegralIcon, expansion: Variable, solutions: SquareFunction };
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
 // a deleted card can be restored from the toast until this passes
 const UNDO_MS = 5000;
@@ -231,17 +232,23 @@ export function NotebookHome() {
           <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Sigma size={19} aria-hidden />
           </span>
-          <h1 className="flex-1 text-lg font-semibold">{t('app.name')}</h1>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="text-lg font-semibold">{t('app.name')}</h1>
+            {(local || DEV_BYPASS) && (
+              <span
+                title={t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}
+                className="inline-flex min-w-0 items-center gap-1 rounded-full bg-unknown-soft px-2.5 py-1 text-xs font-medium text-unknown"
+              >
+                <Info size={13} className="shrink-0" aria-hidden />
+                <span className="truncate">{t(DEV_BYPASS ? 'home.devChip' : 'home.localChip')}</span>
+                <span className="sr-only">{t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}</span>
+              </span>
+            )}
+          </div>
           <AccountMenu user={user} />
         </header>
 
         <main className={clsx('mx-auto max-w-5xl space-y-10 px-6 py-8', selected ? 'pb-28' : 'pb-[max(2rem,env(safe-area-inset-bottom))]')}>
-          {(local || DEV_BYPASS) && (
-            <p className="flex items-start gap-2 rounded-2xl bg-unknown-soft p-4 text-md text-unknown">
-              <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
-              {t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}
-            </p>
-          )}
           {syncNotice && (
             <p className="flex items-start gap-2 rounded-2xl bg-accent-soft p-4 text-md text-accent-strong">
               <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
@@ -261,8 +268,9 @@ export function NotebookHome() {
           )}
 
           <section className="space-y-4">
-            <h2 className="text-sm font-semibold text-balance uppercase tracking-wide text-muted">{t('home.choose')}</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <h2 className="text-3xl font-semibold text-balance">{t('home.choose')}</h2>
+            {/* a swipeable shelf: the cut-off card at the edge hints there are more */}
+            <div className="scrollbar-none -mx-6 flex snap-x snap-mandatory scroll-px-6 gap-3 overflow-x-auto px-6 pb-1">
               {PRESET_IDS.map((id) => (
                 <PresetCard key={id} id={id} busy={creating === id} disabled={!!creating} onCreate={() => void create(id)} />
               ))}
@@ -271,29 +279,35 @@ export function NotebookHome() {
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="flex-1 text-sm font-semibold text-balance uppercase tracking-wide text-muted">{t('home.title')}</h2>
+              <h2 className="flex-1 text-3xl font-semibold text-balance">{t('home.title')}</h2>
               <SearchField value={query} onChange={setQuery} />
               <SortMenu value={prefs.sort} onChange={prefs.setSort} />
             </div>
             {visible === null ? (
-              <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-busy="true" aria-label={t('common.loading')}>
-                {Array.from({ length: 4 }, (_, i) => (
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label={t('common.loading')}>
+                {Array.from({ length: 3 }, (_, i) => (
                   <NotebookCardSkeleton key={i} />
                 ))}
               </ul>
             ) : visible.length === 0 ? (
-              <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border p-8 text-center">
-                <p className="text-base text-pretty text-muted">{query.trim() ? t('home.noMatches', { q: query.trim() }) : t('home.empty')}</p>
-                {query.trim() ? (
+              query.trim() ? (
+                <div className="flex flex-col items-center gap-4 py-10 text-center">
+                  <p className="text-base text-pretty text-muted">{t('home.noMatches', { q: query.trim() })}</p>
                   <Button variant="secondary" icon={<X size={16} aria-hidden />} onClick={() => setQuery('')}>
                     {t('home.clearSearch')}
                   </Button>
-                ) : (
-                  <Button variant="primary" icon={creating === 'blank' ? <Spinner /> : <Plus size={17} aria-hidden />} disabled={!!creating} onClick={() => void create('blank')}>
-                    {t('home.new')}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-5 py-12 text-center">
+                  <span className="flex size-20 items-center justify-center rounded-full bg-accent-soft text-accent">
+                    <PenLine size={36} strokeWidth={1.75} aria-hidden />
+                  </span>
+                  <p className="text-2xl font-semibold text-balance">{t('home.empty')}</p>
+                  <Button variant="primary" size="lg" icon={creating === 'blank' ? <Spinner /> : <Plus size={18} aria-hidden />} disabled={!!creating} onClick={() => void create('blank')}>
+                    {t('preset.blank.action')}
                   </Button>
-                )}
-              </div>
+                </div>
+              )
             ) : (
               <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} selected={selected} actions={actions} />
             )}
@@ -382,35 +396,34 @@ export function NotebookHome() {
   );
 }
 
+/**
+ * A starting point: a solid accent card with its icon drawn large behind a big action title.
+ * "New empty notebook" uses the deeper accent as the screen's main action.
+ */
 function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: boolean; disabled: boolean; onCreate: () => void }) {
   const t = useT();
-  const { locale } = useLocale();
   const Icon = PRESET_ICON[id];
-  const primary = id === 'blank';
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onCreate}
       className={clsx(
-        'flex min-h-32 flex-col items-start gap-3 rounded-3xl p-4 text-left transition-transform duration-fast active:scale-[0.98] disabled:cursor-not-allowed',
-        primary ? 'border border-dashed border-accent/40 bg-accent-soft/40 hover:bg-accent-soft/70' : 'bg-sheet shadow-card hover:-translate-y-0.5',
+        '@container group relative flex aspect-[5/4] w-[64%] shrink-0 snap-start overflow-hidden rounded-3xl p-5 text-left shadow-card',
+        'transition-transform duration-fast active:scale-[0.97] disabled:cursor-not-allowed motion-reduce:transition-none sm:w-[38%] lg:w-[26%]',
+        id === 'blank' ? 'bg-accent-deep' : 'bg-accent',
       )}
     >
-      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-accent text-on-solid' : 'bg-accent-soft text-accent')}>
-        {busy ? <Spinner size={18} /> : <Icon size={19} aria-hidden />}
-      </span>
-      <span className="space-y-1">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base leading-snug font-semibold">
-          {presetText(id, locale).title}
-          {id === 'schrodinger' && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-2xs font-medium text-accent-strong">
-              <Sparkles size={11} aria-hidden /> {t('home.demo')}
-            </span>
-          )}
-        </span>
-        <span className="line-clamp-2 block text-sm leading-snug text-pretty text-muted">{t(`preset.${id}.desc`)}</span>
-      </span>
+      <Icon
+        aria-hidden
+        strokeWidth={1.5}
+        className={clsx(
+          'absolute top-4 right-4 h-[calc(100%-2rem)] w-auto transition-transform duration-fast group-active:-translate-y-1 group-active:-rotate-6 motion-reduce:transition-none',
+          id === 'blank' ? 'text-accent-deep-shade' : 'text-accent-shade',
+        )}
+      />
+      {busy && <Spinner size={20} className="absolute top-4 left-4 text-on-solid" />}
+      <span className="relative mt-auto text-display leading-tight font-semibold text-balance text-on-solid">{t(`preset.${id}.action`)}</span>
     </button>
   );
 }

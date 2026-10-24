@@ -57,6 +57,11 @@
   --color-accent: var(--brand-accent);
   --color-accent-strong: color-mix(in oklab, var(--brand-accent), black 10%);
   --color-accent-soft: color-mix(in oklch, var(--brand-accent) 9%, white);
+  /* a deeper accent for the one hero action on a screen */
+  --color-accent-deep: color-mix(in oklab, var(--brand-accent), black 32%);
+  /* artwork drawn on an accent or accent-deep fill: solid and darker, so white text over it stands out */
+  --color-accent-shade: color-mix(in oklab, var(--brand-accent), black 22%);
+  --color-accent-deep-shade: color-mix(in oklab, var(--brand-accent), black 48%);
 
   /* — color: text, from strongest to weakest — */
   --color-ink: var(--brand-ink);
@@ -116,6 +121,8 @@
   --text-2xl: 1.125rem; /* 18px  sheet titles */
   --text-3xl: 1.25rem; /* 20px  page headings */
   --text-4xl: 1.875rem; /* 30px  hero headings */
+  /* titles on hero cards: 36px, shrinking with the card (an @container) on narrow phones */
+  --text-display: clamp(1.5rem, 13.5cqi, 2.25rem);
 
   /* — shape — */
   --radius-sm: 0.25rem;
@@ -125,6 +132,9 @@
   --radius-2xl: 1rem; /* panels: menus, toasts, line sheets */
   --radius-3xl: 1.5rem; /* cards and dialogs */
   --radius-frame: 2.75rem;
+
+  /* a notebook page in landscape, as on an iPad (1180 × 820) */
+  --aspect-page: 1180 / 820;
   --radius-frame-screen: 1.75rem;
 
   /* — elevation, tinted by the ink — */
@@ -230,8 +240,16 @@ body {
   color: var(--color-ink-soft);
 }
 
-.scrollbar-thin {
+@utility scrollbar-thin {
   scrollbar-width: thin;
+}
+
+/* horizontal shelves scroll by swipe; the cut-off card hints there is more */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 button,

@@ -4,7 +4,7 @@ import { mockRecognition, mockSuggestions, openHome, openPreset, rows, statusOf,
 test('autosave, reload and reopen keep lines and verification', async ({ page }) => {
   await mockRecognition(page, ['$(x-2)(x-3)$', '$= x^2 - 5x + 6$']);
   await mockSuggestions(page, []);
-  await openPreset(page, /Expansion/);
+  await openPreset(page, /Expand a polynomial/);
   await writeAndConfirm(page);
   await writeAndConfirm(page);
   await expect(statusOf(page, 1)).toHaveAttribute('title', 'Verified');
@@ -28,7 +28,7 @@ test('autosave, reload and reopen keep lines and verification', async ({ page })
 test('edits made just before a reload are recovered from the device outbox', async ({ page }) => {
   await mockRecognition(page, ['$(x-2)(x-3)$']);
   await mockSuggestions(page, []);
-  await openPreset(page, /Expansion/);
+  await openPreset(page, /Expand a polynomial/);
   await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
   await writeAndConfirm(page);
   await expect(statusOf(page, 0)).toHaveAttribute('title', /./);
@@ -40,7 +40,7 @@ test('edits made just before a reload are recovered from the device outbox', asy
 });
 
 test('a notebook can be deleted from the list, and the delete undone first', async ({ page }) => {
-  await openPreset(page, /Solving an equation/);
+  await openPreset(page, /Solve a quadratic equation/);
   await openHome(page);
   const item = page.getByRole('listitem').filter({ hasText: 'Solving an equation' });
   await expect(item).toHaveCount(1);
@@ -57,12 +57,12 @@ test('a notebook can be deleted from the list, and the delete undone first', asy
   await expect(notice).toBeVisible();
   await expect(notice).toHaveCount(0, { timeout: 10_000 });
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
   await expect(item).toHaveCount(0);
 });
 
 test('a notebook can be renamed from its card menu', async ({ page }) => {
-  await openPreset(page, /Definite integral/);
+  await openPreset(page, /Solve a definite integral/);
   await openHome(page);
   const item = page.getByRole('listitem').filter({ hasText: 'Definite integral' }).first();
   await item.click({ button: 'right' });
@@ -82,7 +82,7 @@ test('resources: upload a PDF, view pages, pin a textbook page, remove it', asyn
   const pdf = await maker.pdf({ format: 'A5' });
   await maker.close();
 
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await page.getByRole('tab', { name: 'Resources' }).click();
   await expect(page.getByText('Upload a problem sheet or textbook').first()).toBeVisible();
   await page.getByRole('button', { name: 'Add resource' }).first().click();
@@ -115,10 +115,10 @@ test('language toggle in the account menu switches to Japanese and back', async 
   await openHome(page);
   await page.getByRole('button', { name: 'Account' }).click();
   await page.getByRole('menuitemradio', { name: '日本語' }).click();
-  await expect(page.getByRole('heading', { name: '始め方を選んでください' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '新しく始める' })).toBeVisible();
   await page.getByRole('button', { name: 'アカウント' }).click();
   await page.getByRole('menuitemradio', { name: 'English' }).click();
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
 });
 
 test('settings page switches finger input and keeps it after reload', async ({ page }) => {
@@ -147,14 +147,14 @@ test('iPad frame for demos rotates between landscape and portrait', async ({ pag
 });
 
 test('holding a card (touch or mouse) opens its menu; holding and moving reorders the cards', async ({ page }) => {
-  await openPreset(page, /Expansion/);
-  await openPreset(page, /Solving an equation/);
+  await openPreset(page, /Expand a polynomial/);
+  await openPreset(page, /Solve a quadratic equation/);
   await openHome(page);
   const cdp = await page.context().newCDPSession(page);
   const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x = 0, y = 0) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
   const cards = page.getByRole('listitem');
-  const titles = () => cards.locator('span.line-clamp-2').allTextContents();
+  const titles = () => cards.locator('[data-card-title]').allTextContents();
   const [first, second] = await titles();
 
   const a = (await cards.nth(0).boundingBox())!;
@@ -186,13 +186,13 @@ test('holding a card (touch or mouse) opens its menu; holding and moving reorder
   expect((await titles()).slice(0, 2)).toEqual([second, first]);
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
   await expect.poll(async () => (await titles()).slice(0, 2)).toEqual([second, first]);
 });
 
 test('selection mode deletes several notebooks with one Undo', async ({ page }) => {
-  await openPreset(page, /Expansion/);
-  await openPreset(page, /Solving an equation/);
+  await openPreset(page, /Expand a polynomial/);
+  await openPreset(page, /Solve a quadratic equation/);
   await openHome(page);
   const cards = page.getByRole('listitem');
   const before = await cards.count();
