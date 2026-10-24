@@ -49,6 +49,25 @@ export function patchPending(commands: Command[], settled: Line): Command[] {
   return commands.map((c) => ({ ...c, before: patch(c.before), after: patch(c.after) }));
 }
 
+/**
+ * A verdict that does not change a line's content (Lean's, ADR 0007) reaches every history
+ * snapshot holding the same version of that line, so Undo/Redo keep it instead of asking again.
+ */
+export function patchSameVersion(commands: Command[], annotated: Line): Command[] {
+  const patch = (s: Snapshot): Snapshot => {
+    let changed = false;
+    const lines = s.lines.map((l) => {
+      if (l.id === annotated.id && l.version === annotated.version && l !== annotated) {
+        changed = true;
+        return annotated;
+      }
+      return l;
+    });
+    return changed ? { ...s, lines } : s;
+  };
+  return commands.map((c) => ({ ...c, before: patch(c.before), after: patch(c.after) }));
+}
+
 /** Redo of an unfinished command restores an explicit retry state, never automatic paid work. */
 export function interruptPending(s: Snapshot): Snapshot {
   if (!s.lines.some((l) => PENDING_STATES.has(l.state))) return s;

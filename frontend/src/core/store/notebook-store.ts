@@ -4,7 +4,7 @@ import type { Line, Notebook, Proof, Segment, SuggestMode, Target, Verified } fr
 import { create } from 'zustand';
 import type { RejectionHistory } from '@/core/candidates/rejection';
 import type { SyncState } from '@/core/persistence/autosave';
-import { HISTORY_LIMIT, interruptPending, patchPending, type Command, type CommandType, type Snapshot } from '@/core/history/history';
+import { HISTORY_LIMIT, interruptPending, patchPending, patchSameVersion, type Command, type CommandType, type Snapshot } from '@/core/history/history';
 
 export type Tool = 'pen' | 'eraser' | 'view';
 export type Tab = 'canvas' | 'resources';
@@ -16,6 +16,8 @@ export interface CandidateLine {
   target: Target;
   segments: Segment[];
   verified?: Verified;
+  /** route and Lean verdict the line keeps when adopted (ADR 0007) */
+  extensions?: Line['extensions'];
 }
 
 export interface Candidate {
@@ -78,6 +80,8 @@ export interface NotebookState {
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
   ghostConfirm: boolean;
+  /** lines whose Lean check is still running (ADR 0007) */
+  leanPending: Record<string, true>;
   toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
 
   load(nb: Notebook, revision: number | null): void;
@@ -87,6 +91,8 @@ export interface NotebookState {
   /** Replace a line outside history (async results), patching pending snapshots. */
   settleLine(line: Line): void;
   patchLine(id: string, fn: (l: Line) => Line): void;
+  /** Same content, new verdict (Lean): replaces the line here and in history snapshots of its version. */
+  annotateLine(line: Line): void;
   undo(): boolean;
   redo(): boolean;
   bumpEpoch(): number;
@@ -126,6 +132,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
   sheet: null,
   suggesting: false,
   ghostConfirm: false,
+  leanPending: {},
   toast: null,
 
   load(nb, revision) {
@@ -143,6 +150,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
       rejection: null,
       rejections: {},
       sheet: null,
+      leanPending: {},
     });
   },
 
@@ -165,6 +173,13 @@ export const useNotebook = create<NotebookState>((set, get) => ({
     if (!s.notebook) return;
     const lines = s.notebook.lines.map((l) => (l.id === line.id ? line : l));
     set({ notebook: { ...s.notebook, lines }, past: patchPending(s.past, line), future: patchPending(s.future, line), dirty: true });
+  },
+
+  annotateLine(line) {
+    const s = get();
+    if (!s.notebook) return;
+    const lines = s.notebook.lines.map((l) => (l.id === line.id ? line : l));
+    set({ notebook: { ...s.notebook, lines }, past: patchSameVersion(s.past, line), future: patchSameVersion(s.future, line), dirty: true });
   },
 
   patchLine(id, fn) {
