@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, stage-1-prototype]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mn/contracts typecheck
+      - run: pnpm --filter @mn/contracts test
+      - run: pnpm --filter frontend typecheck
+      - run: pnpm --filter frontend lint
+      - run: pnpm --filter frontend build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
+          NEXT_PUBLIC_PYODIDE_INDEX_URL: https://cdn.jsdelivr.net/pyodide/v314.0.7/full/
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: cd packages/cas-core && uv run pytest -q
+      - run: cd packages/cas-core && uv run ruff check cas_core tests
+      - run: cd backend && uv run pytest -q
+      - run: cd backend && uv run ruff check app tests

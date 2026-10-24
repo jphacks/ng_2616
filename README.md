@@ -34,3 +34,9 @@
 #### ハッカソンで開発した独自機能・技術
 * 独自で開発したものの内容をこちらに記載してください
 * 特に力を入れた部分をファイルリンク、またはcommit_idを記載してください。
+
+## 開発者向け / Development
+
+- Setup and tests: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- Stage 1 plan and repository map: [docs/plans/stage-1.md](docs/plans/stage-1.md)
+- Specification: [docs/design/v2.0-en.md](docs/design/v2.0-en.md) · changes: [docs/design/v2.1-deltas.md](docs/design/v2.1-deltas.md)
