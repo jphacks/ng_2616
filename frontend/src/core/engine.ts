@@ -25,9 +25,12 @@ import {
   newDraftLine,
   proofOf,
 } from '@/core/notebook/model';
+import { Autosaver } from '@/core/persistence/autosave';
+import { clearPending, putPending } from '@/core/persistence/outbox';
 import { getRepository } from '@/core/persistence/repo';
 import { demoBinding } from '@/core/presets';
 import { buildReferences } from '@/core/resources/references';
+import { copyNotebookResources } from '@/core/resources/service';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
 
 const SUGGEST_IDLE_MS = 1200;
@@ -48,8 +51,25 @@ export class NotebookEngine {
   private cache = new Map<string, Proof>();
   private unsub: (() => void) | null = null;
   private disposed = false;
+  private autosave: Autosaver;
+  private offAutosave: () => void;
 
   constructor(private deps: EngineDeps) {
+    this.autosave = new Autosaver({
+      getState: () => store.getState(),
+      subscribe: (fn) => store.subscribe(fn),
+      saveCloud: (nb, rev) => getRepository(deps.ownerId).save(nb, rev),
+      saveLocal: (nb, rev) => putPending(deps.ownerId, nb, rev),
+      clearLocal: (id) => clearPending(deps.ownerId, id),
+      onSaved: (nb, rev) => store.getState().markSaved(nb, rev),
+      onStatus: (state, message) => {
+        const s = store.getState();
+        if (s.saveState !== state) s.set('saveState', state);
+        if (s.saveError !== message) s.set('saveError', message);
+      },
+    });
+    this.autosave.start();
+    this.offAutosave = watchPage(this.autosave);
     this.unsub = this.cas.onChange((state, detail) => {
       store.getState().set('cas', { state, detail, version: this.cas.versionString });
       if (state === 'ready') {
@@ -63,6 +83,10 @@ export class NotebookEngine {
 
   dispose() {
     this.disposed = true;
+    // leaving the notebook: send what is left; the outbox keeps it if that fails
+    void this.autosave.flush();
+    this.autosave.stop();
+    this.offAutosave();
     for (const a of this.aborts.values()) a.abort();
     this.aborts.clear();
     this.cancelSuggestion();
@@ -698,38 +722,60 @@ export class NotebookEngine {
 
   // ------------------------------------------------------------------ persistence
 
-  async save(): Promise<boolean> {
-    const s = store.getState();
-    const nb = this.nb;
-    s.set('saveState', 'saving');
-    const repo = getRepository(this.deps.ownerId);
-    try {
-      const res = await repo.save(nb, s.cloudRevision);
-      if (res.ok) {
-        // edits made during the save stay dirty
-        const stillSame = store.getState().notebook === nb;
-        store.getState().set('cloudRevision', res.revision);
-        store.getState().set('saveState', 'saved');
-        if (stillSame) store.getState().set('dirty', false);
-        return true;
-      }
-      store.getState().set('saveState', res.reason === 'conflict' ? 'conflict' : 'error');
-      store.getState().set('saveError', res.message ?? res.reason);
-      return false;
-    } catch (e) {
-      store.getState().set('saveState', 'error');
-      store.getState().set('saveError', e instanceof Error ? e.message : String(e));
-      return false;
-    }
+  /** Saves now instead of waiting for the autosave timer; true when the cloud is up to date. */
+  save(): Promise<boolean> {
+    return this.autosave.flush();
+  }
+
+  /** Edits the cloud does not have yet (they are kept on this device until sent). */
+  get hasUnsent(): boolean {
+    return this.autosave.hasUnsent;
+  }
+
+  retrySave() {
+    this.autosave.retry();
+  }
+
+  /** After a conflict: drop this device's edits and open the cloud's version. */
+  async reload(): Promise<boolean> {
+    const id = this.nb.id;
+    const res = await getRepository(this.deps.ownerId).load(id);
+    if (!res) return false;
+    await clearPending(this.deps.ownerId, id);
+    store.getState().load(res.notebook, res.revision);
+    this.autosave.reset();
+    return true;
   }
 
   /** "Save as another notebook" after a conflict: new id, revision starts at 1. */
   async saveAsCopy(): Promise<string | null> {
     const s = store.getState();
-    const copy: Notebook = { ...this.nb, id: uuid(), title: `${this.nb.title} (2)` };
+    const original = this.nb;
+    const copy: Notebook = { ...original, id: uuid(), title: this.deps.t('sync.copyTitle', { title: original.title }).slice(0, 200) };
     const res = await getRepository(this.deps.ownerId).save(copy, null);
     if (!res.ok) return null;
+    await copyNotebookResources(this.deps.ownerId, original.id, copy.id).catch((e) => console.warn('[copy] resources', e));
+    await clearPending(this.deps.ownerId, original.id);
     s.load(copy, res.revision);
+    this.autosave.reset();
     return copy.id;
   }
+}
+
+/** Saves when the tab is hidden, the network returns, or the page is closed. */
+function watchPage(saver: Autosaver): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const onHide = () => {
+    if (document.visibilityState === 'hidden') void saver.flush();
+  };
+  const onOnline = () => saver.retry();
+  const onPageHide = () => saver.flushLocal();
+  document.addEventListener('visibilitychange', onHide);
+  window.addEventListener('online', onOnline);
+  window.addEventListener('pagehide', onPageHide);
+  return () => {
+    document.removeEventListener('visibilitychange', onHide);
+    window.removeEventListener('online', onOnline);
+    window.removeEventListener('pagehide', onPageHide);
+  };
 }
