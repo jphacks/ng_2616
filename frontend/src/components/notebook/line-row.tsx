@@ -84,6 +84,10 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
               onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
+              onScratchOut={(ids) => {
+                engine.eraseStrokes(line.id, ids);
+                useNotebook.getState().showToast(t('toast.erased'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+              }}
             />
           </div>
         )}

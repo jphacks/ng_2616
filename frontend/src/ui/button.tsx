@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ComponentPropsWithRef, ReactNode } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent-soft';
 
@@ -46,7 +46,7 @@ export function IconButton({
   className,
   children,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }) {
+}: ComponentPropsWithRef<'button'> & { label: string; active?: boolean }) {
   return (
     <button
       type="button"

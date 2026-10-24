@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useDevicePrefs } from '@/core/prefs/device';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { useEngine } from './engine-context';
-import { useMultiFingerTap } from './gestures';
+import { useAutoConfirm, useMultiFingerTap } from './gestures';
 import { LineRow } from './line-row';
 import { ProblemCard } from './problem-card';
 
@@ -20,6 +21,8 @@ export function NotebookPage() {
   const scroller = useRef<HTMLDivElement>(null);
   const t = useT();
   const engine = useEngine();
+
+  useAutoConfirm(useDevicePrefs((s) => s.autoConfirm), watchActiveInk, (id) => void engine.confirmLine(id));
 
   // two fingers tap to undo, three to redo; the toast offers the opposite step
   useMultiFingerTap(scroller, {
@@ -74,6 +77,15 @@ export function NotebookPage() {
       </div>
     </div>
   );
+}
+
+/** Reports the active draft's ink each time it changes (a stroke added or erased). */
+function watchActiveInk(onInk: (lineId: string, ink: readonly unknown[]) => void) {
+  return useNotebook.subscribe((s, prev) => {
+    const line = s.activeLineId ? s.notebook?.lines.find((l) => l.id === s.activeLineId) : undefined;
+    const before = prev.activeLineId ? prev.notebook?.lines.find((l) => l.id === prev.activeLineId) : undefined;
+    if (line?.state === 'DRAFT' && line.ink !== before?.ink) onInk(line.id, line.ink);
+  });
 }
 
 /** Visible numbering: superseded lines keep the number of the line before them. */

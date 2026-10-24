@@ -151,3 +151,58 @@ export function useHoldRepeat(action: () => void, enabled: boolean) {
     },
   };
 }
+
+// long enough to reach for the next symbol, short enough to feel automatic
+const AUTO_CONFIRM_MS = 1800;
+
+/**
+ * Confirms the active draft once its ink has rested for a moment (device setting, off by
+ * default). `watch` reports the active draft's ink whenever it changes; any new pen or finger
+ * contact restarts the wait, so a slow stroke is never cut off.
+ */
+export function useAutoConfirm(
+  enabled: boolean,
+  watch: (onInk: (lineId: string, ink: readonly unknown[]) => void) => () => void,
+  confirm: (lineId: string) => void,
+) {
+  const latest = useRef(confirm);
+  useEffect(() => {
+    latest.current = confirm;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let last: { lineId: string; ink: readonly unknown[] } | null = null;
+    const clear = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    const arm = () => {
+      clear();
+      if (!last || last.ink.length === 0) return;
+      const target = last;
+      timer = setTimeout(() => {
+        if (last === target) latest.current(target.lineId);
+      }, AUTO_CONFIRM_MS);
+    };
+    const stop = watch((lineId, ink) => {
+      last = { lineId, ink };
+      arm();
+    });
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') clear();
+    };
+    // a touch that did not change the ink (a scroll, a tap) lets the wait resume
+    const up = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') arm();
+    };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointerup', up, true);
+    return () => {
+      clear();
+      stop();
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointerup', up, true);
+    };
+  }, [enabled, watch]);
+}

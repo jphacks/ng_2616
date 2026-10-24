@@ -1,13 +1,14 @@
 'use client';
 
 import { SCHEMA_VERSION, type UiLang } from '@mn/contracts';
+import { Switch } from '@base-ui/react/switch';
 import clsx from 'clsx';
 import { ChevronLeft, Download } from 'lucide-react';
 import Link from 'next/link';
 import { useId, useState, type ReactNode } from 'react';
 import { DEV_BYPASS, useSessionUser } from '@/core/auth/browser';
 import { getRepository, isCloudUnavailable } from '@/core/persistence/repo';
-import { useDevicePrefs, type InputMode } from '@/core/prefs/device';
+import { useDevicePrefs, type InkWeight, type InputMode, type ToolbarSide } from '@/core/prefs/device';
 import { useLocale, useT } from '@/i18n';
 import { AccountMenu } from '@/components/account/account-menu';
 import { Button } from '@/ui/button';
@@ -19,8 +20,7 @@ export function SettingsView() {
   const t = useT();
   const { user, loading } = useSessionUser();
   const { locale, setLocale } = useLocale();
-  const inputMode = useDevicePrefs((s) => s.inputMode);
-  const setInputMode = useDevicePrefs((s) => s.setInputMode);
+  const device = useDevicePrefs();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -91,11 +91,44 @@ export function SettingsView() {
         </Section>
 
         <Section title={t('settings.writing')}>
-          <Choices
-            label={t('settings.input')}
-            value={inputMode}
-            onChange={(v) => setInputMode(v as InputMode)}
-            options={INPUT_MODES.map((m) => ({ value: m, label: t(`settings.input.${m}`), description: t(`settings.input.${m}Desc`) }))}
+          <div>
+            <div aria-hidden className="px-5 pt-4 text-[13px] font-medium text-muted">
+              {t('settings.input')}
+            </div>
+            <Choices
+              label={t('settings.input')}
+              value={device.inputMode}
+              onChange={(v) => device.setPref('inputMode', v as InputMode)}
+              options={INPUT_MODES.map((m) => ({ value: m, label: t(`settings.input.${m}`), description: t(`settings.input.${m}Desc`) }))}
+            />
+          </div>
+          <Row label={t('settings.ink')}>
+            <Segmented
+              label={t('settings.ink')}
+              value={device.inkWeight}
+              onChange={(v) => device.setPref('inkWeight', v as InkWeight)}
+              options={(['thin', 'medium', 'thick'] as const).map((w) => ({ value: w, label: t(`ink.${w}`) }))}
+            />
+          </Row>
+          <Row label={t('settings.toolbar')}>
+            <Segmented
+              label={t('settings.toolbar')}
+              value={device.toolbarSide}
+              onChange={(v) => device.setPref('toolbarSide', v as ToolbarSide)}
+              options={(['left', 'center', 'right'] as const).map((w) => ({ value: w, label: t(`settings.toolbar.${w}`) }))}
+            />
+          </Row>
+          <Toggle
+            label={t('settings.scratch')}
+            description={t('settings.scratchDesc')}
+            checked={device.scratchToErase}
+            onChange={(v) => device.setPref('scratchToErase', v)}
+          />
+          <Toggle
+            label={t('settings.autoConfirm')}
+            description={t('settings.autoConfirmDesc')}
+            checked={device.autoConfirm}
+            onChange={(v) => device.setPref('autoConfirm', v)}
           />
         </Section>
 
@@ -179,5 +212,45 @@ function Choices({
         </label>
       ))}
     </fieldset>
+  );
+}
+
+/** A short set of options side by side, as native radios. */
+function Segmented({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  const name = useId();
+  return (
+    <fieldset className="inline-flex rounded-xl bg-black/[0.05] p-1">
+      <legend className="sr-only">{label}</legend>
+      {options.map((o) => (
+        <label
+          key={o.value}
+          className={clsx(
+            'relative flex min-h-9 cursor-pointer items-center rounded-lg px-3 text-[14px] font-medium has-focus-visible:outline-2 has-focus-visible:outline-accent',
+            value === o.value ? 'bg-sheet text-ink shadow-card' : 'text-muted hover:text-ink',
+          )}
+        >
+          <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="sr-only" />
+          {o.label}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function Toggle({ label, description, checked, onChange }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex min-h-14 cursor-pointer items-center gap-4 px-5 py-3">
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-medium">{label}</span>
+        {description && <span className="block text-[13px] text-pretty text-muted">{description}</span>}
+      </span>
+      <Switch.Root
+        checked={checked}
+        onCheckedChange={onChange}
+        className="flex h-7 w-12 shrink-0 rounded-full bg-black/10 p-0.5 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 data-checked:bg-accent"
+      >
+        <Switch.Thumb className="size-6 rounded-full bg-white shadow-card transition-transform duration-150 data-checked:translate-x-5" />
+      </Switch.Root>
+    </label>
   );
 }
