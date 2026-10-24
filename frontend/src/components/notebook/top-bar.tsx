@@ -1,19 +1,21 @@
 'use client';
 
 import clsx from 'clsx';
-import { ChevronLeft, CircleAlert, Cpu, Languages, Save } from 'lucide-react';
+import { ChevronLeft, CircleAlert, Cpu } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import type { SessionUser } from '@/core/auth/browser';
 import { demoBinding } from '@/core/presets';
 import { useNotebook } from '@/core/store/notebook-store';
-import { useLocale, useT } from '@/i18n';
-import { Button } from '@/ui/button';
+import { useT } from '@/i18n';
+import { AccountMenu } from '@/components/account/account-menu';
 import { Spinner } from '@/ui/spinner';
 import { SegmentedTabs } from '@/ui/tabs';
 import { useEngine } from './engine-context';
+import { SaveStatus } from './save-status';
 
-export function TopBar({ mockAi }: { mockAi: boolean }) {
+export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser }) {
   const t = useT();
   const engine = useEngine();
   // select only what the bar shows, so ink edits do not re-render it
@@ -21,21 +23,17 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
   const tab = useNotebook((s) => s.tab);
   const cas = useNotebook((s) => s.cas);
   const dirty = useNotebook((s) => s.dirty);
-  const saveState = useNotebook((s) => s.saveState);
   const set = useNotebook((s) => s.set);
-  const { locale, setLocale } = useLocale();
   const [editing, setEditing] = useState(false);
   if (!nb) return null;
   const demo = nb.demo;
 
   return (
-    <header className="relative z-20 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">
+    <header className="relative z-lifted flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">
+      {/* leaving flushes the autosave; anything unsent stays in the outbox */}
       <Link
         href="/notebooks"
-        onClick={(e) => {
-          if (dirty && !window.confirm(t('top.unsavedLeave'))) e.preventDefault();
-        }}
-        className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-[15px] text-ink-soft hover:bg-black/5"
+        className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-base text-ink-soft hover:bg-hover"
       >
         <ChevronLeft size={20} />
         <span className="hidden lg:inline">{t('top.notebooks')}</span>
@@ -51,14 +49,14 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
               setEditing(false);
             }}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            className="w-full rounded-lg bg-sheet px-2 py-1 text-[16px] font-semibold outline-none ring-2 ring-accent/40"
+            className="w-full rounded-lg bg-sheet px-2 py-1 text-lg font-semibold outline-none ring-2 ring-accent/40"
           />
         ) : (
-          <button type="button" onClick={() => setEditing(true)} className="max-w-full truncate rounded-lg px-2 py-1 text-left text-[16px] font-semibold hover:bg-black/5">
+          <button type="button" onClick={() => setEditing(true)} className="max-w-full truncate rounded-lg px-2 py-1 text-left text-lg font-semibold hover:bg-hover">
             {nb.title}
           </button>
         )}
-        <div className="flex items-center gap-2 px-2 text-[12px] text-muted">
+        <div className="flex items-center gap-2 px-2 text-xs text-muted">
           <CasPill state={cas.state} />
           {demo && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-strong">{t('top.demo')}</span>}
           {mockAi && <span className="rounded-full bg-unknown-soft px-2 py-0.5 font-medium text-unknown">{t('top.mock')}</span>}
@@ -75,10 +73,8 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
         />
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
-        <SaveButton dirty={dirty} state={saveState} onSave={() => void engine.save()} />
-        <Button variant="ghost" size="md" icon={<Languages size={18} />} onClick={() => setLocale(locale === 'en' ? 'ja' : 'en')}>
-          <span className="hidden lg:inline">{t('top.language')}</span>
-        </Button>
+        <SaveStatus />
+        <AccountMenu user={user} unsaved={dirty} />
       </div>
     </header>
   );
@@ -87,39 +83,9 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
 function CasPill({ state }: { state: string }) {
   const t = useT();
   return (
-    <span className={clsx('inline-flex items-center gap-1', state === 'failed' ? 'text-wrong-strong' : state === 'ready' ? 'text-ok' : 'text-muted')}>
+    <span className={clsx('inline-flex items-center gap-1', state === 'failed' ? 'text-danger' : state === 'ready' ? 'text-ok' : 'text-muted')}>
       {state === 'ready' ? <Cpu size={13} /> : state === 'failed' ? <CircleAlert size={13} /> : <Spinner size={12} />}
       {t(state === 'ready' ? 'top.checkerReady' : state === 'failed' ? 'top.checkerFailed' : 'top.checkerLoading')}
     </span>
-  );
-}
-
-function SaveButton({ dirty, state, onSave }: { dirty: boolean; state: string; onSave: () => void }) {
-  const t = useT();
-  const engine = useEngine();
-  if (state === 'conflict') {
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-[13px] text-wrong-strong">{t('top.conflict')}</span>
-        <Button size="sm" onClick={() => window.location.reload()}>
-          {t('top.reload')}
-        </Button>
-        <Button size="sm" onClick={() => void engine.saveAsCopy()}>
-          {t('top.saveCopy')}
-        </Button>
-      </div>
-    );
-  }
-  const label = state === 'saving' ? t('top.saving') : state === 'error' ? t('top.saveFailed') : dirty ? t('top.save') : t('top.saved');
-  return (
-    <Button
-      variant={dirty ? 'primary' : 'secondary'}
-      icon={state === 'saving' ? <Spinner /> : state === 'error' ? <CircleAlert size={18} /> : <Save size={18} />}
-      disabled={state === 'saving' || (!dirty && state !== 'error')}
-      onClick={onSave}
-      title={dirty ? t('top.unsaved') : undefined}
-    >
-      <span className="hidden sm:inline">{label}</span>
-    </Button>
   );
 }

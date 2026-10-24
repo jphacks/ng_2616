@@ -22,6 +22,7 @@ export function rasterizeStrokes(strokes: readonly Stroke[]): { mime: 'image/png
   canvas.width = Math.max(1, Math.round(w * scale));
   canvas.height = Math.max(1, Math.round(h * scale));
   const ctx = canvas.getContext('2d')!;
+  // black on white regardless of the theme: this image is input for handwriting recognition
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#111111';

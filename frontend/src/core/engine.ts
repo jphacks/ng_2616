@@ -4,7 +4,7 @@ import {
   printSegmentLatex,
   type MathJSON,
 } from '@mn/contracts/ir';
-import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
+import { declaredFunctions, type Line, type Meta, type Notebook, type Proof, type Recovery, type Stroke, type SuggestInput, type UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
 import { blockerToastKey, suggestBlockerOf, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
@@ -22,20 +22,28 @@ import {
   findLine,
   hasMath,
   hasUnresolvedWrong,
+  isGiven,
   lastSettledMath,
   lineIndex,
   mathLatexOf,
   newDraftLine,
   proofOf,
+  withDeclarations,
 } from '@/core/notebook/model';
+import { Autosaver } from '@/core/persistence/autosave';
+import { clearPending, openOutbox, putPending, putPendingNow } from '@/core/persistence/outbox';
 import { getRepository } from '@/core/persistence/repo';
 import { demoBinding } from '@/core/presets';
 import { buildReferences } from '@/core/resources/references';
+import { copyNotebookResources } from '@/core/resources/service';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
+import { SUGGEST_ATTEMPTS, checkerFeedback, runAttempts, type Attempt } from '@/core/suggest/attempts';
 
 const SUGGEST_IDLE_MS = 1200;
 /** A hidden (HELD) suggestion comes back after this long without a new stroke (R14; same value as C-01's pen-up wait). */
 export const HELD_QUIET_MS = 1200;
+
+const segmentsLatex = (segments: Line['segments']) => segments.map((seg) => (seg.type === 'math' ? printSegmentLatex(seg.expr, seg.notation) : seg.text)).join(' ');
 
 export interface EngineDeps {
   ownerId: string;
@@ -68,10 +76,29 @@ export class NotebookEngine {
   private cache = new Map<string, Proof>();
   private unsub: (() => void) | null = null;
   private disposed = false;
+  private autosave: Autosaver;
+  private offAutosave: () => void;
 
   constructor(private deps: EngineDeps, overrides: EngineOverrides = {}) {
     this.cas = overrides.cas ?? getCas();
     this.api = overrides.api ?? api;
+    this.autosave = new Autosaver({
+      getState: () => store.getState(),
+      subscribe: (fn) => store.subscribe(fn),
+      saveCloud: (nb, rev) => getRepository(deps.ownerId).save(nb, rev),
+      saveLocal: (nb, rev) => putPending(deps.ownerId, nb, rev),
+      saveLocalNow: (nb, rev) => putPendingNow(deps.ownerId, nb, rev),
+      clearLocal: (id) => clearPending(deps.ownerId, id),
+      onSaved: (nb, rev) => store.getState().markSaved(nb, rev),
+      onStatus: (state, message) => {
+        const s = store.getState();
+        if (s.saveState !== state) s.set('saveState', state);
+        if (s.saveError !== message) s.set('saveError', message);
+      },
+    });
+    openOutbox(deps.ownerId);
+    this.autosave.start();
+    this.offAutosave = watchPage(this.autosave);
     this.unsub = this.cas.onChange((state, detail) => {
       store.getState().set('cas', { state, detail, version: this.cas.versionString });
       if (state === 'ready') {
@@ -85,6 +112,9 @@ export class NotebookEngine {
 
   dispose() {
     this.disposed = true;
+    // leaving the notebook: send what is left; the outbox keeps it if that fails
+    void this.autosave.close();
+    this.offAutosave();
     for (const a of this.aborts.values()) a.abort();
     this.aborts.clear();
     this.cancelSuggestion();
@@ -253,14 +283,14 @@ export class NotebookEngine {
     const ctl = this.slot(`line:${lineId}`);
     const nb = this.nb;
     const prev = contextLinesFor(nb, lineId).filter(hasMath).pop();
-    const userIndex = contextLinesFor(nb, lineId).filter((l) => l.source === 'user' && hasMath(l)).length;
+    const userIndex = contextLinesFor(nb, lineId).filter((l) => l.source === 'user' && !isGiven(l) && hasMath(l)).length;
     try {
       const result = await this.api.recognize(
         this.meta(lineId, version),
         {
           image,
           previous_math_latex: prev ? mathLatexOf(prev) : undefined,
-          functions: nb.problem.functions ?? [],
+          functions: declaredFunctions(nb.lines),
           ui_lang: this.deps.lang(),
           prefetch: false,
           demo: demoBinding(nb),
@@ -273,7 +303,9 @@ export class NotebookEngine {
       if (result.segments.length === 0) return this.failLine(lineId, version, 'recognize', 'RECOGNIZE_UNREADABLE');
       const recognized: Line = { ...line, version: version + 1, state: 'VERIFYING', segments: result.segments };
       store.getState().settleLine(recognized);
+      const reread = this.syncDeclarations();
       await this.verifyLine(lineId);
+      if (reread) void this.recheckStale();
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
       const code = e instanceof ApiCallError ? e.code : 'NETWORK';
@@ -316,6 +348,26 @@ export class NotebookEngine {
       lineId,
     );
     this.abortSlot(`line:${lineId}`);
+    if (this.syncDeclarations()) void this.recheckStale();
+  }
+
+  /**
+   * A function declaration holds for the whole page, so lines written above it are read again
+   * when the declared functions change (outside history: undo restores lines read consistently).
+   * True when any line changed; lines already being checked are checked again.
+   */
+  private syncDeclarations(): boolean {
+    const s = store.getState();
+    const nb = s.notebook;
+    if (!nb) return false;
+    const lines = withDeclarations(nb.lines);
+    if (lines === nb.lines) return false;
+    s.set('notebook', { ...nb, lines });
+    s.set('dirty', true);
+    for (const [i, l] of lines.entries()) {
+      if (l !== nb.lines[i] && l.state === 'VERIFYING') void this.verifyLine(l.id);
+    }
+    return true;
   }
 
   private abortSlot(key: string) {
@@ -401,8 +453,10 @@ export class NotebookEngine {
 
   /** After opening a notebook or a CAS upgrade: recheck lines whose stored input hash no longer matches. */
   async recheckStale() {
+    if (!store.getState().notebook) return;
+    this.syncDeclarations();
     const nb = this.nb;
-    if (!nb || this.cas.status !== 'ready') return;
+    if (this.cas.status !== 'ready') return;
     for (const l of nb.lines) {
       const cur = findLine(this.nb, l.id);
       if (!cur || cur.state !== 'SETTLED' || !hasMath(cur)) continue;
@@ -431,12 +485,20 @@ export class NotebookEngine {
 
   private suggestBlocker(): SuggestBlocker | null {
     const s = store.getState();
-    return suggestBlockerOf({
-      notebook: s.notebook,
-      casReady: this.cas.status === 'ready',
-      candidate: s.candidate?.state ?? null,
-      activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
-    });
+    const nb = s.notebook;
+    if (!nb) return 'none';
+    if (this.cas.status !== 'ready') return 'cas';
+    if (anyPending(nb)) return 'pending';
+    if (hasUnresolvedWrong(nb)) return 'wrong';
+    const last = lastSettledMath(nb);
+    // a template's given lines alone do not start suggestions: the student writes first
+    if (!last || !nb.lines.some((l) => l.state === 'SETTLED' && hasMath(l) && !isGiven(l))) return 'empty';
+    const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
+    if (!incomplete && !canContinueFrom(last)) return 'cannot-continue';
+    if (s.candidate && ['GENERATING', 'VERIFYING', 'READY', 'HELD'].includes(s.candidate.state)) return 'busy';
+    const active = s.activeLineId ? findLine(nb, s.activeLineId) : undefined;
+    if (active && active.state === 'DRAFT' && active.ink.length > 0) return 'writing';
+    return null;
   }
 
   /** True when pressing the suggest button would start a request (the same rules as the automatic start). */
@@ -490,30 +552,49 @@ export class NotebookEngine {
     try {
       const recentText = ctxLines.slice(-8).map(mathLatexOf).join(' ');
       const reference = await buildReferences(this.deps.ownerId, nb.id, recentText).catch(() => []);
-      const input: SuggestInput = {
+      const base: Omit<SuggestInput, 'rejected_hashes'> = {
         context: {
-          problem: nb.problem,
+          functions: declaredFunctions(nb.lines),
           lines: ctxLines.filter((l) => l.segments.length > 0).slice(-64).map((l) => ({ id: l.id, role: l.role, source: l.source, status: proofOf(l)?.status, segments: l.segments })),
         },
         mode,
         based_on_line_id: last.id,
         target_line_id: targetId,
         ...(mode === 'COMPLETE_RHS' && lastMath?.type === 'math' ? { lhs_expr: (lastMath.expr as MathJSON[])[1] as MathJSON } : {}),
-        rejected_hashes: rejected.hashes.slice(-64),
-        rejected_latex: rejected.latex.slice(-16),
+
         ...(reference.length ? { reference } : {}),
         ui_lang: this.deps.lang(),
         demo: demoBinding(nb),
       };
-      const res = await this.api.suggest(slot, input, ctl.signal);
-      if (this.isStale(slot)) return this.discard(pending);
-      if (res.state === 'NONE' || !res.candidate) {
-        store.getState().set('candidate', null);
-        if (manual) store.getState().showToast(this.deps.t('toast.noSuggestion'));
+      const result = await runAttempts<Candidate>(SUGGEST_ATTEMPTS, async (feedback, tried) => {
+        const cur = store.getState();
+        // checker rejections travel as feedback (with the reason), so list them only once
+        const fed = new Set(feedback.map((f) => f.latex));
+        const input: SuggestInput = {
+          ...base,
+          rejected_hashes: [...new Set([...cur.rejectedHashes, ...tried])].slice(-64),
+          rejected_latex: cur.rejectedLatex.filter((l) => !fed.has(l)).slice(-16),
+          ...(feedback.length ? { checker_feedback: feedback } : {}),
+        };
+        if (feedback.length) cur.set('candidate', pending);
+        const res = await this.api.suggest(this.meta(last.id, last.version), input, ctl.signal);
+        if (this.isStale(epoch, last)) return { kind: 'stale' };
+        if (res.state === 'NONE' || !res.candidate) return { kind: 'none' };
+        store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
+        return this.verifyCandidate(res.candidate, pending, ctxLines);
+      });
+      if (result.kind === 'stale') return;
+      if (result.kind === 'show') {
+        const cur = store.getState();
+        const active = cur.activeLineId ? findLine(this.nb, cur.activeLineId) : undefined;
+        const writing = active && active.state === 'DRAFT' && active.ink.length > 0;
+        cur.set('candidate', { ...result.candidate, state: writing ? 'HELD' : 'READY' });
+        if (writing) this.armHeldTimer();
         return;
       }
-      store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
-      await this.verifyCandidate(res.candidate, pending, ctxLines, manual, slot);
+      store.getState().set('candidate', null);
+      // after checker rejections the rejected-suggestion marker explains the empty result
+      if (manual && result.rejected === 0) store.getState().showToast(this.deps.t('toast.noSuggestion'));
     } catch (e) {
       if ((e as Error).name === 'AbortError') return this.discard(pending);
       if (store.getState().candidate?.id === pending.id || store.getState().candidate?.state === 'GENERATING') store.getState().set('candidate', null);
@@ -558,9 +639,7 @@ export class NotebookEngine {
     draft: NonNullable<Awaited<ReturnType<typeof api.suggest>>['candidate']>,
     pending: Candidate,
     ctxLines: Line[],
-    manual: boolean,
-    slot: SlotMeta,
-  ) {
+  ): Promise<Attempt<Candidate>> {
     const nb = this.nb;
     const basedOn = findLine(nb, pending.basedOnLineId)!;
     const verifiedLines: Candidate['lines'] = [];
@@ -572,10 +651,10 @@ export class NotebookEngine {
       const casVersion = this.cas.versionString;
       const hash = inputHash(nb, payload, casVersion);
       const out = await this.cas.verify(payload);
-      if (this.isStale(slot)) return this.discard(pending, draft.id);
+      if (this.isStale(pending.epoch, basedOn)) return { kind: 'stale' };
       if (out.kind === 'unavailable') {
         store.getState().set('candidate', null);
-        return;
+        return { kind: 'stale' };
       }
       const proof = composeProof(out.kind === 'ok' ? out.proof : null, {
         inputHash: hash,
@@ -587,15 +666,7 @@ export class NotebookEngine {
       });
       if (proof.status === 'wrong') {
         this.recordCheckerRejection(draft, pending, cl.segments, proof);
-        const key = `${basedOn.id}:${basedOn.version}`;
-        if (!this.retried.has(key)) {
-          this.retried.add(key);
-          store.getState().set('candidate', null);
-          void this.requestSuggestion(manual);
-        } else {
-          store.getState().set('candidate', null);
-        }
-        return;
+        return { kind: 'wrong', hash: draft.content_hash, feedback: checkerFeedback(segmentsLatex(cl.segments), proof) };
       }
       if (proof.status === 'unknown') policy = 'unverified';
       else if (proof.status === 'none' && policy === 'verified') policy = 'assumption';
@@ -603,17 +674,15 @@ export class NotebookEngine {
       verifiedLines.push({ target, segments: cl.segments, verified });
       chain.push({ id: target.id, version: 1, source: 'ai', role: target.role, state: 'SETTLED', ink: [], segments: cl.segments, verified });
     }
-    const s = store.getState();
-    const active = s.activeLineId ? findLine(this.nb, s.activeLineId) : undefined;
-    const writing = active && active.state === 'DRAFT' && active.ink.length > 0;
-    s.set('candidate', { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy, state: writing ? 'HELD' : 'READY' });
-    if (writing) this.armHeldTimer(); // it may already have been quiet long enough while the suggestion was being made
+    return { kind: 'ready', candidate: { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy } };
   }
 
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
     const s = store.getState();
-    const latex = segments.map((seg) => (seg.type === 'math' ? printSegmentLatex(seg.expr, seg.notation) : seg.text)).join(' ');
-    s.set('rejections', addRejection(s.rejections, pending.rejectKey, draft.content_hash, latex));
+    const latex = segmentsLatex(segments);
+    s.set('rejectedHashes', [...s.rejectedHashes, draft.content_hash]);
+    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
+    if (pending.rejectKey) s.set('rejections', addRejection(s.rejections, pending.rejectKey, draft.content_hash, latex));
     s.set('rejection', { id: draft.id, segments, proof, basedOnLineId: pending.basedOnLineId });
   }
 
@@ -678,6 +747,9 @@ export class NotebookEngine {
     );
     s.set('candidate', null);
     s.set('rejection', null);
+    s.set('rejectedHashes', []);
+    s.set('rejectedLatex', []);
+    if (this.syncDeclarations()) void this.recheckStale();
     this.scheduleSuggestion(500);
     return 'adopted';
   }
@@ -741,22 +813,37 @@ export class NotebookEngine {
   undo() {
     this.abortAll();
     this.cancelSuggestion();
-    if (store.getState().undo()) this.scheduleSuggestion();
+    if (!store.getState().undo()) return;
+    void this.recheckStale();
+    this.scheduleSuggestion();
   }
 
   redo() {
     this.abortAll();
     this.cancelSuggestion();
-    if (store.getState().redo()) this.scheduleSuggestion();
+    if (!store.getState().redo()) return;
+    void this.recheckStale();
+    this.scheduleSuggestion();
   }
 
-  editProblem(problem: Notebook['problem']) {
+  /**
+   * Marks a line as given (a premise: stated, never checked) or back to a step. Lines that are
+   * only assumptions or function declarations count without the mark; the mark is for the rest,
+   * such as an equation the problem states. The line and everything after it is checked again.
+   */
+  setGiven(lineId: string, given: boolean) {
     const s = store.getState();
+    const line = findLine(this.nb, lineId);
+    if (!line || line.state !== 'SETTLED' || isGiven(line) === given) return;
     if (anyPending(this.nb)) {
       s.showToast(this.deps.t('toast.waitForChecks'));
       return;
     }
-    s.commit('EDIT_PROBLEM', (snap) => ({ ...snap, problem }));
+    s.commit(
+      'MARK_GIVEN',
+      (snap) => ({ ...snap, lines: snap.lines.map((l) => (l.id === lineId ? { ...l, version: l.version + 1, role: given ? 'premise' : 'step' } : l)) }),
+      lineId,
+    );
     s.bumpEpoch();
     s.set('candidate', null);
     void this.recheckStale();
@@ -784,38 +871,63 @@ export class NotebookEngine {
 
   // ------------------------------------------------------------------ persistence
 
-  async save(): Promise<boolean> {
-    const s = store.getState();
-    const nb = this.nb;
-    s.set('saveState', 'saving');
-    const repo = getRepository(this.deps.ownerId);
-    try {
-      const res = await repo.save(nb, s.cloudRevision);
-      if (res.ok) {
-        // edits made during the save stay dirty
-        const stillSame = store.getState().notebook === nb;
-        store.getState().set('cloudRevision', res.revision);
-        store.getState().set('saveState', 'saved');
-        if (stillSame) store.getState().set('dirty', false);
-        return true;
-      }
-      store.getState().set('saveState', res.reason === 'conflict' ? 'conflict' : 'error');
-      store.getState().set('saveError', res.message ?? res.reason);
-      return false;
-    } catch (e) {
-      store.getState().set('saveState', 'error');
-      store.getState().set('saveError', e instanceof Error ? e.message : String(e));
-      return false;
-    }
+  /** Saves now instead of waiting for the autosave timer; true when the cloud is up to date. */
+  save(): Promise<boolean> {
+    return this.autosave.flush();
+  }
+
+  /** Edits the cloud does not have yet (they are kept on this device until sent). */
+  get hasUnsent(): boolean {
+    return this.autosave.hasUnsent;
+  }
+
+  retrySave() {
+    this.autosave.retry();
+  }
+
+  /** After a conflict: drop this device's edits and open the cloud's version. */
+  async reload(): Promise<boolean> {
+    const id = this.nb.id;
+    const res = await getRepository(this.deps.ownerId).load(id);
+    if (!res) return false;
+    await clearPending(this.deps.ownerId, id);
+    store.getState().load(res.notebook, res.revision);
+    this.autosave.reset();
+    return true;
   }
 
   /** "Save as another notebook" after a conflict: new id, revision starts at 1. */
   async saveAsCopy(): Promise<string | null> {
     const s = store.getState();
-    const copy: Notebook = { ...this.nb, id: uuid(), title: `${this.nb.title} (2)` };
+    const original = this.nb;
+    const copy: Notebook = { ...original, id: uuid(), title: this.deps.t('sync.copyTitle', { title: original.title }).slice(0, 200) };
     const res = await getRepository(this.deps.ownerId).save(copy, null);
     if (!res.ok) return null;
+    await copyNotebookResources(this.deps.ownerId, original.id, copy.id).catch((e) => console.warn('[copy] resources', e));
+    await clearPending(this.deps.ownerId, original.id);
     s.load(copy, res.revision);
+    this.autosave.reset();
     return copy.id;
   }
+}
+
+/** Saves when the tab is hidden, the network returns, or the page is closed. */
+function watchPage(saver: Autosaver): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const onHide = () => {
+    if (document.visibilityState !== 'hidden') return;
+    // the page may be about to unload (reload, tab closed): device copy first, synchronously
+    saver.flushLocal();
+    void saver.flush();
+  };
+  const onOnline = () => saver.retry();
+  const onPageHide = () => saver.flushLocal();
+  document.addEventListener('visibilitychange', onHide);
+  window.addEventListener('online', onOnline);
+  window.addEventListener('pagehide', onPageHide);
+  return () => {
+    document.removeEventListener('visibilitychange', onHide);
+    window.removeEventListener('online', onOnline);
+    window.removeEventListener('pagehide', onPageHide);
+  };
 }

@@ -12,7 +12,7 @@ from typing import Any
 import sympy as sp
 from sympy.core.function import AppliedUndef
 
-from .context import Context, Fact
+from .context import Context, Fact, declaration_kind
 from .evidence import (
     classify_expressions,
     denominators_ir,
@@ -25,6 +25,7 @@ from .evidence import (
 from .ir import (
     CONSTANTS,
     INEQUALITIES,
+    RELATION_HEADS,
     CasIncomplete,
     CasUnreadable,
     CasUnsupported,
@@ -38,8 +39,6 @@ from .ir import (
     to_sympy,
     walk_ir,
 )
-
-RELATION_HEADS = {"Equal", "EqualChain", "And", "Or"} | INEQUALITIES
 
 
 @dataclass
@@ -97,6 +96,9 @@ def conv_rel(ir: Any, ctx: Context) -> tuple[Rel | None, set[str]]:
 
 
 def verify_segment(ir: Any, notation: str, role: str, ctx: Context) -> SegResult:
+    declares = declaration_kind(ir) if notation == "plain" else None
+    if declares:
+        return _none(declares, declares)
     if role == "premise":
         return _none("PREMISE", "PREMISE")
     if ir_has(ir, {"Unparsed"}):
@@ -167,8 +169,8 @@ def _appears_in_derivative(name: str, ctx: Context) -> bool:
 
 
 def definition_check(ir: Any, role: str, ctx: Context) -> SegResult | None:
-    if any(_same_ir(ir, d) for d in ctx.problem_definitions):
-        return _none("DEFINITION", "DEFINITION")
+    if any(f.is_definition and _same_ir(ir, f.ir) for f in ctx.facts):
+        return _none("DEFINITION", "DEFINITION")  # the definition written out again
     if not (is_node(ir) and ir[0] == "Equal"):
         return _unknown("UNSUPPORTED", "DEFINITION") if role == "definition" else None
     lhs, rhs = ir[1], ir[2]
@@ -191,7 +193,7 @@ def definition_check(ir: Any, role: str, ctx: Context) -> SegResult | None:
         if _appears_in_derivative(name, ctx):
             return None  # a claimed solution of an earlier differential equation
         return _none("DEFINITION", "DEFINITION")
-    if resolved in ctx.known_names or resolved in ctx.unknowns or resolved in env.aliases.values():
+    if resolved in ctx.known_names or resolved in env.aliases.values():
         return None
     if not (ir_symbols(rhs) - set(CONSTANTS)):
         return None  # "x = 2" on its own is a claim with no source, not a definition
@@ -215,8 +217,7 @@ def _no_parent(goal: str, ctx: Context) -> SegResult:
 def _parent_expression(ctx: Context) -> tuple[Fact, Any] | None:
     by_line: dict[str, list[Fact]] = {}
     for f in ctx.facts:
-        if f.line_id != "problem":
-            by_line.setdefault(f.line_id, []).append(f)
+        by_line.setdefault(f.line_id, []).append(f)
     order = sorted(by_line, key=lambda lid: max(x.order for x in by_line[lid]), reverse=True)
     if ctx.parent_id in by_line:
         order.remove(ctx.parent_id)
@@ -616,9 +617,6 @@ def compare_relations(T: Rel, S: Rel, ctx: Context) -> SegResult | None:
 def _pick_unknown(T: Rel, S: Rel, ctx: Context) -> sp.Symbol | None:
     env = ctx.env
     t_free = rel_free_symbols(T)
-    declared = [env.sym(u) for u in ctx.unknowns if env.sym(u) in t_free]
-    if len(declared) == 1:
-        return declared[0]
     if T.op in ("Equal", "EqualAny") and isinstance(T.lhs, sp.Symbol) and not env.is_parameter(T.lhs.name):
         return T.lhs
     cands = [s for s in t_free if not env.is_parameter(s.name) and s.name not in env.independent]
@@ -740,11 +738,7 @@ def _witnesses(Ts: sp.Set, Ss: sp.Set, x: sp.Symbol, ctx: Context) -> tuple[list
 
 
 def system_compare(T: Rel, ctx: Context) -> SegResult | None:
-    env = ctx.env
-    t_free = rel_free_symbols(T)
-    unknowns = [env.sym(u) for u in ctx.unknowns if env.sym(u) in t_free]
-    if not unknowns:
-        unknowns = [p.lhs for p in T.parts if p.op == "Equal" and isinstance(p.lhs, sp.Symbol)]
+    unknowns = [p.lhs for p in T.parts if p.op == "Equal" and isinstance(p.lhs, sp.Symbol)]
     if not unknowns or len(unknowns) > 3:
         return None
     for f in sorted(ctx.facts, key=lambda f: (f.line_id == ctx.parent_id, f.order), reverse=True):

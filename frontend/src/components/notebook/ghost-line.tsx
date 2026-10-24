@@ -24,7 +24,7 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
 
   if (candidate.state === 'GENERATING' || candidate.state === 'VERIFYING') {
     return (
-      <div className="shimmer flex min-h-14 items-center gap-2 rounded-2xl px-4 text-[15px] text-accent">
+      <div className="shimmer flex min-h-14 items-center gap-2 rounded-2xl px-4 text-base text-accent">
         <Spinner />
         {t(candidate.state === 'GENERATING' ? 'ghost.generating' : 'ghost.checking')}
       </div>
@@ -54,7 +54,7 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
         unverified ? 'border-unknown/50 bg-unknown-soft/70' : 'border-accent/40 bg-accent-soft/60',
       )}
     >
-      <div className={clsx('mb-1 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide', unverified ? 'text-unknown' : 'text-accent')}>
+      <div className={clsx('mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide', unverified ? 'text-unknown' : 'text-accent')}>
         {unverified ? <ShieldAlert size={14} /> : <Sparkles size={14} />}
         {label}
       </div>
@@ -63,19 +63,19 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
           <Segments key={i} segments={l.segments} />
         ))}
       </button>
-      {confirming && unverified && <p className="mt-2 text-[14px] text-unknown">{t('ghost.confirmUnverified')}</p>}
+      {confirming && unverified && <p className="mt-2 text-md text-unknown">{t('ghost.confirmUnverified')}</p>}
       <div className="mt-2 flex items-center gap-2">
         <button
           type="button"
           onClick={accept}
           className={clsx(
-            'inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-[15px] font-medium text-white',
+            'inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-medium text-on-solid',
             unverified ? 'bg-unknown hover:bg-unknown/90' : 'bg-accent hover:bg-accent-strong',
           )}
         >
           <Check size={18} />
           {unverified ? (confirming ? t('ghost.adoptUnverified') : t('ghost.accept')) : t('ghost.accept')}
-          <kbd className="rounded-md bg-white/20 px-1.5 text-[12px]">{t('ghost.acceptHint')}</kbd>
+          <kbd className="rounded-md bg-on-solid/20 px-1.5 text-xs">{t('ghost.acceptHint')}</kbd>
         </button>
         <button
           type="button"
@@ -83,7 +83,7 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
             setConfirm(false);
             engine.reject();
           }}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-[15px] text-muted hover:bg-black/5"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-base text-muted hover:bg-hover"
         >
           <X size={18} /> {t('ghost.reject')}
         </button>
@@ -100,7 +100,7 @@ export function RejectionChip() {
     <button
       type="button"
       onClick={() => useNotebook.getState().set('sheet', { kind: 'rejection' })}
-      className="mb-2 inline-flex min-h-9 animate-rise items-center gap-2 rounded-full bg-wrong-soft px-3 text-[13px] font-medium text-wrong-strong hover:opacity-85"
+      className="mb-2 inline-flex min-h-9 animate-rise items-center gap-2 rounded-full bg-wrong-soft px-3 text-sm font-medium text-wrong-strong hover:opacity-85"
     >
       <ShieldAlert size={15} />
       {t('ghost.rejected')}

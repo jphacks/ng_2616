@@ -2,7 +2,7 @@
 
 import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
-import { Check, CornerUpLeft, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
+import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -13,6 +13,7 @@ import { GhostLine, RejectionChip } from './ghost-line';
 import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
 import { StatusBadge } from './status';
+import { SwipeRow, type SwipeAction } from './swipe-row';
 
 interface RowProps {
   line: Line;
@@ -48,20 +49,37 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         <div className="min-w-0 flex-1 line-through decoration-wrong/50">
           <Segments segments={line.segments} />
         </div>
-        <span className="shrink-0 text-[13px] text-muted">{t('line.superseded')}</span>
+        <span className="shrink-0 text-sm text-muted">{t('line.superseded')}</span>
       </div>
     );
   }
 
+  // swiping a settled or failed line left reveals its actions, as in Mail
+  const swipe: SwipeAction[] =
+    line.state === 'SETTLED'
+      ? [
+          ...(line.verified?.proof.status === 'wrong'
+            ? [{ label: t('line.revise'), icon: <CornerUpLeft size={18} />, onClick: () => engine.startRevision(line.id), tone: 'warn' as const }]
+            : []),
+          { label: t('line.details'), icon: <Info size={18} />, onClick: openDetails, tone: 'accent' },
+        ]
+      : line.state === 'RECOGNIZE_FAILED'
+        ? [
+            ...(line.ink.length > 0 ? [{ label: t('line.backToInk'), icon: <PenLine size={18} />, onClick: () => engine.backToInk(line.id) }] : []),
+            { label: t('line.retry'), icon: <RotateCcw size={18} />, onClick: () => void engine.retry(line.id), tone: 'accent' },
+          ]
+        : [];
+
   return (
-    <div
-      data-line-id={line.id}
+    <SwipeRow
+      id={line.id}
+      actions={swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
     >
       <Gutter n={number} line={line} />
       <div className="min-w-0 flex-1 py-2">
         {revisionOf !== null && (
-          <div className="mb-1 inline-flex items-center gap-1 text-[13px] font-medium text-unknown">
+          <div className="mb-1 inline-flex items-center gap-1 text-sm font-medium text-unknown">
             <CornerUpLeft size={14} /> {t('line.revising', { n: revisionOf })}
           </div>
         )}
@@ -69,13 +87,13 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'DRAFT' && (
           <div className="relative">
             {showGhost && candidate ? (
-              <div className="absolute inset-x-0 top-1 z-10">
+              <div className="absolute inset-x-0 top-1 z-raised">
                 <GhostLine candidate={candidate} />
               </div>
             ) : (
               active &&
               line.ink.length === 0 &&
-              tool === 'pen' && <div className="pointer-events-none absolute left-2 top-12 text-[15px] text-faint">{t('line.writeHere')}</div>
+              tool === 'pen' && <div className="pointer-events-none absolute left-2 top-12 text-base text-faint">{t('line.writeHere')}</div>
             )}
             <InkCanvas
               strokes={line.ink}
@@ -84,13 +102,17 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
               onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
+              onScratchOut={(ids) => {
+                engine.eraseStrokes(line.id, ids);
+                useNotebook.getState().showToast(t('toast.erased'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+              }}
             />
           </div>
         )}
         {line.state === 'RECOGNIZING' && (
           <div className="relative">
             <InkCanvas strokes={line.ink} editable={false} tool={tool} dim />
-            <div className="shimmer absolute inset-0 flex items-end rounded-xl p-2 text-[13px] text-accent">
+            <div className="shimmer absolute inset-0 flex items-end rounded-xl p-2 text-sm text-accent">
               <span className="inline-flex items-center gap-2 rounded-full bg-sheet/90 px-3 py-1 shadow-card">
                 <Spinner size={14} /> {t('line.reading')}
               </span>
@@ -100,7 +122,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'RECOGNIZE_FAILED' && (
           <div>
             {line.ink.length > 0 ? <InkCanvas strokes={line.ink} editable={false} tool={tool} dim /> : <Segments segments={line.segments} />}
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[14px] text-wrong-strong">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-md text-danger">
               <TriangleAlert size={16} />
               <span>
                 {t(line.failure?.stage === 'verify' ? 'line.verifyFailed' : 'line.failed')}
@@ -124,7 +146,14 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       <div className="flex w-[11.5rem] shrink-0 flex-col items-end justify-center gap-2 py-2">
         {line.state === 'DRAFT' && active && (
           <div className="flex items-center gap-1">
-            <IconButton label={t('tool.clear')} onClick={() => engine.clearDraft(line.id)} disabled={line.ink.length === 0}>
+            <IconButton
+              label={t('tool.clear')}
+              onClick={() => {
+                engine.clearDraft(line.id);
+                useNotebook.getState().showToast(t('toast.cleared'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+              }}
+              disabled={line.ink.length === 0}
+            >
               <Trash2 size={19} />
             </IconButton>
             <Button variant="primary" icon={<Check size={18} />} disabled={line.ink.length === 0} onClick={() => void engine.confirmLine(line.id)}>
@@ -145,7 +174,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </div>
         )}
         {line.state === 'VERIFYING' && (
-          <span className="inline-flex items-center gap-2 text-[13px] text-muted">
+          <span className="inline-flex items-center gap-2 text-sm text-muted">
             <Spinner size={14} /> {t('line.checking')}
           </span>
         )}
@@ -156,17 +185,20 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </Button>
         )}
       </div>
-    </div>
+    </SwipeRow>
   );
 });
 
 function Gutter({ n, line }: { n: number; line: Line }) {
   const t = useT();
   return (
-    <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-[13px] tabular-nums text-faint">
+    <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-sm tabular-nums text-faint">
       <span>{n}</span>
+      {line.role === 'premise' && (
+        <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>
+      )}
       {line.source === 'ai' && (
-        <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-[11px] font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
+        <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-2xs font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
           <Sparkles size={11} />
           {t('line.ai')}
         </span>

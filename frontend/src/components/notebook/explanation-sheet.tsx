@@ -2,9 +2,9 @@
 
 import type { Evidence, Line, Notebook, Proof } from '@mn/contracts';
 import clsx from 'clsx';
-import { CornerUpLeft, Lightbulb, Search, ShieldAlert } from 'lucide-react';
+import { CornerUpLeft, Flag, Lightbulb, Search, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
-import { findLine, lineNumber } from '@/core/notebook/model';
+import { findLine, isGiven, lineNumber } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button } from '@/ui/button';
@@ -20,7 +20,7 @@ function EvidenceCard({ ev, goal }: { ev: Evidence; goal?: string }) {
   const t = useT();
   const sides = goal && RELATION_GOALS.has(goal);
   return (
-    <div className="space-y-2 rounded-2xl bg-paper p-4 text-[15px]">
+    <div className="space-y-2 rounded-2xl bg-paper p-4 text-base">
       {ev.assignment && Object.keys(ev.assignment).length > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-medium text-muted">{t('sheet.at')}</span>
@@ -59,7 +59,7 @@ function EvidenceCard({ ev, goal }: { ev: Evidence; goal?: string }) {
           <Tex latex={ev.condition_latex} />
         </div>
       )}
-      {ev.approx && <div className="text-[13px] text-muted">({t('sheet.approx')})</div>}
+      {ev.approx && <div className="text-sm text-muted">({t('sheet.approx')})</div>}
     </div>
   );
 }
@@ -96,14 +96,14 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
       </div>
       {shown.evidence && (
         <section className="animate-rise space-y-2">
-          <h4 className="text-[13px] font-semibold uppercase tracking-wide text-muted">{t('sheet.evidence')}</h4>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-muted">{t('sheet.evidence')}</h4>
           {proof.evidence.map((ev, i) => (
             <EvidenceCard key={i} ev={ev} goal={proof.goal} />
           ))}
         </section>
       )}
-      {shown.hint1 && h1 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-[15px] text-ink">{hintText(t, nb, h1)}</p>}
-      {shown.hint2 && h2 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-[15px] text-ink">{hintText(t, nb, h2)}</p>}
+      {shown.hint1 && h1 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-base text-ink">{hintText(t, nb, h1)}</p>}
+      {shown.hint2 && h2 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-base text-ink">{hintText(t, nb, h2)}</p>}
     </div>
   );
 }
@@ -111,9 +111,9 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
 function DetailBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
   const t = useT();
   const src = proof.segment_results.find((r) => r.source_line_id)?.source_line_id;
-  const srcN = src && src !== 'problem' ? lineNumber(nb, src) : null;
+  const srcN = src ? lineNumber(nb, src) : null;
   return (
-    <div className="space-y-3 text-[15px]">
+    <div className="space-y-3 text-base">
       {proof.status === 'ok' && proof.unverified_ancestors.length > 0 && (
         <p className="rounded-2xl bg-unknown-soft p-4 text-unknown">
           {t('sheet.localBody', { lines: proof.unverified_ancestors.map((id) => lineNumber(nb, id) ?? '?').join(', ') })}
@@ -127,7 +127,7 @@ function DetailBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proo
           {t(`method.${proof.method}`)}
         </p>
       )}
-      {(srcN !== null || src === 'problem') && <p className="text-muted">{src === 'problem' ? t('sheet.comparedWithProblem') : t('sheet.comparedWith', { n: srcN! })}</p>}
+      {srcN !== null && <p className="text-muted">{t('sheet.comparedWith', { n: srcN })}</p>}
       {proof.conditions.length > 0 && (
         <div>
           <span className="text-muted">{t('sheet.conditions')}: </span>
@@ -148,7 +148,7 @@ export function ExplanationSheet() {
   const nb = useNotebook((s) => s.notebook);
   const rejection = useNotebook((s) => s.rejection);
   const close = () => useNotebook.getState().set('sheet', null);
-  if (!sheet || !nb || sheet.kind === 'problem') return null;
+  if (!sheet || !nb) return null;
 
   if (sheet.kind === 'rejection') {
     if (!rejection) return null;
@@ -156,7 +156,7 @@ export function ExplanationSheet() {
     return (
       <Sheet open onClose={close} title={<span className="inline-flex items-center gap-2"><ShieldAlert size={20} className="text-wrong-strong" />{t('sheet.rejectionTitle')}</span>}>
         <div className="space-y-4">
-          <p className="text-[15px] text-ink-soft">{t('sheet.rejectionBody')}</p>
+          <p className="text-base text-ink-soft">{t('sheet.rejectionBody')}</p>
           <div className="rounded-2xl border border-dashed border-wrong/40 bg-wrong-soft/50 p-4">
             <Segments segments={rejection.segments} />
           </div>
@@ -200,6 +200,19 @@ export function ExplanationSheet() {
           <StatusBadge line={line} ancestor={proof.unverified_ancestors[0] ? lineNumber(nb, proof.unverified_ancestors[0]) : null} />
         </div>
         {proof.status === 'wrong' ? <WrongBody line={line} nb={nb} proof={proof} /> : <DetailBody line={line} nb={nb} proof={proof} />}
+        {line.state === 'SETTLED' && (
+          <div className="space-y-2 border-t border-border pt-4">
+            <Button
+              variant={isGiven(line) ? 'secondary' : 'accent-soft'}
+              icon={<Flag size={17} />}
+              aria-pressed={isGiven(line)}
+              onClick={() => engine.setGiven(line.id, !isGiven(line))}
+            >
+              {t(isGiven(line) ? 'sheet.unmarkGiven' : 'sheet.markGiven')}
+            </Button>
+            <p className="text-sm text-muted">{t('sheet.givenHint')}</p>
+          </div>
+        )}
       </div>
     </Sheet>
   );

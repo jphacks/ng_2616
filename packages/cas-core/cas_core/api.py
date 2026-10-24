@@ -1,7 +1,7 @@
 """Worker entry point. The browser CAS controller calls verify_json() with validated IR only.
 
 Payload:
-  {"problem": Problem, "lines": [ContextLine], "target": Target, "parent_id": str | None}
+  {"lines": [ContextLine], "target": Target, "parent_id": str | None}
 ContextLine:
   {"id", "role", "segments": [InputSegment], "status", "unverified_ancestors": [id],
    "segment_results": [{"segment_index", "status", "reason"?, "method"?, "goal"?}]}
@@ -42,15 +42,19 @@ def _seg_dict(index: int, r: SegResult) -> dict:
 def verify(payload: dict) -> dict:
     t0 = time.perf_counter()
     try:
-        ctx = build_context(payload["problem"], payload.get("lines") or [], payload.get("parent_id"))
+        ctx = build_context(payload.get("lines") or [], payload.get("parent_id"))
         target = payload["target"]
         results: list[tuple[int, SegResult]] = []
         for i, seg in enumerate(target.get("segments") or []):
             if seg.get("type") != "math":
                 continue
             results.append((i, verify_segment(seg["expr"], seg.get("notation", "plain"), target.get("role", "step"), ctx)))
+        declares = {r.reason for _, r in results}
         if not results:
             primary = SegResult("none", reason="TEXT_ONLY")
+        elif declares == {"ASSUMPTION", "FUNCTION"}:
+            # "Given I(a), where a > 0": functions and assumptions on one line
+            primary = SegResult("none", goal="DECLARATION", reason="DECLARATION")
         else:
             agg = next(s for s in ORDER if any(r.status == s for _, r in results))
             primary = next(r for _, r in results if r.status == agg)
@@ -59,7 +63,6 @@ def verify(payload: dict) -> dict:
             depends |= r.depends_on
             if r.source_line_id:
                 depends.add(r.source_line_id)
-        depends.discard("problem")
         depends.discard(target.get("id"))
         unverified: set[str] = set()
         for d in depends:

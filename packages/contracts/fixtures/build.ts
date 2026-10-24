@@ -1,45 +1,23 @@
-/** Turn LaTeX fixtures into IR payloads (shared by the emit script and frontend presets). */
-import { parseMathLatex, type ParseOptions } from '../src/ir';
+/** Turn LaTeX fixtures into IR payloads (shared by the emit script and the CAS oracle). */
+import { declaredFunctions } from '../src/declarations';
+import type { ParseOptions } from '../src/ir';
 import { segmentsFromSource, toInputSegments } from '../src/segments';
-import type { Assumption, MathJSON } from '../src';
-import type { CasCase, FixtureProblem } from './cas-cases';
-
-function ir(latex: string, opts: ParseOptions): MathJSON {
-  const r = parseMathLatex(latex, opts);
-  if (!r.ok) throw new Error(`fixture "${latex}": ${r.error.message}`);
-  return r.expr;
-}
-
-export function buildProblem(p: FixtureProblem, id = 'P') {
-  const opts: ParseOptions = { functions: p.functions ?? [] };
-  const assumptions: Assumption[] = (p.assumptions ?? []).map((a) => {
-    const { expr_latex, lower_latex, upper_latex, ...rest } = a;
-    return {
-      ...rest,
-      ...(expr_latex ? { expr: ir(expr_latex, opts) } : {}),
-      ...(lower_latex ? { lower: ir(lower_latex, opts) } : {}),
-      ...(upper_latex ? { upper: ir(upper_latex, opts) } : {}),
-    };
-  });
-  return {
-    id,
-    title: 'fixture',
-    statement: [],
-    definitions: (p.definitions ?? []).map((d) => ir(d, opts)),
-    conditions: (p.conditions ?? []).map((c) => ir(c, opts)),
-    assumptions,
-    unknowns: p.unknowns ?? [],
-    ...(p.independent_var ? { independent_var: p.independent_var } : {}),
-    functions: p.functions ?? [],
-  };
-}
+import type { MathJSON } from '../src';
+import type { CasCase, FixtureLine } from './cas-cases';
 
 const unparsedSegments = (latex: string) => [{ type: 'math' as const, expr: ['Unparsed', latex] as MathJSON, notation: 'plain' as const }];
 
 /** Payload in the exact shape the browser CAS controller sends to the worker. */
 export function buildCasPayload(c: CasCase) {
-  const opts: ParseOptions = { functions: c.problem.functions ?? [] };
-  const lines = c.lines.map((l) => {
+  const top: FixtureLine[] = [
+    ...(c.given ?? []).map((latex, i): FixtureLine => ({ id: `G${i + 1}`, src: `$${latex}$`, role: 'premise', status: 'none', reason: 'PREMISE' })),
+    ...(c.definitions ?? []).map((latex, i): FixtureLine => ({ id: `D${i + 1}`, src: `$${latex}$`, role: 'definition', status: 'none', reason: 'DEFINITION' })),
+  ];
+  // a declaration holds for the whole page, as in the notebook
+  const written = [...top, ...c.lines].filter((l) => l.unparsed === undefined).map((l) => l.src);
+  if (c.target.src) written.push(c.target.src);
+  const opts: ParseOptions = { functions: declaredFunctions(written.map((src) => ({ state: 'SETTLED', segments: segmentsFromSource(src) }))) };
+  const lines = [...top, ...c.lines].map((l) => {
     const segments = l.unparsed !== undefined ? unparsedSegments(l.unparsed) : toInputSegments(segmentsFromSource(l.src, opts));
     return {
       id: l.id,
@@ -58,7 +36,6 @@ export function buildCasPayload(c: CasCase) {
       ? unparsedSegments(c.target.unparsed)
       : toInputSegments(segmentsFromSource(c.target.src ?? '', opts));
   return {
-    problem: buildProblem(c.problem),
     lines,
     target: { id: c.target.id, role: c.target.role ?? 'step', segments: targetSegments },
     parent_id: c.parent ?? lines[lines.length - 1]?.id ?? null,

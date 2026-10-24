@@ -3,6 +3,7 @@
 import type { Line, Notebook, Proof, Segment, SuggestMode, Target, Verified } from '@mn/contracts';
 import { create } from 'zustand';
 import type { RejectionHistory } from '@/core/candidates/rejection';
+import type { SyncState } from '@/core/persistence/autosave';
 import { HISTORY_LIMIT, interruptPending, patchPending, type Command, type CommandType, type Snapshot } from '@/core/history/history';
 
 export type Tool = 'pen' | 'eraser' | 'view';
@@ -39,7 +40,8 @@ export interface CheckerRejection {
   basedOnLineId: string;
 }
 
-export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+/** Autosave progress (core/persistence/autosave.ts); `dirty` means the cloud lacks the latest edits. */
+export type SaveState = SyncState;
 
 export interface CasStatus {
   state: 'idle' | 'loading' | 'ready' | 'failed';
@@ -47,7 +49,13 @@ export interface CasStatus {
   version?: string;
 }
 
-export type Sheet = { kind: 'line'; lineId: string } | { kind: 'rejection' } | { kind: 'problem' } | null;
+export type Sheet = { kind: 'line'; lineId: string } | { kind: 'rejection' } | null;
+
+/** A button on a toast, such as Undo after a destructive edit. */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
 
 export interface NotebookState {
   notebook: Notebook | null;
@@ -70,7 +78,7 @@ export interface NotebookState {
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
   ghostConfirm: boolean;
-  toast: { id: number; text: string; tone: 'info' | 'error' } | null;
+  toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
 
   load(nb: Notebook, revision: number | null): void;
   unload(): void;
@@ -84,17 +92,18 @@ export interface NotebookState {
   bumpEpoch(): number;
   setActive(id: string | null): void;
   set<K extends keyof NotebookState>(key: K, value: NotebookState[K]): void;
-  showToast(text: string, tone?: 'info' | 'error'): void;
-  markSaved(revision: number): void;
+  showToast(text: string, tone?: 'info' | 'error', action?: ToastAction): void;
+  /** The cloud holds `nb` at `revision`. */
+  markSaved(nb: Notebook, revision: number): void;
 }
 
 function snapshotOf(s: NotebookState): Snapshot {
   const nb = s.notebook!;
-  return { lines: nb.lines, recoveries: nb.recoveries, problem: nb.problem, activeLineId: s.activeLineId };
+  return { lines: nb.lines, recoveries: nb.recoveries, activeLineId: s.activeLineId };
 }
 
 function applySnapshot(nb: Notebook, snap: Snapshot): Notebook {
-  return { ...nb, lines: snap.lines, recoveries: snap.recoveries, problem: snap.problem };
+  return { ...nb, lines: snap.lines, recoveries: snap.recoveries };
 }
 
 let toastId = 0;
@@ -213,17 +222,20 @@ export const useNotebook = create<NotebookState>((set, get) => ({
     set({ [key]: value } as Partial<NotebookState>);
   },
 
-  showToast(text, tone = 'info') {
+  showToast(text, tone = 'info', action) {
     toastId += 1;
     const id = toastId;
-    set({ toast: { id, text, tone } });
+    set({ toast: { id, text, tone, action } });
+    // a toast that can be acted on stays a little longer
     setTimeout(() => {
       if (get().toast?.id === id) set({ toast: null });
-    }, 4000);
+    }, action ? 5000 : 4000);
   },
 
-  markSaved(revision) {
-    set({ cloudRevision: revision, dirty: false, saveState: 'saved' });
+  markSaved(nb, revision) {
+    if (get().notebook?.id !== nb.id) return;
+    // edits made during the save stay dirty
+    set({ cloudRevision: revision, dirty: get().notebook !== nb });
   },
 }));
 

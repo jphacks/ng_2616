@@ -11,10 +11,14 @@
     "start": "next start",
     "typecheck": "pnpm prepare-assets && tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test tests/unit/history.test.ts",
+    "test": "tsx --test tests/unit/history.test.ts tests/unit/autosave.test.ts tests/unit/outbox.test.ts tests/unit/scratch.test.ts tests/unit/suggest-attempts.test.ts tests/unit/presets.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@dnd-kit/utilities": "3.2.2",
     "@google/genai": "2.31.0",
     "@mn/contracts": "workspace:*",
     "@supabase/ssr": "0.12.7",
@@ -23,6 +27,7 @@
     "dexie": "4.4.7",
     "katex": "0.19.1",
     "lucide-react": "1.61.0",
+    "motion": "14.1.0",
     "next": "16.4.3",
     "pdfjs-dist": "6.4.299",
     "perfect-freehand": "1.2.3",

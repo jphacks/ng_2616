@@ -1,8 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { draw, inkPixels, openPreset, rows, scribble } from './helpers';
 
 test.describe('ink', () => {
-  test.beforeEach(async ({ page }) => openPreset(page, /Untitled notebook/));
+  test.beforeEach(async ({ page }) => openPreset(page, /New empty notebook/));
 
   test('every finished stroke stays visible (no flicker or lost strokes)', async ({ page }) => {
     const row = rows(page).last();
@@ -16,6 +16,17 @@ test.describe('ink', () => {
     }
     await page.waitForTimeout(800);
     expect(await inkPixels(row)).toBe(last);
+  });
+
+  test('fast consecutive strokes are not lost by React re-renders', async ({ page }) => {
+    const row = rows(page).last();
+    for (let i = 0; i < 8; i++) {
+      await draw(page, row, [[[30 + i * 35, 40], [55 + i * 35, 110]]]);
+    }
+    await page.waitForTimeout(600);
+    const n = await inkPixels(row);
+    expect(n).toBeGreaterThan(1000);
+    await expect(page.getByRole('button', { name: 'Confirm' })).toBeEnabled();
   });
 
   test('the eraser removes a whole stroke and Undo brings it back', async ({ page }) => {
@@ -49,4 +60,24 @@ test.describe('ink', () => {
     await draw(page, rows(page).first(), [[[300, 40], [300, 110]]]);
     await expect.poll(() => inkPixels(rows(page).first())).toBeGreaterThan(before);
   });
+});
+
+test('a two-finger tap undoes the last stroke and a three-finger tap redoes it', async ({ page }) => {
+  await openPreset(page, /New empty notebook/);
+  const row = rows(page).first();
+  await scribble(page, row);
+  const drawn = await inkPixels(row);
+  expect(drawn).toBeGreaterThan(0);
+  const cdp = await page.context().newCDPSession(page);
+  const box = (await row.boundingBox())!;
+  const tap = async (fingers: number) => {
+    const touchPoints = Array.from({ length: fingers }, (_, i) => ({ x: box.x + 300 + i * 60, y: box.y + 60, id: i }));
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await tap(2);
+  await expect.poll(() => inkPixels(row)).toBe(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Undone' })).toBeVisible();
+  await tap(3);
+  await expect.poll(() => inkPixels(row)).toBe(drawn);
 });

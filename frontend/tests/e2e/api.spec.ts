@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const meta = () => ({
   request_id: crypto.randomUUID(),
@@ -10,7 +10,6 @@ const meta = () => ({
 
 const suggestInput = (target = 'L2') => ({
   context: {
-    problem: { id: 'p', title: 't', statement: [], definitions: [], conditions: [], assumptions: [], unknowns: [] },
     lines: [],
   },
   mode: 'NEXT_STEP',

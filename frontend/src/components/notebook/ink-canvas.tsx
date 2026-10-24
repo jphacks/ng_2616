@@ -3,14 +3,23 @@
 import type { Stroke, StrokePoint } from '@mn/contracts';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { shortId } from '@/core/ids';
+import { scratchTargets } from '@/core/ink/scratch';
 import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
+import { INK_WEIGHTS, useDevicePrefs } from '@/core/prefs/device';
+import { tokenColor } from '@/ui/tokens';
 import type { Tool } from '@/core/store/notebook-store';
+import { fingersDown, useSecondFinger } from './gestures';
+import { usePageZoom } from './zoom';
 
 export const LINE_HEIGHT = 140;
 const MAX_HEIGHT = 560;
 const GROW_MARGIN = 36;
+const ERASER_RADIUS = 12;
+const MAX_BACKING_SCALE = 3;
+// ink is drawn in the --color-ink token; these fade it for each state
+const INK_ALPHA = { erasing: 0.18, dim: 0.55, hover: 0.32 } as const;
 
-// once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
+// in auto mode, once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
 let penSeen = false;
 const markPenSeen = () => {
   penSeen = true;
@@ -37,22 +46,32 @@ interface Props {
   onErase?: (ids: string[]) => void;
   onActivate?: () => void;
   onPenDown?: () => void;
+  /** a pen stroke that scratched out existing ink, instead of adding a stroke */
+  onScratchOut?: (ids: string[]) => void;
 }
 
 /**
  * Line-local ink surface. Pointer Events with capture, coalesced events and pressure;
  * logical CSS-pixel coordinates (spec §8.1). Buttons live outside the canvas.
  */
-export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown }: Props) {
+export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown, onScratchOut }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const live = useRef<{ id: number; points: StrokePoint[]; t0: number } | null>(null);
+  const live = useRef<{ id: number; points: StrokePoint[]; t0: number; touch: boolean } | null>(null);
   const erasing = useRef<Set<string> | null>(null);
+  const erasingByTouch = useRef(false);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
   const frame = useRef(0);
-  // every draw reads the latest strokes from strokesRef, which is optimistically updated on pen-up
-  // and synced with props.strokes whenever React re-renders.
+  // where a hovering Apple Pencil would touch down (iPads with Pencil hover)
+  const hover = useRef<{ x: number; y: number } | null>(null);
+  const inkSize = INK_WEIGHTS[useDevicePrefs((s) => s.inkWeight)];
+  // zoomed in, the bitmap gets more pixels so ink stays sharp (capped for memory)
+  const zoom = usePageZoom((s) => s.settled);
+  // every draw reads the latest strokes from strokesRef.
+  // pendingStrokesRef holds optimistically added strokes that React has not yet passed down in props.strokes.
+  // This prevents fast consecutive strokes from being wiped out by an in-flight React re-render.
   const strokesRef = useRef(strokes);
+  const pendingStrokesRef = useRef<Stroke[]>([]);
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(() => inkHeight(strokes));
 
@@ -69,7 +88,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const draw = useCallback(() => {
     const c = canvas.current;
     if (!c || width === 0) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(MAX_BACKING_SCALE, (window.devicePixelRatio || 1) * zoom);
     if (c.width !== Math.round(width * dpr) || c.height !== Math.round(height * dpr)) {
       c.width = Math.round(width * dpr);
       c.height = Math.round(height * dpr);
@@ -79,18 +98,42 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     ctx.clearRect(0, 0, width, height);
     const hidden = erasing.current;
     const list = strokesRef.current;
+    const ink = tokenColor('--color-ink');
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
     for (const s of list) {
-      ctx.fillStyle = hidden?.has(s.id) ? 'rgba(26,32,48,0.18)' : dim ? 'rgba(26,32,48,0.55)' : '#1a2030';
-      drawStroke(ctx, s.points, undefined, true);
+      ctx.globalAlpha = hidden?.has(s.id) ? INK_ALPHA.erasing : dim ? INK_ALPHA.dim : 1;
+      drawStroke(ctx, s.points, inkSize, true);
     }
-    if (live.current) {
-      ctx.fillStyle = '#1a2030';
-      drawStroke(ctx, live.current.points, undefined, false);
+    ctx.globalAlpha = 1;
+    if (live.current) drawStroke(ctx, live.current.points, inkSize, false);
+    const h = hover.current;
+    if (h && editable && !live.current && !hidden) {
+      ctx.beginPath();
+      ctx.globalAlpha = INK_ALPHA.hover;
+      if (tool === 'eraser') {
+        ctx.lineWidth = 1;
+        ctx.arc(h.x, h.y, ERASER_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (tool === 'pen') {
+        ctx.arc(h.x, h.y, inkSize / 2 + 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
-  }, [width, height, dim]);
+  }, [width, height, dim, inkSize, editable, tool, zoom]);
 
   useLayoutEffect(() => {
-    strokesRef.current = strokes;
+    if (strokes.length === 0 && !live.current) {
+      pendingStrokesRef.current = [];
+      strokesRef.current = [];
+    } else {
+      const confirmed = new Set(strokes.map((s) => s.id));
+      if (pendingStrokesRef.current.length > 0) {
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
+      }
+      strokesRef.current = [...strokes, ...pendingStrokesRef.current];
+    }
     draw();
   }, [strokes, draw]);
 
@@ -98,6 +141,14 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(draw);
   };
+
+  // a second finger means a gesture (undo tap, pinch): drop what the first finger started
+  useSecondFinger(() => {
+    if (live.current?.touch) live.current = null;
+    if (erasingByTouch.current) erasing.current = null;
+    scrolling.current = null;
+    schedule();
+  });
 
   const local = (e: PointerEvent | React.PointerEvent, t0: number): StrokePoint => {
     const r = canvas.current!.getBoundingClientRect();
@@ -108,7 +159,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType === 'pen') markPenSeen();
-    const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
+    if (e.pointerType === 'touch' && fingersDown() > 1) return;
+    const mode = useDevicePrefs.getState().inputMode;
+    const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && (mode === 'pen' || (mode === 'auto' && penSeen)));
     if (fingerScroll || !editable) {
       if (!editable && tool !== 'view') onActivate?.();
       scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
@@ -117,24 +170,31 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     }
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
+    hover.current = null;
     onPenDown?.();
     if (tool === 'eraser') {
       erasing.current = new Set();
+      erasingByTouch.current = e.pointerType === 'touch';
       eraseAt(e);
       return;
     }
-    live.current = { id: e.pointerId, points: [], t0: e.timeStamp };
+    live.current = { id: e.pointerId, points: [], t0: e.timeStamp, touch: e.pointerType === 'touch' };
     live.current.points.push(local(e, e.timeStamp));
     schedule();
   };
 
   const eraseAt = (e: PointerEvent | React.PointerEvent) => {
     const p = local(e, 0);
-    for (const id of strokesHit(strokesRef.current, p.x, p.y)) erasing.current?.add(id);
+    for (const id of strokesHit(strokesRef.current, p.x, p.y, ERASER_RADIUS)) erasing.current?.add(id);
     schedule();
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === 'pen' && e.buttons === 0) {
+      hover.current = local(e, 0);
+      schedule();
+      return;
+    }
     const sc = scrolling.current;
     if (sc && sc.id === e.pointerId) {
       if (sc.el) sc.el.scrollTop -= e.clientY - sc.y;
@@ -158,6 +218,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   };
 
   const finish = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore in case capture was lost or not set
+    }
     if (scrolling.current?.id === e.pointerId) {
       scrolling.current = null;
       return;
@@ -167,6 +232,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       erasing.current = null;
       if (ids.length) {
         const drop = new Set(ids);
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
         strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
         onErase?.(ids);
       }
@@ -177,9 +243,17 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     const l = live.current;
     if (!l || l.id !== e.pointerId) return;
     live.current = null;
-    if (l.points.length > 0) {
+    const scratched = useDevicePrefs.getState().scratchToErase && onScratchOut ? scratchTargets(l.points, strokesRef.current) : null;
+    if (scratched) {
+      const drop = new Set(scratched);
+      pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
+      strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
+      draw();
+      onScratchOut!(scratched);
+    } else if (l.points.length > 0) {
       const stroke = { id: shortId('s'), points: l.points };
-      // optimistically append to the local ref so the stroke is permanently visible at 0ms
+      // optimistically append to both pendingStrokes and strokesRef so the stroke is permanently visible at 0ms
+      pendingStrokesRef.current.push(stroke);
       strokesRef.current = [...strokesRef.current, stroke];
       draw();
       onStroke?.(stroke);
@@ -197,6 +271,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         onPointerMove={onPointerMove}
         onPointerUp={finish}
         onPointerCancel={finish}
+        onPointerLeave={() => {
+          if (!hover.current) return;
+          hover.current = null;
+          schedule();
+        }}
       />
     </div>
   );

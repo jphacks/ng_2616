@@ -25,6 +25,15 @@ const TONE_CLASS: Record<Tone, string> = {
 
 const ICON: Record<Tone, typeof CircleCheck> = { ok: CircleCheck, local: CircleDashed, wrong: CircleX, unknown: CircleHelp, none: CircleMinus };
 
+const NONE_LABEL: Record<string, string> = {
+  DEFINITION: 'status.definition',
+  PREMISE: 'status.premise',
+  ASSUMPTION: 'status.assumption',
+  FUNCTION: 'status.function',
+  DECLARATION: 'status.declaration',
+  TEXT_ONLY: 'status.text',
+};
+
 export function useStatusLabel() {
   const t = useT();
   /** `ancestor` is the visible number of the first unverified line this one depends on. */
@@ -42,7 +51,7 @@ export function useStatusLabel() {
       case 'none':
         return {
           label: t(
-            p.reason === 'DEFINITION' ? 'status.definition' : p.reason === 'PREMISE' ? 'status.premise' : p.reason === 'TEXT_ONLY' ? 'status.text' : 'status.first',
+            NONE_LABEL[p.reason ?? ''] ?? 'status.first',
           ),
         };
     }
@@ -60,7 +69,7 @@ export function StatusBadge({ line, ancestor, onClick, compact }: { line: Line; 
     <button
       type="button"
       onClick={onClick}
-      className={clsx('inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full px-3 text-left text-[13px] font-medium transition-opacity hover:opacity-85', TONE_CLASS[tone])}
+      className={clsx('inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full px-3 text-left text-sm font-medium transition-opacity hover:opacity-85', TONE_CLASS[tone])}
       title={detail ? `${text} · ${detail}` : text}
     >
       <Icon size={16} className="shrink-0" aria-hidden />

@@ -7,7 +7,7 @@
  * is kept and the line shows a recognition failure instead of a guessed formula.
  */
 import { isRelation, type MathJSON } from './ops';
-import { GREEK, SYMBOL_NAME, UNICODE_TO_LATEX, isConstant } from './symbols';
+import { GREEK, SYMBOL_NAME, UNICODE_TO_LATEX, isConstant, type NumberSet } from './symbols';
 import { freeSymbols, validateExpr } from './validate';
 
 export interface FunctionDecl {
@@ -42,7 +42,7 @@ const SKIP_CMDS = new Set([
 ]);
 const REL_CMDS: Record<string, string> = {
   le: 'LessEqual', leq: 'LessEqual', leqslant: 'LessEqual', ge: 'GreaterEqual', geq: 'GreaterEqual',
-  geqslant: 'GreaterEqual', ne: 'NotEqual', neq: 'NotEqual', lt: 'Less', gt: 'Greater',
+  geqslant: 'GreaterEqual', ne: 'NotEqual', neq: 'NotEqual', lt: 'Less', gt: 'Greater', in: 'Element',
 };
 const NON_STARTERS = new Set([
   ...Object.keys(REL_CMDS), 'cdot', 'times', 'pm', 'mp', 'to', '}', 'lor', 'land', 'cdots', 'ldots', 'dots',
@@ -192,9 +192,60 @@ class Parser {
 
   // ---- grammar ----
   parseTop(): MathJSON {
+    const decl = this.functionDeclaration();
+    if (decl) return decl;
     const e = this.parseRelationList();
     if (!this.atEnd()) this.fail(`unexpected "${tokText(this.peek()!)}"`);
     return e;
+  }
+
+  /**
+   * A formula that is only a name applied to distinct variables, such as "\Psi(x,t)" or "V(x)",
+   * declares that function, whether or not the name is declared or reads as a function by default.
+   * The same head before "=" ("I(a) = \int_0^a …") reads as the function throughout the formula.
+   */
+  functionDeclaration(): MathJSON | null {
+    const head = this.functionHead();
+    const end = this.pos;
+    this.pos = 0;
+    if (!head) return null;
+    if (end === this.toks.length) {
+      this.pos = end;
+      return ['Apply', head.name, ...head.args];
+    }
+    const next = this.toks[end]!;
+    if (next.k === 'sym' && next.v === '=' && !this.opts.functions.has(head.name)) this.opts.functions.set(head.name, head.args);
+    return null;
+  }
+
+  /** Reads "name(var, …)" from the start; the caller rewinds. */
+  functionHead(): FunctionDecl | null {
+    const name = (): string | null => {
+      const t = this.peek();
+      if (!t || !(t.k === 'letter' || (t.k === 'cmd' && GREEK.has(t.v)))) return null;
+      this.next();
+      const sub = this.readNameSubscript();
+      const n = sub ? `${t.v}_${sub}` : t.v;
+      return SYMBOL_NAME.test(n) && n !== 'e' && n !== 'i' ? n : null;
+    };
+    try {
+      const fn = name();
+      if (fn === null || !this.isSym('(')) return null;
+      this.next();
+      const args: string[] = [];
+      for (;;) {
+        const a = name();
+        if (a === null || args.includes(a) || a === fn) return null;
+        args.push(a);
+        if (this.isSym(',')) { this.next(); continue; }
+        if (!this.isSym(')') || args.length > 4) return null;
+        this.next();
+        return { name: fn, args };
+      }
+    } catch (e) {
+      if (e instanceof ParseError) return null;
+      throw e;
+    }
   }
 
   parseRelationList(): MathJSON {
@@ -510,6 +561,7 @@ class Parser {
       case 'sum': return this.parseSum();
       case 'lim': return this.parseLimit();
       case 'partial': return this.parsePartialPrefix();
+      case 'mathbb': return this.parseNumberSet();
       case '{': return this.parseSet();
       case 'cdots': case 'ldots': case 'dots': case 'vdots':
         this.pos--;
@@ -538,6 +590,20 @@ class Parser {
       return [{ k: 'num', v: t.v[0]!, at: t.at }];
     }
     return [t];
+  }
+
+  /** \mathbb{Z}^{+}, \mathbb{Z}_{>0}, \mathbb{Z}, \mathbb{N}, \mathbb{R}; the validator allows them only after \in. */
+  parseNumberSet(): NumberSet {
+    const letter = this.readGroupTokens();
+    const v = letter.length === 1 && letter[0]!.k === 'letter' ? letter[0]!.v : '';
+    if (v === 'R') return 'Reals';
+    if (v === 'N') return 'NaturalNumbers';
+    if (v !== 'Z') return this.fail('only \\mathbb{Z}, \\mathbb{N} and \\mathbb{R} are supported', 'UNSUPPORTED_NOTATION');
+    if (!this.isSym('^') && !this.isSym('_')) return 'Integers';
+    this.next();
+    const mark = this.readGroupTokens().map((t) => t.v).join('');
+    if (mark === '+' || mark === '>0') return 'PositiveIntegers';
+    return this.fail(`unsupported number set "\\mathbb{Z}" with "${mark}"`, 'UNSUPPORTED_NOTATION');
   }
 
   subParse(toks: Tok[]): MathJSON {
