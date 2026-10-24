@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { mockRecognition, mockSuggestions, openHome, openPreset, rows, statusOf, writeAndConfirm } from './helpers';
 
 test('autosave, reload and reopen keep lines and verification', async ({ page }) => {
@@ -205,4 +205,28 @@ test('selection mode deletes several notebooks with one Undo', async ({ page }) 
   await expect(cards).toHaveCount(before - 2);
   await page.getByRole('status').filter({ hasText: 'Deleted 2 notebooks' }).getByRole('button', { name: 'Undo' }).click();
   await expect(cards).toHaveCount(before);
+});
+
+test('with a mouse, the starting-point shelf scrolls by its arrows and by dragging', async ({ page }) => {
+  await openHome(page);
+  const row = page.locator('[aria-label="More starting points"]').locator('xpath=preceding-sibling::div[1]');
+  const scrollLeft = () => row.evaluate((el) => el.scrollLeft);
+  await expect(page.getByRole('button', { name: 'Previous starting points' })).toBeHidden();
+  await page.getByRole('button', { name: 'More starting points' }).click();
+  await expect.poll(scrollLeft).toBeGreaterThan(100);
+
+  // dragging scrolls back, and releasing does not start a notebook
+  const box = (await row.boundingBox())!;
+  const before = await scrollLeft();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(scrollLeft).toBeLessThan(before);
+  await page.waitForTimeout(500);
+  await expect(page).toHaveURL(/\/notebooks$/);
+
+  // a plain click still starts one
+  await page.getByRole('button', { name: /New empty notebook/ }).first().click();
+  await page.waitForURL(/\/notebooks\/[0-9a-f-]{36}$/, { timeout: 60_000 });
 });

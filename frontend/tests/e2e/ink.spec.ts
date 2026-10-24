@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { draw, inkPixels, openPreset, rows, scribble } from './helpers';
 
 test.describe('ink', () => {

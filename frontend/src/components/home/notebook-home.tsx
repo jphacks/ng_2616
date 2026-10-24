@@ -17,6 +17,7 @@ import { AccountMenu } from '@/components/account/account-menu';
 import { Button } from '@/ui/button';
 import { IntegralIcon } from '@/ui/icons';
 import { Menu, MenuPopup, MenuRadioItem } from '@/ui/menu';
+import { Shelf } from '@/ui/shelf';
 import { Spinner } from '@/ui/spinner';
 import { NotebookCardSkeleton } from './notebook-card';
 import { NotebookGrid, type GridActions } from './notebook-grid';
@@ -270,11 +271,11 @@ export function NotebookHome() {
           <section className="space-y-4">
             <h2 className="text-3xl font-semibold text-balance">{t('home.choose')}</h2>
             {/* a swipeable shelf: the cut-off card at the edge hints there are more */}
-            <div className="scrollbar-none -mx-6 flex snap-x snap-mandatory scroll-px-6 gap-3 overflow-x-auto px-6 pb-1">
+            <Shelf className="-mx-6 scroll-px-6 gap-3 px-6 pb-1" prevLabel={t('home.shelfPrev')} nextLabel={t('home.shelfNext')}>
               {PRESET_IDS.map((id) => (
                 <PresetCard key={id} id={id} busy={creating === id} disabled={!!creating} onCreate={() => void create(id)} />
               ))}
-            </div>
+            </Shelf>
           </section>
 
           <section className="space-y-4">

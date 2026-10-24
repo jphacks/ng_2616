@@ -3,9 +3,9 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
-import { Check, MoreHorizontal } from 'lucide-react';
+import { Check, MoreVertical } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useState, useSyncExternalStore, type MouseEvent } from 'react';
+import { useId, useState, useSyncExternalStore, type MouseEvent } from 'react';
 import type { NotebookSummary } from '@/core/persistence/repo';
 import { useLocale, useT } from '@/i18n';
 import { NotebookPreview } from './notebook-preview';
@@ -78,6 +78,7 @@ export function NotebookCard({
 }) {
   const t = useT();
   const edited = useEdited(nb.updated_at);
+  const labelId = useId();
   const selecting = selection !== null;
   // while selecting, a hold or drag does nothing, so taps only select
   const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: nb.id, disabled: selecting });
@@ -117,22 +118,41 @@ export function NotebookCard({
           selection && 'ring-2 ring-accent',
         )}
       >
-        {/* the page fills the card, with its title on a solid band along the bottom */}
+        {/* the page fills the card and opens it; the band along the bottom only labels it,
+            so clicks on the title fall through to the card, except on the menu button */}
         <button
           type="button"
+          aria-labelledby={`${labelId}-title ${labelId}-edited`}
           aria-pressed={selecting ? selection : undefined}
           onClick={() => (selecting ? handlers.onToggle(nb.id) : handlers.onOpen(nb.id))}
           className="absolute inset-0 block text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-inset"
         >
           <NotebookPreview preview={nb.preview} />
-          <span className="absolute inset-x-0 bottom-0 block bg-ink/90 px-4 pt-2.5 pb-3">
-            <span data-card-title className="block truncate text-base font-semibold text-on-solid">
+        </button>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-2 bg-ink/90 py-2 pr-1.5 pl-4">
+          <div className="min-w-0 flex-1">
+            <span id={`${labelId}-title`} data-card-title className="block truncate text-base font-semibold text-on-solid">
               {nb.title}
             </span>
-            <span className="block truncate text-xs text-on-solid/70 tabular-nums">{edited}</span>
-          </span>
-        </button>
-        {selecting ? (
+            <span id={`${labelId}-edited`} className="block truncate text-xs text-on-solid/70 tabular-nums">
+              {edited}
+            </span>
+          </div>
+          {!selecting && (
+            <button
+              type="button"
+              aria-label={t('home.more')}
+              onClick={(e) => handlers.onMenu(nb.id, e.currentTarget)}
+              // a press on this button must not start a drag of the card
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-full text-on-solid/80 outline-none transition-transform duration-fast hover:bg-on-solid/10 hover:text-on-solid focus-visible:ring-2 focus-visible:ring-on-solid/60 active:scale-90"
+            >
+              <MoreVertical size={20} aria-hidden />
+            </button>
+          )}
+        </div>
+        {selecting && (
           <span
             aria-hidden
             className={clsx(
@@ -142,20 +162,6 @@ export function NotebookCard({
           >
             {selection && <Check size={16} />}
           </span>
-        ) : (
-        <button
-          type="button"
-          aria-label={t('home.more')}
-          onClick={(e) => handlers.onMenu(nb.id, e.currentTarget)}
-          // a press on this button must not start a drag of the card
-          onMouseDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          className="absolute top-1.5 right-1.5 inline-flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-        >
-          <span className="flex size-8 items-center justify-center rounded-full bg-sheet/90 text-ink-soft shadow-card transition-transform duration-fast active:scale-90">
-            <MoreHorizontal size={18} aria-hidden />
-          </span>
-        </button>
         )}
       </motion.div>
     </li>
