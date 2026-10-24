@@ -73,6 +73,9 @@ export class DirectAiService implements AiService {
       system: SUGGEST_SYSTEM,
       parts: suggestParts(input),
       schema: SUGGEST_JSON_SCHEMA,
+      // Larger than the 600 tokens / 20 s of spec v2.0 §13 (AI-S), which predates Gemini's thinking_level: the model's
+      // thinking tokens count against the output limit, so 600 would cut the answer off. This reasoning is an
+      // assumption, not measured; v2.1 gives no figures. Revisit with real latency and truncation data (NOTES R29).
       maxOutputTokens: 8192,
       timeoutMs: 40_000,
       signal: ctx.signal,

@@ -238,11 +238,12 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.confirmFirst': '書いている行を先に確定してください。',
   'toast.noSuggestion': 'この行に対する提案はありません。',
   'toast.suggestFailed': '提案を生成できませんでした。',
-  // 仮の文言（NOTES: 要確認）
+  // 補完ボタンを押したが何も始まらないときの案内（R27）
   'toast.suggestPending': '行の確認が終わってから、もう一度押してください。',
   'toast.suggestCannotContinue': 'この行からはまだ続けられません。先に確認するか、直してください。',
   'toast.suggestBusy': '提案を作成中か、採用待ちの提案があります。',
-  'toast.suggestHeld': '提案の準備ができています。書き終えると表示されます。',
+  // TODO(R14): 「ペンを離して 1.2 秒」で表示すると決まったら戻す：'提案の準備ができています。書き終えると表示されます。'
+  'toast.suggestHeld': '書いている途中なので、提案を隠しています。',
   'toast.waitForChecks': '現在の検証が終わるまでお待ちください。',
 
   'frame.rotate': '回転',

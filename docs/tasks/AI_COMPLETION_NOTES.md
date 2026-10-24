@@ -63,26 +63,35 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - **`canSuggest` と補完ボタン**：`toolbar.tsx` のボタンは `disabled` を持たず、`canSuggest` も使っていない（`onClick` は `engine.requestSuggestion(true)` を呼ぶだけ）。`canSuggest` を呼ぶのは `scheduleSuggestion`（自動起動）だけ。したがって **R27 の案内（pending／cannot-continue／busy／HELD）は表示される**。ボタンが無効化される変更が `toolbar.tsx` に入った場合は、案内が出なくなるので、UI 担当に「補完ボタンは `disabled` にしない」ことを伝える（依頼事項に記載）。
 - **`context_fingerprint` を `suggestFingerprint` に変えた影響**：この値を読むコードは、`packages/contracts` のスキーマ（`MetaSchema`、`HashSchema` の形式チェックのみ）と `engine.ts` だけ。gateway は値を読まず（検証は形式のみ）、FastAPI は未実装（`/suggest` は 501）、`recognize`／`ocrPage` は従来どおり `contextFingerprint`（`cas/payload.ts`）を送る。**サーバー側・ほかの機能への影響なし**。ただし将来 `Job.meta` を照合する側（`client.ts`、⑤）は、補完の `context_fingerprint` が `suggestFingerprint` であることを知っておく必要がある（依頼事項に記載）。
 
-### ③が決めること
+### ③が決めたこと／決めること
 
 私（③）が決める項目。UI 担当などに「確認」はするが、決定権は③にある。
 
-1. **R27 の案内文言（仮）**：下記 4 件を確定する。en／ja とも仮。
-   | キー | en（仮） | ja（仮） |
+**決定済み（2026-10-24）**
+
+1. **R27 の案内文言**：4 件とも確定（「仮」は外した）。`toast.suggestHeld` だけは **暫定の文言** に変えてある。
+
+   | キー | en | ja |
    | --- | --- | --- |
    | `toast.suggestPending` | Wait until the line is checked, then try again. | 行の確認が終わってから、もう一度押してください。 |
    | `toast.suggestCannotContinue` | This line cannot be continued yet. Check it, or fix it first. | この行からはまだ続けられません。先に確認するか、直してください。 |
    | `toast.suggestBusy` | A suggestion is already being prepared or waiting for you. | 提案を作成中か、採用待ちの提案があります。 |
-   | `toast.suggestHeld` | A suggestion is ready. It will appear when you stop writing. | 提案の準備ができています。書き終えると表示されます。 |
-2. **R12 のアイコン**：候補ラベルは `status.local` の文言にしたが、アイコンは従来の Sparkles のまま（確定行は CircleDashed）。そろえるか。
-3. **R29 AI-S の token／timeout**：現状 `maxOutputTokens: 8192`、`timeoutMs: 40_000`。v2.0 は 600 tokens／20 秒、v2.1 に記載なし（thinking の token を含むための差と推測しているだけで、根拠は未確認）。現状維持か変更か。変更するなら `direct/index.ts`（③の範囲）。
+   | `toast.suggestHeld` | A suggestion is hidden while you are writing. | 書いている途中なので、提案を隠しています。 |
+
+   - **`toast.suggestHeld` を元に戻す条件**：R14（①と合意する「筆記が止まった」の定義）が **「ペンを離して 1.2 秒で表示」（案 B）に決まったら**、次の文言に戻す。en「A suggestion is ready. It will appear when you stop writing.」／ja「提案の準備ができています。書き終えると表示されます。」。案 A（現状維持＝下書きに筆跡がある間は隠す）のままなら今の文言を使い続ける。`en.ts`／`ja.ts` の該当行に `TODO(R14)` を残してある。
+   - 理由：現状は筆跡が残る限り HELD のままで「書き終えると表示されます」と言うと嘘になる（確定するまで出ない）ため。
+2. **R12 のアイコン**：**Sparkles のまま**（確定行の CircleDashed にはそろえない）。候補は「AI の提案」であることをアイコンで示し、検証状態は文言（`status.local`）で示す。
+3. **R29 AI-S の token／timeout**：**変えない**（`maxOutputTokens: 8192`、`timeoutMs: 40_000`）。`server/ai/direct/index.ts` のその箇所に、「Gemini の thinking のトークンが出力上限に含まれるため v2.0 の 600 tokens／20 秒より大きくしている」という趣旨のコメントを足した。**この根拠は推測で、計測していない**（コメントにも明記）。実機の遅延と打ち切りのデータが取れたら見直す。
+
+**未決**
+
 4. **R30 の候補の mock 表示**：`ghost-line.tsx`（③）に出すか。`Proof.mock` の意味（②の回答）が先。
 
 ### 次にやること
 
 1. ①の回答待ち：R13（`addStroke`）、R14（筆記停止の定義）、コンストラクタの差し替え口。回答が来たら skip の G3・G4・G5・G6・G9 を有効にする。
 2. ⑤の回答待ち：`Job.meta` の照合（R16）、BRIDGE の 403（R28）、`test` script、描画テスト基盤（I2）。
-3. ③が決める項目（上）を決めて反映する。
+3. R14 が案 B に決まったら `toast.suggestHeld` を元の文言に戻す。R30 は②の回答後に決める。
 4. E2E を live の LLM で一度流す（live の記録はまだ無い）。
 
 ## 依頼事項（縦割りの役割ごと・現在有効）
@@ -168,7 +177,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - **R30（`Proof.mock` の意味、候補の mock 表示）**：CAS の仕様（②）の確認が先。`verifyCandidate` の `mock:` 式は③の関数だが、意味が決まるまで触らない。
 - **R3（`DOMAIN_CHANGED`）、R10（修正関係を持つ unknown の直接判定）**：`model.ts`（②）。
 
-（仮文言・アイコン・R29 は上の「③が決めること」へ移した。）
+（文言・アイコン・R29 は上の「③が決めたこと」に決定として記録した。）
 
 ## 参照：部品の対応表（現行リポジトリの事実）
 
@@ -252,7 +261,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 | R24 | wrong の候補は表示せず「チェッカーが却下」チップ、その hash を除外して 1 回だけ再生成（ADR 0003） | 満たす／テストなし | `verifyCandidate`（`recordCheckerRejection`、`retried`）、`RejectionChip` | E2E（checking.spec、demo.spec） |
 | R25 | none（定義・仮定）は「仮定の提案」で 1 タップ採用（ADR 0003） | 満たす／テストなし | `verifyCandidate`（`policy='assumption'`） | E2E（部分） |
 | R26 | 自動提案は「行が settle し筆記が止まったら」。採用は明示（v2.1） | 満たす／テストなし | `scheduleSuggestion`（1200ms）、`addStroke` で `cancelSuggestion`、`suggestBlocker` の `writing` | E2E（部分） |
-| R27 | 手動ボタンの無反応を作らない（§12.1「すべての処理は着地する」の趣旨） | **修正済み（段階2・e。文言は仮）** | `requestSuggestion`：toast は wrong／cas／empty／writing のみ。`pending`／`cannot-continue`／`busy`（HELD 中含む）は **何も言わず戻る**。`canSuggest` は HELD 中の手動押下を許すが、`requestSuggestion` が `busy` で戻るため効かない（食い違い） | なし |
+| R27 | 手動ボタンの無反応を作らない（§12.1「すべての処理は着地する」の趣旨） | **修正済み（段階2・e。文言は確定。`suggestHeld` のみ R14 待ちの暫定）** | `requestSuggestion`：toast は wrong／cas／empty／writing のみ。`pending`／`cannot-continue`／`busy`（HELD 中含む）は **何も言わず戻る**。`canSuggest` は HELD 中の手動押下を許すが、`requestSuggestion` が `busy` で戻るため効かない（食い違い） | なし |
 | R28 | mode=BRIDGE は FEATURE_DISABLED（§14.2、エラー表は 403） | 一部 | `direct/index.ts`：`suggest` が `AiError('FEATURE_DISABLED')`→ゲートウェイは **202 の failed ジョブ**（HTTP 403 ではない）。Must では UI から BRIDGE は送られない | なし |
 | R29 | AI-S の契約：1 行、429/5xx/タイムアウトは 1 回だけ再試行、スキーマ違反は再試行しない、打切り・空応答は成功にしない（§13） | 一部 | `providers/gemini.ts`（1 回再試行、空応答→`UPSTREAM_INVALID`）、`direct/index.ts`（`SuggestWireSchema` 違反→`SCHEMA_INVALID`）。数値は v2.0 の 600 tokens／20s に対し **8192 tokens／40s**（v2.1 に記載なし。根拠は要確認で、仮決めしない） | なし |
 | R30 | mock を UI／保存／ログで明示し、live の検証文脈に混ぜない（§13） | 一部 | `top-bar.tsx`：`top.mock`（capabilities の `llm.mock`）。`Candidate.mock` は保持するが表示しない。`verifyCandidate` の `mock: draft.lines.length > 0 && false` は **常に false**（意図不明の式） | なし |

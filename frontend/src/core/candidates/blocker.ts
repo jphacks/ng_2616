@@ -42,7 +42,7 @@ export function suggestModeOf(last: Line): 'COMPLETE_RHS' | 'NEXT_STEP' {
 /**
  * The short message a manual press of the suggest button gets when nothing starts, or null when the
  * reason is already obvious on screen. `candidate` is the state of the current candidate, if any.
- * Messages are keys of src/i18n; the four toast.suggest* keys are provisional wording (NOTES, 要確認).
+ * Messages are keys of src/i18n; the toast.suggest* keys are final wording (NOTES, ③が決めたこと).
  */
 export function blockerToastKey(blocker: SuggestBlocker, candidate: CandidateStateName | null): string | null {
   switch (blocker) {

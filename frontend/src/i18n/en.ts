@@ -236,11 +236,12 @@ export const en = {
   'toast.confirmFirst': 'Confirm the line you are writing first.',
   'toast.noSuggestion': 'No suggestion for this step.',
   'toast.suggestFailed': 'The suggestion could not be generated.',
-  // provisional wording for the suggest button when nothing starts (NOTES: 要確認)
+  // shown when the suggest button is pressed but nothing starts (R27)
   'toast.suggestPending': 'Wait until the line is checked, then try again.',
   'toast.suggestCannotContinue': 'This line cannot be continued yet. Check it, or fix it first.',
   'toast.suggestBusy': 'A suggestion is already being prepared or waiting for you.',
-  'toast.suggestHeld': 'A suggestion is ready. It will appear when you stop writing.',
+  // TODO(R14): when "stopped writing" is defined (pen up for 1.2 s), restore: 'A suggestion is ready. It will appear when you stop writing.'
+  'toast.suggestHeld': 'A suggestion is hidden while you are writing.',
   'toast.waitForChecks': 'Wait for the current checks to finish.',
 
   'frame.rotate': 'Rotate',
