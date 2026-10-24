@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "build_id": {
+      "type": "string"
+    },
+    "features": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "hints",
+          "assist_modes",
+          "bridge",
+          "plot",
+          "lean",
+          "autosave",
+          "auto_submit",
+          "resources"
+        ]
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "required": [
+        "hints",
+        "assist_modes",
+        "bridge",
+        "plot",
+        "lean",
+        "autosave",
+        "auto_submit",
+        "resources"
+      ]
+    },
+    "cas_runtime": {
+      "type": "string",
+      "const": "pyodide"
+    },
+    "ai_execution": {
+      "type": "string",
+      "enum": [
+        "direct",
+        "relay"
+      ]
+    },
+    "llm": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "mock": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "provider",
+        "configured",
+        "mock"
+      ],
+      "additionalProperties": false
+    },
+    "lean": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "available"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "build_id",
+    "features",
+    "cas_runtime",
+    "ai_execution",
+    "llm",
+    "lean"
+  ],
+  "additionalProperties": false
+}

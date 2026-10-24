@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next.js / build output
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# generated at predev/prebuild
+frontend/public/cas/cas_core/
+frontend/public/pdfjs/
+frontend/src/features/registry.generated.ts
+
+# env files (only *.example is committed)
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# tests
+coverage/
+playwright-report/
+test-results/
+
+# tooling
+.vercel/
+.DS_Store
+Thumbs.db

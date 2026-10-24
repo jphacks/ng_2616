@@ -1,0 +1,9 @@
+# /etc/caddy/Caddyfile on the Azure VM. Only 443 is open in the NSG; 8000 stays on loopback.
+api.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000 {
+		transport http {
+			read_timeout 200s
+		}
+	}
+}

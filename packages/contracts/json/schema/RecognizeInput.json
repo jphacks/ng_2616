@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "mime": {
+          "type": "string",
+          "enum": [
+            "image/png",
+            "image/jpeg"
+          ]
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 1400000
+        }
+      },
+      "required": [
+        "mime",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "previous_math_latex": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "functions": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "args"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "symbols": {
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ui_lang": {
+      "type": "string",
+      "enum": [
+        "en",
+        "ja"
+      ]
+    },
+    "prefetch": {
+      "type": "boolean"
+    },
+    "demo": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "script"
+      ],
+      "additionalProperties": false
+    },
+    "user_line_index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "image",
+    "ui_lang"
+  ],
+  "additionalProperties": false
+}

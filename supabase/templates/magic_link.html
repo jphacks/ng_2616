@@ -1,0 +1,15 @@
+<!--
+  Paste into Supabase → Authentication → Email Templates → "Magic Link".
+  The token_hash link works even when the email is opened in a different browser or app than
+  the one that requested it (common on tablets), unlike the default PKCE confirmation URL.
+-->
+<h2>Sign in to Math Notebook / 数式ノートにログイン</h2>
+<p>Tap the button to sign in. The link expires in one hour and can be used once.</p>
+<p>下のボタンからログインしてください。リンクの有効期限は1時間で、1回だけ使用できます。</p>
+<p>
+  <a
+    href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/notebooks"
+    style="display:inline-block;padding:12px 20px;border-radius:10px;background:#1a2030;color:#ffffff;text-decoration:none;font-weight:600"
+  >Sign in / ログイン</a>
+</p>
+<p style="color:#6b7280;font-size:13px">If you did not request this, you can ignore this email. / 心当たりがない場合はこのメールを無視してください。</p>

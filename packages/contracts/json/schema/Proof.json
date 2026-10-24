@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "wrong",
+        "unknown",
+        "none"
+      ]
+    },
+    "goal": {
+      "type": "string"
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "sym",
+        "sets",
+        "solve",
+        "eval",
+        "cx",
+        "num",
+        "def",
+        "sep",
+        "sub",
+        "scale"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COUNTEREXAMPLE",
+              "SOLUTION_DIFF",
+              "DOMAIN_CONDITION",
+              "EXACT_MISMATCH"
+            ]
+          },
+          "assignment": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "context_value": {
+            "type": "string"
+          },
+          "written_value": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extra": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "condition_latex": {
+            "type": "string"
+          },
+          "approx": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "summary"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "hints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 1
+              },
+              {
+                "type": "number",
+                "const": 2
+              }
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "level",
+          "text",
+          "refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "segment_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "segment_index": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "wrong",
+              "unknown",
+              "none"
+            ]
+          },
+          "goal": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "sym",
+              "sets",
+              "solve",
+              "eval",
+              "cx",
+              "num",
+              "def",
+              "sep",
+              "sub",
+              "scale"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "COUNTEREXAMPLE",
+                    "SOLUTION_DIFF",
+                    "DOMAIN_CONDITION",
+                    "EXACT_MISMATCH"
+                  ]
+                },
+                "assignment": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "context_value": {
+                  "type": "string"
+                },
+                "written_value": {
+                  "type": "string"
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "extra": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "condition_latex": {
+                  "type": "string"
+                },
+                "approx": {
+                  "type": "boolean"
+                },
+                "summary": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "summary"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "source_line_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "segment_index",
+          "status",
+          "conditions",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "depends_on_unverified": {
+      "type": "boolean"
+    },
+    "unverified_ancestors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "input_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "mock": {
+      "type": "boolean"
+    },
+    "cas": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "rules_version": {
+          "type": "string",
+          "const": "2.0.0"
+        },
+        "elapsed_ms": {
+          "type": "number"
+        },
+        "timed_out": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "version",
+        "rules_version",
+        "elapsed_ms",
+        "timed_out"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "status",
+    "conditions",
+    "evidence",
+    "hints",
+    "segment_results",
+    "depends_on",
+    "depends_on_unverified",
+    "unverified_ancestors",
+    "input_hash",
+    "mock",
+    "cas"
+  ],
+  "additionalProperties": false
+}

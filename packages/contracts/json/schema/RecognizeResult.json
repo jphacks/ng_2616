@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "segments": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 4000
+              }
+            },
+            "required": [
+              "type",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "math"
+              },
+              "expr": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "notation": {
+                "type": "string",
+                "enum": [
+                  "plain",
+                  "continuation"
+                ]
+              },
+              "latex": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "expr",
+              "notation",
+              "latex"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "unreadable": {
+      "type": "boolean"
+    },
+    "mock": {
+      "type": "boolean"
+    },
+    "transcription": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "segments",
+    "unreadable",
+    "mock"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "minItems": 1
+        }
+      ]
+    }
+  }
+}

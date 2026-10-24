@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "mime": {
+          "type": "string",
+          "enum": [
+            "image/png",
+            "image/jpeg"
+          ]
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 1400000
+        }
+      },
+      "required": [
+        "mime",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "ui_lang": {
+      "type": "string",
+      "enum": [
+        "en",
+        "ja"
+      ]
+    }
+  },
+  "required": [
+    "image",
+    "ui_lang"
+  ],
+  "additionalProperties": false
+}

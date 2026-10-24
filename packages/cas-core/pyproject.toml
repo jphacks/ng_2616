@@ -1,0 +1,29 @@
+[project]
+name = "cas-core"
+version = "0.1.0"
+description = "Math Notebook CAS rules (SymPy). Runs natively for tests and in Pyodide in the browser."
+requires-python = ">=3.12"
+# Pinned to the versions bundled in Pyodide v314.0.7 (see pyodide-lock.json).
+dependencies = ["sympy==1.14.0", "mpmath==1.4.1"]
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "ruff==0.17.2"]
+
+[tool.uv]
+package = false
+# SymPy 1.14 declares mpmath<1.4, but Pyodide v314.0.7 ships mpmath 1.4.1; mirror the browser runtime.
+override-dependencies = ["mpmath==1.4.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore:bitcount function is deprecated:DeprecationWarning"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+# SymPy strategies are tried in order and a failing one is skipped on purpose, so the
+# try/except/continue rules (S110/S112) are not enabled.
+select = ["E", "F", "W", "I", "B", "UP"]

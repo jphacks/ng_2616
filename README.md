@@ -78,3 +78,9 @@
 
 #### 特に注力した実装ファイル
 後で書く
+
+## 開発者向け / Development
+
+- Setup and tests: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- Stage 1 plan and repository map: [docs/plans/stage-1.md](docs/plans/stage-1.md)
+- Specification: [docs/design/v2.0-en.md](docs/design/v2.0-en.md) · changes: [docs/design/v2.1-deltas.md](docs/design/v2.1-deltas.md)
