@@ -8,6 +8,7 @@ import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLan
 import { api, ApiCallError } from '@/core/api/client';
 import { suggestBlockerOf, suggestModeOf } from '@/core/candidates/blocker';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
+import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
 import { getCas, type CasController } from '@/core/cas/controller';
 import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine, semanticHash } from '@/core/cas/payload';
 import type { Snapshot } from '@/core/history/history';
@@ -45,6 +46,8 @@ export class NotebookEngine {
   private cas: CasController = getCas();
   private aborts = new Map<string, AbortController>();
   private suggestTimer: ReturnType<typeof setTimeout> | null = null;
+  /** the active suggestion request: results are applied only if they still match it (spec §7.3) */
+  private suggestSlot: SlotMeta | null = null;
   private retried = new Set<string>();
   private cache = new Map<string, Proof>();
   private unsub: (() => void) | null = null;
@@ -423,6 +426,8 @@ export class NotebookEngine {
     s.set('candidate', pending);
     s.set('suggesting', true);
     const ctl = this.slot('suggest');
+    const slot = this.slotFor(uuid(), last, ctxLines);
+    this.suggestSlot = slot;
     try {
       const recentText = ctxLines.slice(-8).map(mathLatexOf).join(' ');
       const reference = await buildReferences(this.deps.ownerId, nb.id, recentText).catch(() => []);
@@ -441,15 +446,15 @@ export class NotebookEngine {
         ui_lang: this.deps.lang(),
         demo: demoBinding(nb),
       };
-      const res = await api.suggest(this.meta(last.id, last.version), input, ctl.signal);
-      if (this.isStale(epoch, last)) return;
+      const res = await api.suggest(slot, input, ctl.signal);
+      if (this.isStale(slot)) return this.discard(pending);
       if (res.state === 'NONE' || !res.candidate) {
         store.getState().set('candidate', null);
         if (manual) store.getState().showToast(this.deps.t('toast.noSuggestion'));
         return;
       }
       store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
-      await this.verifyCandidate(res.candidate, pending, ctxLines, manual);
+      await this.verifyCandidate(res.candidate, pending, ctxLines, manual, slot);
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
       if (store.getState().candidate?.id === pending.id || store.getState().candidate?.state === 'GENERATING') store.getState().set('candidate', null);
@@ -460,10 +465,33 @@ export class NotebookEngine {
     }
   }
 
-  private isStale(epoch: number, basedOn: Line): boolean {
+  /** The slot of a suggestion request made now: what its result has to carry to be applied later. */
+  private slotFor(requestId: string, basedOn: Line, ctxLines: readonly Line[]): SlotMeta {
     const s = store.getState();
-    const cur = s.notebook ? findLine(s.notebook, basedOn.id) : undefined;
-    return this.disposed || s.epoch !== epoch || !cur || cur.version !== basedOn.version;
+    const nb = s.notebook!;
+    return {
+      request_id: requestId,
+      notebook_id: nb.id,
+      client_session_id: this.sessionId,
+      client_epoch: s.epoch,
+      line_id: basedOn.id,
+      line_version: basedOn.version,
+      context_fingerprint: suggestFingerprint({ notebookId: nb.id, problem: nb.problem, lines: ctxLines, sessionId: this.sessionId, epoch: s.epoch }),
+    };
+  }
+
+  /** A result is stale unless it carries all seven fields of what the active request would carry now. */
+  private isStale(slot: SlotMeta): boolean {
+    const nb = store.getState().notebook;
+    const cur = nb ? findLine(nb, slot.line_id!) : undefined;
+    if (this.disposed || !nb || !cur || this.suggestSlot?.request_id !== slot.request_id) return true;
+    return !matchesSlot(this.slotFor(slot.request_id, cur, [...contextLinesFor(nb, cur.id), cur]), slot);
+  }
+
+  /** Drop a candidate that this request created, unless a newer request has already replaced it. */
+  private discard(pending: Candidate, draftId?: string) {
+    const c = store.getState().candidate;
+    if (c && (c.id === pending.id || c.id === draftId)) store.getState().set('candidate', null);
   }
 
   private async verifyCandidate(
@@ -471,6 +499,7 @@ export class NotebookEngine {
     pending: Candidate,
     ctxLines: Line[],
     manual: boolean,
+    slot: SlotMeta,
   ) {
     const nb = this.nb;
     const basedOn = findLine(nb, pending.basedOnLineId)!;
@@ -483,7 +512,7 @@ export class NotebookEngine {
       const casVersion = this.cas.versionString;
       const hash = inputHash(nb, payload, casVersion);
       const out = await this.cas.verify(payload);
-      if (this.isStale(pending.epoch, basedOn)) return;
+      if (this.isStale(slot)) return this.discard(pending, draft.id);
       if (out.kind === 'unavailable') {
         store.getState().set('candidate', null);
         return;

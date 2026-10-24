@@ -4,8 +4,8 @@ import type { Meta } from '@mn/contracts';
 import { suggestBlockerOf, suggestModeOf, type BlockerInput } from '../../../src/core/candidates/blocker';
 import { candidateHash, lineHash, mathKey } from '../../../src/core/candidates/hash';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '../../../src/core/candidates/rejection';
-import { matchesSlot, mismatchedFields, type SlotMeta } from '../../../src/core/candidates/slot';
-import { line, notebook, segs, settled, stroke, ZERO } from './fixtures';
+import { matchesSlot, mismatchedFields, suggestFingerprint, type SlotMeta } from '../../../src/core/candidates/slot';
+import { line, notebook, problem, segs, settled, stroke, ZERO } from './fixtures';
 
 describe('core/candidates/hash', () => {
   it('mathKey keeps formulas in order with expr and notation only', () => {
@@ -117,6 +117,30 @@ describe('core/candidates/slot (R16)', () => {
     const { line_id: _l, line_version: _v, ...bare } = slot;
     assert.equal(matchesSlot(slot, bare), false);
     assert.equal(matchesSlot(bare, bare), true);
+  });
+});
+
+describe('core/candidates/slot: suggestFingerprint (R16)', () => {
+  const base = { notebookId: 'nb', problem, lines: [{ id: 'L1', version: 1 }, { id: 'L2', version: 3 }], sessionId: 's', epoch: 2 };
+
+  it('is stable and has the hash shape', () => {
+    assert.equal(suggestFingerprint(base), suggestFingerprint({ ...base }));
+    assert.match(suggestFingerprint(base), /^sha256:[0-9a-f]{64}$/);
+  });
+
+  it('moves when the context, the session, the epoch or the problem changes', () => {
+    const f = suggestFingerprint(base);
+    assert.notEqual(f, suggestFingerprint({ ...base, lines: [{ id: 'L1', version: 1 }, { id: 'L2', version: 4 }] }), 'a context line was edited');
+    assert.notEqual(f, suggestFingerprint({ ...base, lines: [base.lines[0]!] }), 'a context line was removed');
+    assert.notEqual(f, suggestFingerprint({ ...base, sessionId: 's2' }));
+    assert.notEqual(f, suggestFingerprint({ ...base, epoch: 3 }));
+    assert.notEqual(f, suggestFingerprint({ ...base, problem: { ...problem, title: 'other' } }));
+    assert.notEqual(f, suggestFingerprint({ ...base, notebookId: 'nb2' }));
+  });
+
+  it('does not depend on drafts, which are not part of the lines it is given', () => {
+    // the engine passes only the settled prefix, so ink added to a draft cannot change the fingerprint
+    assert.equal(suggestFingerprint(base), suggestFingerprint({ ...base, lines: [...base.lines] }));
   });
 });
 

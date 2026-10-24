@@ -17,8 +17,9 @@ describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', 
   // R17: undo/redo abort the suggest request; confirmLine, startRevision and editProblem do not.
   it.skip('G5 confirming, starting a revision or editing the problem aborts the suggest request (R17)', () => {});
 
-  // R16: engine.isStale compares only epoch and the base line version.
-  it.skip('G6 a result whose request_id or context_fingerprint differs from the active slot is discarded (R16)', () => {});
+  // R16: NotebookEngine.isStale now compares all seven slot fields via matchesSlot (rules tested in pure.test.ts).
+  // The wiring (request superseded, context line edited, epoch bumped) needs a fake CAS and api (constructor owner).
+  it.skip('G6 engine wiring: a result whose request_id or context_fingerprint differs from the active slot is discarded (R16)', () => {});
 
   // R22: the pure rules (empty hash, READY/HELD only, per-context key) are tested in pure.test.ts (F3, G9).
   // What stays here is the wiring inside NotebookEngine.reject(), which needs a fake CAS and api (constructor owner).
