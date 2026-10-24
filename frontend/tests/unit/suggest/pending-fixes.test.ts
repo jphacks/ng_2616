@@ -8,9 +8,6 @@ import { describe, it } from 'node:test';
 // what is missing is that engine.ts / notebook-store.ts call them.
 
 describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', () => {
-  // R13: addStroke only holds the candidate when the stroke lands on the candidate's target line.
-  it.skip('G4 writing on any draft line turns a READY candidate into HELD (R13)', () => {});
-
   // R17: requestSuggestion now aborts itself on any epoch change (abortOnEpochChange, tested in epoch.test.ts).
   // The wiring inside NotebookEngine needs a fake CAS and api (constructor owner).
   it.skip('G5 engine wiring: confirming, starting a revision or editing the problem aborts the suggest request (R17)', () => {});

@@ -130,7 +130,8 @@ export class NotebookEngine {
       lineId,
     );
     this.cancelSuggestion();
-    if (s.candidate && s.candidate.state === 'READY' && s.candidate.targetLineId === lineId) {
+    // writing on any draft line hides a ready suggestion (spec §11), not only on the line it is for
+    if (s.candidate && s.candidate.state === 'READY' && findLine(this.nb, lineId)?.state === 'DRAFT') {
       s.set('candidate', { ...s.candidate, state: 'HELD' });
     }
   }
