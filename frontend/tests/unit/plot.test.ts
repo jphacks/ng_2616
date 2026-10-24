@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { Line } from '@mn/contracts';
+import type { Line, MathJSON } from '@mn/contracts';
 import { analyzeLineForPlot, evaluateExpr, generatePlotData } from '../../src/features/plot/evaluator';
 
-function makeMathLine(latex: string, expr: unknown): Line {
+function makeMathLine(latex: string, expr: MathJSON): Line {
   return {
     id: 'test-line-1',
     role: 'step',
@@ -14,7 +14,7 @@ function makeMathLine(latex: string, expr: unknown): Line {
       {
         type: 'math',
         latex,
-        expr: expr as any,
+        expr,
         notation: 'plain',
       },
     ],
@@ -23,7 +23,7 @@ function makeMathLine(latex: string, expr: unknown): Line {
 }
 
 test('analyzeLineForPlot: quadratic equation y = x^2 - 4x + 3', () => {
-  const expr = [
+  const expr: MathJSON = [
     'Equal',
     'y',
     ['Add', ['Power', 'x', 2], ['Negate', ['Multiply', 4, 'x']], 3],
@@ -43,7 +43,7 @@ test('analyzeLineForPlot: quadratic equation y = x^2 - 4x + 3', () => {
 });
 
 test('analyzeLineForPlot: function with parameters y = a*x^2 + b', () => {
-  const expr = [
+  const expr: MathJSON = [
     'Equal',
     'y',
     ['Add', ['Multiply', 'a', ['Power', 'x', 2]], 'b'],
@@ -63,7 +63,7 @@ test('analyzeLineForPlot: function with parameters y = a*x^2 + b', () => {
 });
 
 test('analyzeLineForPlot: function notation f(x) = sin(x)', () => {
-  const expr = ['Equal', ['Apply', 'f', 'x'], ['Sin', 'x']];
+  const expr: MathJSON = ['Equal', ['Apply', 'f', 'x'], ['Sin', 'x']];
   const line = makeMathLine('f(x) = \\sin(x)', expr);
   const analysis = analyzeLineForPlot(line);
 
@@ -78,14 +78,14 @@ test('analyzeLineForPlot: function notation f(x) = sin(x)', () => {
 });
 
 test('analyzeLineForPlot: forbidden operations (Integrate, D) are marked undrawable', () => {
-  const intExpr = ['Integrate', ['Multiply', 2, 'x'], 'x'];
+  const intExpr: MathJSON = ['Integrate', ['Multiply', 2, 'x'], 'x'];
   const lineInt = makeMathLine('\\int 2x dx', intExpr);
   const analysisInt = analyzeLineForPlot(lineInt);
 
   assert.equal(analysisInt.drawable, false);
   assert.ok(analysisInt.reason?.includes('積分'));
 
-  const diffExpr = ['D', ['Power', 'x', 2], 'x'];
+  const diffExpr: MathJSON = ['D', ['Power', 'x', 2], 'x'];
   const lineDiff = makeMathLine('\\frac{d}{dx} x^2', diffExpr);
   const analysisDiff = analyzeLineForPlot(lineDiff);
 
@@ -93,8 +93,8 @@ test('analyzeLineForPlot: forbidden operations (Integrate, D) are marked undrawa
 });
 
 test('generatePlotData: handles division by zero and asymptotes with null cuts', () => {
-  const expr = ['Divide', 1, 'x'];
-  const data = generatePlotData(expr as any, 'x', {}, [-2, 2], 5);
+  const expr: MathJSON = ['Divide', 1, 'x'];
+  const data = generatePlotData(expr, 'x', {}, [-2, 2], 5);
 
   // sample points: -2, -1, 0, 1, 2
   assert.equal(data.x.length, 5);

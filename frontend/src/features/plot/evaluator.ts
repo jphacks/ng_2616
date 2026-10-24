@@ -14,7 +14,6 @@ function collectSymbols(expr: MathJSON, out: Set<string>): void {
   if (Array.isArray(expr)) {
     const [head, ...args] = expr;
     if (typeof head === 'string' && head === 'Apply') {
-      // First arg is function name, subsequent args are arguments
       for (let i = 1; i < args.length; i++) {
         collectSymbols(args[i], out);
       }
@@ -72,7 +71,6 @@ export function analyzeLineForPlot(line: Line): PlotAnalysis {
     const rhs = expr[2];
 
     if (Array.isArray(lhs) && lhs[0] === 'Apply' && typeof lhs[2] === 'string') {
-      // e.g. ["Apply", "f", "x"] -> x
       xVarHint = lhs[2];
       targetExpr = rhs;
     } else if (typeof lhs === 'string' && (lhs === 'y' || lhs === 'f' || lhs === 'u')) {
@@ -82,7 +80,6 @@ export function analyzeLineForPlot(line: Line): PlotAnalysis {
       xVarHint = 'x';
       targetExpr = lhs;
     } else {
-      // general lhs = rhs -> lhs - rhs
       targetExpr = ['Subtract', lhs, rhs];
     }
   }
@@ -91,7 +88,6 @@ export function analyzeLineForPlot(line: Line): PlotAnalysis {
   collectSymbols(targetExpr, symbolsSet);
   const freeSymbols = Array.from(symbolsSet);
 
-  // Determine independent variable (xVar)
   let xVar = 'x';
   if (xVarHint && freeSymbols.includes(xVarHint)) {
     xVar = xVarHint;
@@ -105,7 +101,6 @@ export function analyzeLineForPlot(line: Line): PlotAnalysis {
     xVar = freeSymbols[0];
   }
 
-  // Other free symbols are parameters
   const paramNames = freeSymbols.filter((s) => s !== xVar);
   const paramsMeta: Record<string, ParamMeta> = {};
   const initialParams: Record<string, number> = {};

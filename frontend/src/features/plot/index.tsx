@@ -17,7 +17,6 @@ export function PlotLineAction({ line }: { line: Line }) {
   if (line.state !== 'SETTLED') return null;
 
   const analysis = analyzeLineForPlot(line);
-  // Don't show button if there is no math formula
   if (!analysis.targetExpr && !analysis.drawable) return null;
 
   return (

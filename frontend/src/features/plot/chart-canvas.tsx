@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { drawChart } from './chart-renderer';
 
 interface ChartCanvasProps {
@@ -29,7 +29,6 @@ export function ChartCanvas({
 
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; px: number; py: number } | null>(null);
 
-  // Compute y-bounds
   const validY = yData.filter((v): v is number => v !== null && !isNaN(v) && isFinite(v));
   let yMin = -10;
   let yMax = 10;
@@ -51,26 +50,6 @@ export function ChartCanvas({
 
   const [xMin, xMax] = xRange;
 
-  const renderChart = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    drawChart(ctx, {
-      width: canvas.width,
-      height: canvas.height,
-      xData,
-      yData,
-      xMin,
-      xMax,
-      yMin,
-      yMax,
-      hoveredPoint: hoveredPoint ? { px: hoveredPoint.px, py: hoveredPoint.py } : null,
-    });
-  }, [xData, yData, xMin, xMax, yMin, yMax, hoveredPoint, canvasRef]);
-
-  // Resize observer to keep canvas sharp
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -87,17 +66,43 @@ export function ChartCanvas({
       canvas.style.height = `${height}px`;
 
       const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(dpr, dpr);
-      renderChart();
+      if (!ctx) return;
+      ctx.scale(dpr, dpr);
+      drawChart(ctx, {
+        width: canvas.width,
+        height: canvas.height,
+        xData,
+        yData,
+        xMin,
+        xMax,
+        yMin,
+        yMax,
+        hoveredPoint: hoveredPoint ? { px: hoveredPoint.px, py: hoveredPoint.py } : null,
+      });
     });
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [renderChart, canvasRef]);
+  }, [canvasRef, xData, yData, xMin, xMax, yMin, yMax, hoveredPoint]);
 
   useEffect(() => {
-    renderChart();
-  }, [renderChart]);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    drawChart(ctx, {
+      width: canvas.width,
+      height: canvas.height,
+      xData,
+      yData,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      hoveredPoint: hoveredPoint ? { px: hoveredPoint.px, py: hoveredPoint.py } : null,
+    });
+  }, [canvasRef, xData, yData, xMin, xMax, yMin, yMax, hoveredPoint]);
 
   const handlePointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -161,7 +166,6 @@ export function ChartCanvas({
         className="h-full w-full touch-none"
       />
 
-      {/* Floating coordinates badge */}
       {hoveredPoint && (
         <div
           className="pointer-events-none absolute z-raised -translate-x-1/2 -translate-y-8 rounded-lg bg-sheet/95 px-2.5 py-1 text-xs font-semibold tabular-nums shadow-card ring-1 ring-border backdrop-blur-xs"
