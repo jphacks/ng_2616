@@ -24,6 +24,26 @@ test('a read outside the parser grammar is kept as written and marked not checka
   await expect(statusOf(page, 1)).toHaveAttribute('title', 'Not verified · the line above could not be checked');
 });
 
+test('assumption and function lines are recognised; any line can be marked as given', async ({ page }) => {
+  await mockRecognition(page, ['$m > 0$', '$V(x)$', '$x^2 = 4$']);
+  await mockSuggestions(page, []);
+  await openPreset(page, /New empty notebook/);
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 0)).toHaveAttribute('title', 'Assumption');
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Function');
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Starting line');
+
+  await statusOf(page, 2).click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByRole('button', { name: 'Mark as given' }).click();
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Given');
+  await expect(rows(page).nth(2).getByText('Given', { exact: true }).first()).toBeVisible();
+  await sheet.getByRole('button', { name: 'Not given' }).click();
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Starting line');
+});
+
 test('Back to ink turns a failed line into an editable draft', async ({ page }) => {
   await mockRecognition(page, [{ fail: 'IR_INVALID' }]);
   await openPreset(page, /New empty notebook/);
@@ -36,18 +56,20 @@ test('wrong step: category first, then evidence, hints, revision and recovery', 
   await mockRecognition(page, ['$(x-2)(x-3)$', '$= x^2 - 5x + 5$', '$= x^2 - 5x + 6$']);
   await mockSuggestions(page, []);
   await openPreset(page, /Expand a polynomial/);
+  // line 1 is the template's statement, marked as given
+  await expect(statusOf(page, 0)).toHaveAttribute('title', 'Given');
   await writeAndConfirm(page);
-  await expect(statusOf(page, 0)).toHaveAttribute('title', 'Starting line');
+  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Starting line');
   await writeAndConfirm(page);
-  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Constant term');
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Constant term');
 
   // completion is locked while a wrong line is unresolved
   await page.getByRole('button', { name: /Suggest next step/ }).click();
   await expect(page.getByText('Revise the line marked wrong')).toBeVisible();
 
-  await statusOf(page, 1).click();
+  await statusOf(page, 2).click();
   const sheet = page.getByRole('dialog');
-  await expect(sheet.getByText('Constant term in line 2')).toBeVisible();
+  await expect(sheet.getByText('Constant term in line 3')).toBeVisible();
   await expect(sheet.getByText('Expected')).toBeHidden();
   await sheet.getByRole('button', { name: 'Show evidence' }).click();
   await expect(sheet.getByText('Expected')).toBeVisible();
@@ -55,12 +77,12 @@ test('wrong step: category first, then evidence, hints, revision and recovery', 
   await sheet.getByRole('button', { name: 'Hint 1' }).click();
   await expect(sheet.getByText('Check the term independent of the variable.')).toBeVisible();
   await sheet.getByRole('button', { name: 'Hint 2' }).click();
-  await expect(sheet.getByText('Match the constant part of line 1 to this line.')).toBeVisible();
+  await expect(sheet.getByText('Match the constant part of line 2 to this line.')).toBeVisible();
   // hints never reveal the missing value
   await expect(sheet.getByText(/\+\s*6/)).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Revise this line' }).click();
 
-  const revision = rows(page).filter({ hasText: 'Revision of line 2' });
+  const revision = rows(page).filter({ hasText: 'Revision of line 3' });
   await expect(revision).toBeVisible();
   await writeAndConfirm(page, revision);
   await expect(page.getByText('Revision verified')).toBeVisible();
@@ -128,8 +150,8 @@ test('swiping a settled line left reveals its actions', async ({ page }) => {
   await openPreset(page, /Expand a polynomial/);
   await writeAndConfirm(page);
   await writeAndConfirm(page);
-  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Constant term');
-  const row = rows(page).nth(1);
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Constant term');
+  const row = rows(page).nth(2);
   const box = (await row.boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
   await page.mouse.down();

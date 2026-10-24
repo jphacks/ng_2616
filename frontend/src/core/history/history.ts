@@ -1,4 +1,4 @@
-import type { Line, Problem, Recovery } from '@mn/contracts';
+import type { Line, Recovery } from '@mn/contracts';
 import { PENDING_STATES } from '@/core/notebook/model';
 
 export type CommandType =
@@ -11,13 +11,12 @@ export type CommandType =
   | 'ADOPT_CANDIDATE'
   | 'REJECT_CANDIDATE'
   | 'IMPORT_PDF'
-  | 'EDIT_PROBLEM';
+  | 'MARK_GIVEN';
 
 /** Serializable before/after state of everything an edit can touch (spec §12.2). */
 export interface Snapshot {
   lines: Line[];
   recoveries: Recovery[];
-  problem: Problem;
   activeLineId: string | null;
 }
 

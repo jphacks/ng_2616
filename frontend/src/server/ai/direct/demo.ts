@@ -35,7 +35,8 @@ export function scriptedRecognition(input: RecognizeInput): RecognizeResult {
  */
 export async function scriptedSuggestion(input: SuggestInput, signal: AbortSignal): Promise<CandidateDraftResult> {
   const lineHashes = new Set(input.context.lines.map((l) => hashOf(toInputSegments(l.segments))));
-  const userLines = input.context.lines.filter((l) => l.source === 'user' && l.segments.some((s) => s.type === 'math')).length;
+  // the student's own lines: a template's given lines are not part of the script
+  const userLines = input.context.lines.filter((l) => l.source === 'user' && l.role !== 'premise' && l.segments.some((s) => s.type === 'math')).length;
   let userSeen = 0;
   for (const [index, step] of SCHRODINGER_SCRIPT.entries()) {
     if (step.who === 'user') {

@@ -23,7 +23,6 @@ export interface CasContextLine {
 }
 
 export interface CasPayload {
-  problem: Notebook['problem'];
   lines: CasContextLine[];
   target: { id: string; role: Role; segments: InputSegment[]; revision_of?: string; recovery_root_id?: string };
   parent_id: string | null;
@@ -56,7 +55,6 @@ export function payloadForLine(nb: Notebook, lineId: string, extra: Line[] = [])
   const ctx = [...contextLinesFor(nb, lineId), ...extra];
   const parent = extra.length ? extra[extra.length - 1] : parentFor(nb, lineId);
   return {
-    problem: nb.problem,
     lines: ctx.map(contextLine),
     target: {
       id: target.id,
@@ -72,15 +70,13 @@ export function payloadForLine(nb: Notebook, lineId: string, extra: Line[] = [])
 /** Payload for a suggested line that would be inserted after `afterLines`. */
 export function payloadForCandidate(nb: Notebook, contextLines: Line[], target: CasPayload['target']): CasPayload {
   const parent = [...contextLines].reverse().find((l) => l.segments.some((s) => s.type === 'math') && proofOf(l)?.status !== 'wrong');
-  return { problem: nb.problem, lines: contextLines.map(contextLine), target, parent_id: parent?.id ?? null };
+  return { lines: contextLines.map(contextLine), target, parent_id: parent?.id ?? null };
 }
 
 /** Semantic hash (spec §7.3): mathematical content only, no ink, timings or transport ids. */
 export function semanticHash(nb: Notebook, payload: CasPayload): Hash {
-  const p = payload.problem;
   return hashOf({
     notebook_id: nb.id,
-    problem: { definitions: p.definitions, conditions: p.conditions, assumptions: p.assumptions, unknowns: p.unknowns, functions: p.functions ?? [], independent_var: p.independent_var },
     domain: nb.domain,
     mode: nb.mode,
     ancestors: payload.lines.map((l) => ({ id: l.id, role: l.role, segments: l.segments, status: l.status, unverified: l.unverified_ancestors })),
@@ -94,7 +90,6 @@ export function inputHash(nb: Notebook, payload: CasPayload, casVersion: string)
 export function contextFingerprint(nb: Notebook, sessionId: string, epoch: number): Hash {
   return hashOf({
     notebook: nb.id,
-    problem: nb.problem,
     lines: nb.lines.map((l) => [l.id, l.version]),
     session: sessionId,
     epoch,

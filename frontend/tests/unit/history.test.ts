@@ -5,7 +5,7 @@ import { interruptPending, patchPending, type Command, type Snapshot } from '../
 import { contextLinesFor, hasUnresolvedWrong, parentFor } from '../../src/core/notebook/model';
 
 const line = (id: string, state: Line['state'], extra: Partial<Line> = {}): Line => ({ id, version: 1, source: 'user', role: 'step', state, ink: [], segments: [], ...extra });
-const snap = (lines: Line[]): Snapshot => ({ lines, recoveries: [], problem: { id: 'p', title: 't', statement: [], definitions: [], conditions: [], assumptions: [], unknowns: [] }, activeLineId: null });
+const snap = (lines: Line[]): Snapshot => ({ lines, recoveries: [], activeLineId: null });
 
 describe('history', () => {
   it('patches a settled result into every snapshot that still holds the pending line', () => {
@@ -45,7 +45,7 @@ describe('notebook model', () => {
     cas: { version: 'v', rules_version: '2.0.0' as const, elapsed_ms: 1, timed_out: false },
   });
   const math = [{ type: 'math' as const, expr: 'x', notation: 'plain' as const, latex: 'x' }];
-  const nb = (lines: Line[]): Notebook => ({ schema_version: '2.0.0', id: '00000000-0000-4000-8000-000000000000', title: 't', mode: 'live', domain: 'Reals', problem: snap([]).problem, lines, recoveries: [] });
+  const nb = (lines: Line[]): Notebook => ({ schema_version: '2.2.0', id: '00000000-0000-4000-8000-000000000000', title: 't', mode: 'live', domain: 'Reals', lines, recoveries: [] });
 
   it('checks a revision against its source parent, never against the wrong source', () => {
     const a = line('A', 'SETTLED', { segments: math, verified: { verification_id: '1', input_hash: `sha256:${'0'.repeat(64)}`, proof: proof('ok') } });

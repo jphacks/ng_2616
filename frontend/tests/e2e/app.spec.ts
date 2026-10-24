@@ -7,7 +7,7 @@ test('autosave, reload and reopen keep lines and verification', async ({ page })
   await openPreset(page, /Expand a polynomial/);
   await writeAndConfirm(page);
   await writeAndConfirm(page);
-  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Verified');
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Verified');
   // no Save button: the edits reach storage on their own within a few seconds
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
@@ -15,8 +15,8 @@ test('autosave, reload and reopen keep lines and verification', async ({ page })
 
   await page.reload();
   await expect(page.getByText('Checker ready')).toBeVisible({ timeout: 120_000 });
-  await expect(rows(page)).toHaveCount(3);
-  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Verified');
+  await expect(rows(page)).toHaveCount(4);
+  await expect(statusOf(page, 2)).toHaveAttribute('title', 'Verified');
 
   await openHome(page);
   const item = page.getByRole('listitem').filter({ hasText: 'Expansion' });
@@ -31,11 +31,11 @@ test('edits made just before a reload are recovered from the device outbox', asy
   await openPreset(page, /Expand a polynomial/);
   await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
   await writeAndConfirm(page);
-  await expect(statusOf(page, 0)).toHaveAttribute('title', /./);
+  await expect(statusOf(page, 1)).toHaveAttribute('title', /./);
   // reload before the 3 s cloud debounce: pagehide writes the outbox, the next open resumes it
   await page.reload();
   await expect(page.getByText('Checker ready')).toBeVisible({ timeout: 120_000 });
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page)).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
 });
 

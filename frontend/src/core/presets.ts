@@ -1,5 +1,5 @@
-import { SCHEMA_VERSION, segmentsFromSource, type Notebook, type Problem, type UiLang } from '@mn/contracts';
-import { SCHRODINGER_ASSUMPTIONS, SCHRODINGER_FUNCTIONS, TDSE_LATEX, buildProblem } from '@mn/contracts/fixtures';
+import { SCHEMA_VERSION, declaredFunctions, segmentsFromSource, type Line, type Notebook, type Role, type UiLang } from '@mn/contracts';
+import { TDSE_LATEX } from '@mn/contracts/fixtures';
 import { uuid } from '@/core/ids';
 import { newDraftLine } from '@/core/notebook/model';
 
@@ -47,36 +47,44 @@ export function presetText(id: PresetId, lang: UiLang): PresetText {
   return TEXT[id][lang];
 }
 
-function problemFor(id: PresetId, lang: UiLang): Problem {
-  const t = TEXT[id][lang];
-  const base = (() => {
-    switch (id) {
-      case 'schrodinger':
-        return buildProblem({ conditions: [TDSE_LATEX], functions: SCHRODINGER_FUNCTIONS, assumptions: SCHRODINGER_ASSUMPTIONS }, 'schrodinger');
-      case 'integral':
-        return buildProblem(
-          {
-            definitions: ['I(a) = \\int_0^a (3x^2 + 2x) \\, dx'],
-            functions: [{ name: 'I', args: ['a'] }],
-            assumptions: [{ symbol: 'a', kind: 'positive', source: 'user' }],
-          },
-          'integral',
-        );
-      case 'expansion':
-        return buildProblem({}, 'expansion');
-      case 'solutions':
-        return buildProblem({ unknowns: ['x'] }, 'solutions');
-      case 'blank':
-        return buildProblem({}, 'blank');
-    }
-  })();
-  const functions = base.functions;
-  return {
-    ...base,
-    title: t.title,
-    statement: t.statement ? segmentsFromSource(t.statement, { functions }) : [],
-    origin: { kind: 'preset', name: id },
-  };
+interface OpeningLine {
+  /** "$…$" marks math; a source without "$" is one formula */
+  src: string;
+  role: Extract<Role, 'premise' | 'definition'>;
+}
+
+const given = (src: string): OpeningLine => ({ src, role: 'premise' });
+
+const SCHRODINGER_FUNCTIONS = '$\\Psi(x,t)$ $\\psi(x)$ $\\phi(t)$ $V(x)$';
+const SCHRODINGER_CONDITIONS = '$m > 0, L > 0, n \\in \\mathbb{Z}^{+}, \\psi(x) \\neq 0, \\phi(t) \\neq 0$';
+
+/**
+ * The lines a template opens with after its statement: what the problem card used to show, kept
+ * compact: each given equation and definition on its own line, the functions on one line and the
+ * conditions on one more (or both on one). A student can write the same lines in an empty
+ * notebook; assumptions, function declarations and definitions are recognised without the given
+ * mark, which only equations such as the TDSE need.
+ */
+const OPENING: Record<PresetId, Record<UiLang, OpeningLine[]>> = {
+  blank: { en: [], ja: [] },
+  schrodinger: {
+    en: [given(`$${TDSE_LATEX}$`), given(`Given ${SCHRODINGER_FUNCTIONS}`), given(`where ${SCHRODINGER_CONDITIONS}`)],
+    ja: [given(`$${TDSE_LATEX}$`), given(`関数 ${SCHRODINGER_FUNCTIONS}`), given(`ただし ${SCHRODINGER_CONDITIONS}`)],
+  },
+  integral: {
+    en: [{ src: '$I(a) = \\int_0^a (3x^2 + 2x) \\, dx$', role: 'definition' }, given('Given $I(a)$ where $a > 0$')],
+    ja: [{ src: '$I(a) = \\int_0^a (3x^2 + 2x) \\, dx$', role: 'definition' }, given('関数 $I(a)$ ただし $a > 0$')],
+  },
+  expansion: { en: [], ja: [] },
+  solutions: { en: [], ja: [] },
+};
+
+function openingLines(id: PresetId, lang: UiLang): Line[] {
+  const statement = TEXT[id][lang].statement;
+  const sources: OpeningLine[] = [...(statement ? [given(statement)] : []), ...OPENING[id][lang]];
+  // declarations hold for the whole page: read every line with the functions any of them declares
+  const functions = declaredFunctions(sources.map((s) => ({ state: 'SETTLED', segments: segmentsFromSource(s.src) })));
+  return sources.map((s) => ({ ...newDraftLine(), role: s.role, state: 'SETTLED', segments: segmentsFromSource(s.src, { functions }) }));
 }
 
 export function buildNotebook(id: PresetId, lang: UiLang): Notebook {
@@ -86,8 +94,7 @@ export function buildNotebook(id: PresetId, lang: UiLang): Notebook {
     title: TEXT[id][lang].title,
     mode: 'live',
     domain: 'Reals',
-    problem: problemFor(id, lang),
-    lines: [newDraftLine()],
+    lines: [...openingLines(id, lang), newDraftLine()],
     recoveries: [],
     extensions: id === 'schrodinger' ? { demo: { script: 'schrodinger-v1' } } : {},
   };
