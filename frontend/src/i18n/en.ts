@@ -238,6 +238,23 @@ export const en = {
   'toast.suggestFailed': 'The suggestion could not be generated.',
   'toast.waitForChecks': 'Wait for the current checks to finish.',
 
+  'pdf.export': 'Export PDF',
+  'pdf.local': 'Create a PDF on this device. Your notebook is not sent to a server.',
+  'pdf.snapshot': 'Includes unsaved work as it was when you started export. You can close this panel to continue writing.',
+  'pdf.preparing': 'Preparing the document…',
+  'pdf.progress': 'Creating PDF: {done} / {total} pages',
+  'pdf.ready': 'Your PDF is ready.',
+  'pdf.download': 'Download PDF',
+  'pdf.generate': 'Create report PDF',
+  'pdf.title': 'Report title',
+  'pdf.author': 'Name (optional)',
+  'pdf.studentId': 'Student ID (optional)',
+  'pdf.cancel': 'Cancel',
+  'pdf.retry': 'Try again',
+  'pdf.failed': 'The PDF could not be created. Your notebook has not changed. Please try again.',
+  'pdf.tooLarge': 'This notebook is too large to export (up to 500 lines, 50 pages and 30 MiB). Please export a smaller notebook.',
+  'pdf.omitted': '{n} unfinished lines were noted in the PDF; their ink was omitted.',
+  'pdf.imageNote': 'Text and formulas are stored as images in this PDF and cannot be selected as text.',
   'frame.rotate': 'Rotate',
 } as const;
 
