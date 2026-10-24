@@ -14,7 +14,7 @@ import { usePageZoom } from './zoom';
 export const LINE_HEIGHT = 140;
 const MAX_HEIGHT = 560;
 const PADDING_BOTTOM = 16;
-const ERASER_RADIUS = 12;
+const ERASER_RADIUS = 20;
 const MAX_BACKING_SCALE = 3;
 const INK_ALPHA = { erasing: 0.18, dim: 0.55, hover: 0.32 } as const;
 
@@ -293,6 +293,22 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     const c = canvas.current;
     if (!c) return;
 
+    const commitEraser = () => {
+      if (!erasing.current) return;
+      const ids = [...erasing.current];
+      erasing.current = null;
+      if (ids.length) {
+        const drop = new Set(ids);
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
+        strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
+        backingDirty.current = true;
+        setHeight(inkHeight(strokesRef.current));
+        propsRef.current.onErase?.(ids);
+      }
+      drawRef.current();
+      schedule();
+    };
+
     const startStroke = (e: PointerEvent) => {
       // 1. SALVAGE: If rapid strokes occur and the previous stroke was not yet committed, commit it immediately!
       if (liveStroke.current && liveStroke.current.points.length > 0) {
@@ -324,7 +340,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
       const { editable, tool, onActivate } = propsRef.current;
       const mode = useDevicePrefs.getState().inputMode;
-      const fingerScroll = tool === 'view' || (!isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
+      // Eraser tool works with both stylus and finger touch!
+      const fingerScroll = tool === 'view' || (tool !== 'eraser' && !isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
 
       if (fingerScroll || !editable) {
         if (!editable && tool !== 'view') onActivate?.();
@@ -344,6 +361,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         if (liveStroke.current) {
           commitLiveRef.current();
         }
+        if (erasing.current) {
+          commitEraser();
+        }
         hover.current = local(e, 0);
         schedule();
         return;
@@ -361,8 +381,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
-      // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
-      if (!liveStroke.current && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
+      // Auto-start stroke or eraser if pointerdown was swallowed by iPadOS / Scribble
+      if (!liveStroke.current && !erasing.current && isContact && propsRef.current.editable && (propsRef.current.tool === 'pen' || propsRef.current.tool === 'eraser')) {
         startStroke(e);
       }
 
@@ -370,7 +390,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       if (!l) return;
 
       // Contact lost mid-move without pointerup event
-      if (!isContact && e.pointerType === 'pen') {
+      if (!isContact && (e.pointerType === 'pen' || e.pointerType === 'touch')) {
         commitLiveRef.current();
         return;
       }
@@ -393,18 +413,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
 
       if (erasing.current) {
-        const ids = [...erasing.current];
-        erasing.current = null;
-        if (ids.length) {
-          const drop = new Set(ids);
-          pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
-          strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
-          backingDirty.current = true;
-          setHeight(inkHeight(strokesRef.current));
-          propsRef.current.onErase?.(ids);
-        }
-        drawRef.current();
-        schedule();
+        commitEraser();
         return;
       }
 
