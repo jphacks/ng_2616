@@ -3,6 +3,7 @@
 import { NotebookSchema, type Notebook } from '@mn/contracts';
 import Dexie, { type EntityTable } from 'dexie';
 import { DEV_BYPASS, supabaseBrowser } from '@/core/auth/browser';
+import { buildPreview, previewOf, PREVIEW_LINES, type NotebookPreview } from '@/core/notebook/preview';
 
 export interface NotebookSummary {
   id: string;
@@ -11,7 +12,16 @@ export interface NotebookSummary {
   revision: number;
   mode?: string;
   demo?: boolean;
+  preview?: NotebookPreview;
 }
+
+// a few leading lines (superseded ones are skipped) instead of the whole snapshot
+const PREVIEW_COLUMNS = [
+  'problem:snapshot->problem',
+  ...Array.from({ length: PREVIEW_LINES + 2 }, (_, i) => `l${i}:snapshot->lines->${i}`),
+].join(',');
+// a plain string: the column list is built at runtime, so the typed select parser cannot read it
+const LIST_COLUMNS: string = `id,title,updated_at,revision,mode:snapshot->>mode,demo:snapshot->extensions->demo->>script,${PREVIEW_COLUMNS}`;
 
 export type SaveResult = { ok: true; revision: number } | { ok: false; reason: 'conflict' | 'too_large' | 'error'; message?: string };
 
@@ -63,10 +73,24 @@ class SupabaseRepo implements NotebookRepository {
   }
 
   async list() {
-    const { data, error } = await this.table.select('id,title,updated_at,revision,mode:snapshot->>mode,demo:snapshot->extensions->demo->>script').order('updated_at', { ascending: false }).limit(200);
+    const { data, error } = await this.table
+      .select(LIST_COLUMNS)
+      .order('updated_at', { ascending: false })
+      .limit(200);
     if (migrationMissing(error)) throw new RepoError('MIGRATION_MISSING', error!.message);
     if (error) throw new RepoError('NETWORK', error.message);
-    return (data ?? []).map((r) => ({ id: r.id, title: r.title, updated_at: r.updated_at, revision: r.revision, mode: r.mode ?? undefined, demo: !!r.demo }));
+    return ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => ({
+      id: r.id as string,
+      title: r.title as string,
+      updated_at: r.updated_at as string,
+      revision: r.revision as number,
+      mode: (r.mode as string | null) ?? undefined,
+      demo: !!r.demo,
+      preview: buildPreview(
+        r.problem as { title?: unknown; statement?: unknown } | null,
+        Array.from({ length: PREVIEW_LINES + 2 }, (_, i) => r[`l${i}`]).filter((l) => l != null),
+      ),
+    }));
   }
 
   async load(id: string) {
@@ -130,7 +154,15 @@ class LocalRepo implements NotebookRepository {
 
   async list() {
     const rows = await this.db.notebooks.orderBy('updated_at').reverse().toArray();
-    return rows.map((r) => ({ id: r.id, title: r.title, updated_at: r.updated_at, revision: r.revision, mode: r.snapshot.mode, demo: !!(r.snapshot.extensions as { demo?: unknown } | undefined)?.demo }));
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      updated_at: r.updated_at,
+      revision: r.revision,
+      mode: r.snapshot.mode,
+      demo: !!(r.snapshot.extensions as { demo?: unknown } | undefined)?.demo,
+      preview: previewOf(r.snapshot),
+    }));
   }
 
   async load(id: string) {
