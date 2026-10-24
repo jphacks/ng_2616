@@ -54,17 +54,32 @@ npx tsc --noEmit
 npx eslint src/core/candidates tests/unit/suggest src/server/ai/direct/candidate.ts
 ```
 
+### 試験結果
+
+環境はすべて **mock（`LLM_PROVIDER=mock`、台本 AI）＋実 CAS（Pyodide 314.0.7 + SymPy、ブラウザ内）、ローカル（Windows 11、Chromium 1248、`next dev` :3100、認証はバイパス）**。コミット＝`0548c91`（`Riku_feature`）。live の LLM では未実施なので、live の合格としては数えない。
+
+| ID | 結果 | 日時 | 環境（live / mock、provider/model、コミット） |
+| --- | --- | --- | --- |
+| `tests/unit/suggest/*.test.ts` 73 件（A・B・C・H・純関数・skip 8） | 65 通過／0 失敗／8 skip | 2026-10-24 | mock（単体、LLM 呼び出しなし）、ローカル、`0548c91` の作業ツリー |
+| `tests/unit/history.test.ts` 3 件 | 3 通過 | 2026-10-24 | 同上 |
+| E2E `checking.spec.ts` 8 件（再認識失敗、パーサー外の読み、Back to ink、wrong の復帰、右辺補完 `1 + 1 =`、wrong 候補の非表示、unknown の二重確認、Esc で却下） | 8 通過 | 2026-10-24 | mock、ローカル、`0548c91` |
+| E2E `demo.spec.ts` 2 件（Schrödinger 台本の通し：誤ったステップの却下と訂正、unverified 採用、Undo/Redo） | 2 通過 | 2026-10-24 | mock、ローカル、`0548c91` |
+| E2E 合計（`npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts`） | **10 通過／0 失敗**（2.5 分） | 2026-10-24 | mock、ローカル、`0548c91` |
+
+R6b（重複判定と `content_hash`）の変更後も、台本の通し（`demo.spec.ts`）と候補まわりの E2E は崩れていない。実行のために PC へ導入したもの：Playwright の Chromium、`pnpm@10.20.0`（`corepack enable` は `C:\Program Files
+odejs` への書き込み権限で EPERM になったため `npm i -g` を使用）。
+
 ### `server-only` の回避
 
 `npx tsx --test --conditions=react-server <ファイル>` で通る。条件なしだと `candidate.ts`・`direct/index.ts` を import するテストは読み込み時に例外で失敗する（`server-only` が投げる）。`@/…` の別名は tsx が `tsconfig.json` の `paths` で解決するので追加設定は不要。`package.json` の `test` script は変更していない（`history.test.ts` 固定のまま）。グロブ指定への変更は管理者の許可待ち。**`--conditions=react-server` を付けないと失敗する** 点を、script を変えるときに必ず反映すること。
 
 ### E2E への影響の確認
 
-Playwright は実行していない（ブラウザ・Pyodide・Supabase 環境が必要）。静的に確認した結果：
+静的に確認した結果（実機の実行結果は下の「試験結果」）：
 - `tests/e2e/helpers.ts` の `mockSuggestions` は `/api/v1/suggest` を丸ごと差し替え、`content_hash` も自前で作る。`finalizeCandidate` を通らないので影響なし。
 - `tests/e2e/api.spec.ts` は mock プロバイダー経路（`MOCK_PROVIDER`）で、`finalizeCandidate` を呼ばない。影響なし。
 - `tests/e2e/demo.spec.ts` だけが台本経路（`scriptedSuggestion` → `finalizeCandidate`）を通る。代わりに単体テストで台本を最後まで再現した（`service.test.ts` の「scripted demo」）：学生の 2 行を文脈に置き、AI の各ステップを採用していき、誤ったステップ（`rejected`）はハッシュを `rejected_hashes` に返す。結果は「全 AI ステップが 1 回ずつ、台本の順に出る。誤ったステップが先に出て、却下後に訂正版が出る」。`demo.ts` 自体の重複判定（`lineHashes`）は文章込みの別実装で、今回は変更していない。
-- 実機の `demo.spec.ts` は、環境のある人が一度流して確認してほしい（依頼事項に追加）。
+- `demo.spec.ts` は後から実際に流して通過を確認した（下の「試験結果」）。
 
 ### 今回見つかったこと（コードは直していない）
 
@@ -88,7 +103,7 @@ Playwright は実行していない（ブラウザ・Pyodide・Supabase 環境�
 - [ ] CAS 担当：`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`（R3）。`Proof.mock` の意味（R30）。
 - [ ] QA 担当：MT-10／GT-7 の「ok のみ」を ADR 0003 に合わせた読み替え（第1節）の承認。
 - [ ] リポジトリ管理者：`frontend/package.json` の `test` script をグロブ指定に変更、`server-only` のテスト時の扱い。
-- [ ] 環境のある人：`pnpm test:e2e`（少なくとも `demo.spec.ts`・`checking.spec.ts`）を一度流して、R6b の変更で台本が崩れていないことを確認してほしい。
+- [x] `demo.spec.ts`・`checking.spec.ts` の実行（この PC で実施済み。結果は「試験結果」）。
 
 ## 参照：部品の対応表（現行リポジトリの事実）
 
