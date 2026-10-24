@@ -20,6 +20,15 @@ hackerserver.japaneast.cloudapp.azure.com {
             }
         }
     }
+    # cas-worker serves /health and /verify; the gateway calls them as /cas/health, /cas/verify.
+    handle_path /cas/* {
+        reverse_proxy cas-worker:8200 {
+            transport http {
+                # above the worker's 5 s per check plus its 3 s queue wait
+                response_header_timeout 15s
+            }
+        }
+    }
     handle {
         respond "Not found" 404
     }

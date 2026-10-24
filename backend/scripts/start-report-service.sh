@@ -21,6 +21,15 @@ Path('.env.lean').write_text('APP_ENV=production\nLEAN_WORKER_KEY=' + secrets.to
 PY
 fi
 chmod 600 .env.lean
+# And for CAS: the key is shared with Vercel's CAS_WORKER_KEY.
+if [ ! -e .env.cas ]; then
+    python3 - <<'PY'
+import secrets
+from pathlib import Path
+Path('.env.cas').write_text('APP_ENV=production\nCAS_WORKER_KEY=' + secrets.token_urlsafe(32) + '\n')
+PY
+fi
+chmod 600 .env.cas
 sudo docker compose -f compose.azure.yaml config --quiet
 sudo docker compose -f compose.azure.yaml build
 sudo docker compose -f compose.azure.yaml run --rm --no-deps https caddy validate --config /etc/caddy/Caddyfile
