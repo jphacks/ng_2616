@@ -944,13 +944,18 @@ function watchPage(saver: Autosaver): () => void {
     void saver.flush();
   };
   const onOnline = () => saver.retry();
-  const onPageHide = () => saver.flushLocal();
+  // beforeunload comes while the page is still alive (a reload waits for the new page), so a write
+  // started here has time to finish; pagehide comes just before teardown and may be cut short, but
+  // is the only one iOS Safari fires reliably
+  const onLeave = () => saver.flushLocal();
   document.addEventListener('visibilitychange', onHide);
   window.addEventListener('online', onOnline);
-  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('beforeunload', onLeave);
+  window.addEventListener('pagehide', onLeave);
   return () => {
     document.removeEventListener('visibilitychange', onHide);
     window.removeEventListener('online', onOnline);
-    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('beforeunload', onLeave);
+    window.removeEventListener('pagehide', onLeave);
   };
 }
