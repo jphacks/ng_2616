@@ -118,6 +118,29 @@ test('closing a pending transcription discards its late result and retains the e
   await expect.poll(() => inkPixels(page.locator('[data-line-id]').last())).toBeGreaterThan(10);
 });
 
+for (const [code, message] of [
+  ['UPSTREAM_INVALID', 'AI service could not process'],
+  ['UPSTREAM_TIMEOUT', 'timed out'],
+  ['SCHEMA_INVALID', 'could not be validated'],
+] as const) {
+  test(`AI failure ${code} explains the problem and preserves the selected local question`, async ({ page }) => {
+    await page.route('**/api/v1/resources/questions', (route) => route.fulfill({ status: 202, json: {
+      ok: true, request_id: 'failure', data: { job: { state: 'failed', error: { code, message: 'provider failure', retryable: false } } },
+    } }));
+    const dialog = await openImport(page);
+    const questions = dialog.getByRole('combobox', { name: 'Question', exact: true });
+    await expect(questions.locator('option')).toHaveCount(11);
+    await questions.selectOption({ label: 'Question 1' });
+    const before = await dialog.getByLabel('Review / correct the transcription').inputValue();
+    await dialog.getByRole('button', { name: 'Transcribe this page with AI' }).click();
+    await expect(dialog.getByRole('alert')).toContainText(message);
+    await expect(dialog.getByLabel('Review / correct the transcription')).toHaveValue(before);
+    await dialog.getByRole('button', { name: 'Adopt as given lines' }).click();
+    await expect(page.locator('main')).toContainText('Question 1');
+    await expect.poll(() => inkPixels(page.locator('[data-line-id]').last())).toBeGreaterThan(10);
+  });
+}
+
 test('corrupt and oversized files leave the notebook unchanged', async ({ page }) => {
   const dialog = await openImport(page, Buffer.from('%PDF-invalid'));
   await expect(dialog.getByRole('alert')).toContainText('readable PDF');

@@ -366,6 +366,11 @@ export const en = {
   'question.err.complex': 'This page exceeds the supported amount (100 lines / 20 questions). Choose a simpler exercise sheet.',
   'question.err.preview': 'Could not display the original page. Please reopen the PDF.',
   'question.err.generic': 'Could not complete the operation. Your notebook is unchanged. Please review the PDF or retry.',
+  'question.err.timeout': 'AI transcription timed out. The previous result is kept. Please retry.',
+  'question.err.network': 'Could not connect for AI transcription. Check your connection and retry. The previous result is kept.',
+  'question.err.quota': 'The AI service is busy or its usage limit has been reached. Try again later. You can still use the local PDF text.',
+  'question.err.provider': 'The AI service could not process this page. The previous result is kept. You can still review and use the local PDF text.',
+  'question.err.result': 'The AI transcription could not be validated. The previous result is kept. Please retry or review the local PDF text.',
   'frame.rotate': 'Rotate',
 
   'sync.saving': 'Saving…',

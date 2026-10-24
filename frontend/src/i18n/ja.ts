@@ -368,6 +368,11 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'question.err.complex': 'このページは対応上限（100行・20問）を超えています。設問の少ない演習プリントを選んでください。',
   'question.err.preview': 'PDF原本を表示できませんでした。PDFを開き直してください。',
   'question.err.generic': '処理を完了できませんでした。ノートは保持されています。PDFを確認するか再試行してください。',
+  'question.err.timeout': 'AI文字起こしが時間内に完了しませんでした。以前の結果を保持しています。再試行してください。',
+  'question.err.network': 'AI文字起こしに接続できませんでした。通信状況を確認して再試行してください。以前の結果は保持しています。',
+  'question.err.quota': 'AIが混雑しているか、利用上限に達しています。時間をおいて再試行してください。PDFの文字情報からの取り込みは利用できます。',
+  'question.err.provider': 'AIサービスがこのページを処理できませんでした。以前の結果を保持しています。PDFの文字情報を確認・修正して取り込むこともできます。',
+  'question.err.result': 'AIの文字起こし結果を確認できませんでした。以前の結果を保持しています。再試行するか、PDFの文字情報を確認・修正してください。',
   'frame.rotate': '回転',
 
   'sync.saving': '保存中…',

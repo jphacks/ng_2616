@@ -25,6 +25,10 @@ const ERRORS: Record<string, string> = {
   QUESTION_PREMISE_INVALID: 'question.err.premise', QUESTION_STATEMENT_INVALID: 'question.err.statement',
   QUESTION_OCR_UNAVAILABLE: 'question.err.unavailable', PDF_TRANSCRIPTION_INCOMPLETE: 'question.err.incomplete',
   QUESTION_PAGE_TOO_COMPLEX: 'question.err.complex',
+  UPSTREAM_TIMEOUT: 'question.err.timeout', NETWORK: 'question.err.network',
+  UPSTREAM_429: 'question.err.quota', RATE_LIMITED: 'question.err.quota', QUEUE_FULL: 'question.err.quota',
+  UPSTREAM_AUTH: 'question.err.unavailable', LLM_NOT_CONFIGURED: 'question.err.unavailable',
+  UPSTREAM_INVALID: 'question.err.provider', SCHEMA_INVALID: 'question.err.result', IR_INVALID: 'question.err.result',
 };
 
 export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?: () => Promise<File>; initialPage?: number }) {
@@ -117,8 +121,12 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
     const ctl = new AbortController(); controller.current?.abort(); controller.current = ctl;
     setBusy('ai'); setError(null);
     try {
-      const canvas = await renderPage(pdf.doc, pageNo, 1000);
-      const image = await canvasToBase64(canvas); canvas.width = 0; canvas.height = 0;
+      const canvas = await renderPage(pdf.doc, pageNo, 1600);
+      // Whole-page formulas need more pixels than a single handwritten line. Keep the
+      // existing request-size limit for image-heavy PDFs by falling back to a smaller image.
+      let image = await canvasToBase64(canvas, 2000);
+      if (image.data.length > 1_400_000) image = await canvasToBase64(canvas);
+      canvas.width = 0; canvas.height = 0;
       ctl.signal.throwIfAborted();
       const raw = await engine.transcribeQuestionPage({ page: pageNo, image, text: (pdf.text[pageNo - 1] ?? '').slice(0, 30000), ui_lang: locale }, ctl.signal);
       ctl.signal.throwIfAborted();

@@ -52,7 +52,18 @@ export function normalizeQuestionPage(raw: unknown, page: number, method: Questi
   if (new Set(wire.lines.map((l) => l.id)).size !== wire.lines.length || new Set(wire.questions.map((q) => q.id)).size !== wire.questions.length) throw new Error('SCHEMA_INVALID');
   const functions = wire.questions.flatMap((q) => q.functions);
   const lines = wire.lines.map((line) => {
-    const parsed = wireToSegments(line.segments, { functions, allowUnparsed: true });
+    // A printed question number may arrive as "(1)\\quad x=0" in a math segment.
+    // Separate only a label confirmed by this question's metadata and explicit layout spacing;
+    // ordinary parenthesized numbers in a formula must remain mathematical content.
+    const labels = new Set(wire.questions.filter((q) => q.line_ids.includes(line.id))
+      .map((q) => q.label.normalize('NFKC').replace(/^\((\d+)\)$/, '$1')));
+    const segments = line.segments.flatMap((segment) => {
+      const match = segment.type === 'math' ? /^\s*(\(([0-9０-９]{1,2})\))\s*\\(?:qquad|quad)\s+([\s\S]+)$/.exec(segment.content) : null;
+      return match && labels.has(match[2]!.normalize('NFKC'))
+        ? [{ type: 'text' as const, content: match[1]! }, { type: 'math' as const, content: match[3]! }]
+        : [segment];
+    });
+    const parsed = wireToSegments(segments, { functions, allowUnparsed: true });
     if (!parsed.ok || !parsed.segments.length) throw new Error('IR_INVALID');
     return { id: line.id, segments: parsed.segments, has_unreadable: line.has_unreadable || hasUnreadable(parsed.segments) };
   });
@@ -84,5 +95,16 @@ export function inferredUnknowns(segments: QuestionLine['segments']): string[] {
   return symbols.size <= 3 ? [...symbols] : [];
 }
 
-// Zod emits ordinary JSON Schema because all provider-facing fields are flat objects/arrays.
-export const QUESTION_PAGE_JSON_SCHEMA = z.toJSONSchema(QuestionPageWireSchema);
+/** Keep the output shape small enough for Gemini's constrained decoder. Nested array limits
+ * (100 lines × 16 segments, 20 questions × 32 premises) exceed its state budget. Length and
+ * symbol constraints are still enforced by QuestionPageWireSchema after generation. */
+function outputShape(schema: Record<string, unknown>): Record<string, unknown> {
+  const shape = Object.fromEntries(['type', 'enum', 'required', 'additionalProperties', 'pattern']
+    .filter((key) => key in schema).map((key) => [key, schema[key]]));
+  if (schema.properties) shape.properties = Object.fromEntries(Object.entries(schema.properties as Record<string, Record<string, unknown>>)
+    .map(([key, value]) => [key, outputShape(value)]));
+  if (schema.items) shape.items = outputShape(schema.items as Record<string, unknown>);
+  return shape;
+}
+
+export const QUESTION_PAGE_JSON_SCHEMA = outputShape(z.toJSONSchema(QuestionPageWireSchema));

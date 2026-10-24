@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { quadraticQuestionFixture } from '../fixtures/question-card';
-import { normalizeQuestionPage, questionSegments, type QuestionPageWire } from '../src/question-card';
+import { normalizeQuestionPage, questionSegments, QUESTION_PAGE_JSON_SCHEMA, type QuestionPageWire } from '../src/question-card';
 
 function wire(): QuestionPageWire {
   return { complete: true, lines: [{ id: 'a', has_unreadable: false, segments: [{ type: 'math', content: 'a>0' }] }, { id: 'b', has_unreadable: false, segments: [{ type: 'math', content: 'x^2=a' }] }], questions: [{ id: 'q', label: '1', title: 'Problem', line_ids: ['a', 'b'], unknowns: ['x'], independent_var: '', functions: [], premises: [{ id: 'positive', kind: 'assumption', latex: 'a>0', source_line_ids: ['a'] }] }] };
@@ -29,4 +29,31 @@ test('rejects incomplete pages, unknown source references and duplicated IDs', (
   assert.throws(() => normalizeQuestionPage(missing, 1, 'ai'), /SCHEMA_INVALID/);
   const duplicate = wire(); duplicate.lines.push(duplicate.lines[0]!);
   assert.throws(() => normalizeQuestionPage(duplicate, 1, 'ai'), /SCHEMA_INVALID/);
+});
+
+test('provider shape avoids nested decoder limits while responses still enforce size and symbol limits', () => {
+  assert.doesNotMatch(JSON.stringify(QUESTION_PAGE_JSON_SCHEMA), /"(?:maxItems|minItems|maxLength|minLength)":/);
+  const oversized = wire();
+  oversized.lines = Array.from({ length: 101 }, (_, i) => ({ ...oversized.lines[0]!, id: `L${i}` }));
+  assert.throws(() => normalizeQuestionPage(oversized, 1, 'ai'));
+  const invalidSymbol = wire(); invalidSymbol.questions[0]!.unknowns = ['not a symbol'];
+  assert.throws(() => normalizeQuestionPage(invalidSymbol, 1, 'ai'));
+  const longText = wire(); longText.lines[0]!.segments[0]!.content = 'x'.repeat(4001);
+  assert.throws(() => normalizeQuestionPage(longText, 1, 'ai'));
+});
+
+test('a confirmed printed question label is text, while ordinary formula parentheses remain math', () => {
+  const labeled = wire();
+  labeled.lines[1]!.segments[0]!.content = '(1)\\quad x^2=a';
+  const page = normalizeQuestionPage(labeled, 1, 'ai');
+  assert.equal(page.lines[1]!.segments[0]!.type, 'text');
+  assert.deepEqual(page.lines[1]!.segments[1], normalizeQuestionPage(wire(), 1, 'ai').lines[1]!.segments[0]);
+  const formula = wire();
+  formula.lines[1]!.segments[0]!.content = '(1) x^2=a';
+  const math = normalizeQuestionPage(formula, 1, 'ai').lines[1]!.segments;
+  assert.equal(math.length, 1);
+  assert.equal(math[0]!.type, 'math');
+  const otherLabel = wire();
+  otherLabel.lines[1]!.segments[0]!.content = '(2)\\quad x^2=a';
+  assert.equal(normalizeQuestionPage(otherLabel, 1, 'ai').lines[1]!.segments.length, 1);
 });
