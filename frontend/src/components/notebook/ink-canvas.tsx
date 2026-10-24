@@ -181,10 +181,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     }
   }, [width, height, dim, inkSize, editable, tool, zoom, updateBacking]);
 
-  useEffect(() => {
-    draw();
-  }, [draw]);
-
   const drawRef = useRef(draw);
   useLayoutEffect(() => {
     drawRef.current = draw;
