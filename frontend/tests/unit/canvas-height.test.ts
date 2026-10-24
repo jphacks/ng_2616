@@ -1,3 +1,6 @@
+/**
+ * Unit tests for inkHeight calculation and auto-shrink behavior.
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Stroke } from '@mn/contracts';
