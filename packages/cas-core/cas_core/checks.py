@@ -284,10 +284,15 @@ def compare_values(
     found = search_counterexample(free, env, ev)
     if found[0] is not None:
         assign, cv, wv, approx = found  # type: ignore[misc]
-        category = _integration_category(c_ir, w_ir, ctx) or classify_expressions(Cd, Wd, env, c_ir, w_ir)
+        constants = not free
+        if constants:
+            # two exact constants that differ: no variable to blame, so no coefficient/sign story
+            category = "UNCLASSIFIED"
+        else:
+            category = _integration_category(c_ir, w_ir, ctx) or classify_expressions(Cd, Wd, env, c_ir, w_ir)
         where = ", ".join(f"{k} = {v}" for k, v in latex_assignment(assign, inverse).items())
         evidence = {
-            "kind": "COUNTEREXAMPLE",
+            "kind": "EXACT_MISMATCH" if constants else "COUNTEREXAMPLE",
             "assignment": latex_assignment(assign, inverse),
             "context_value": sp.latex(cv),
             "written_value": sp.latex(wv),
@@ -334,8 +339,25 @@ def expression_equivalence(ir: Any, ctx: Context) -> SegResult:
 # ---------------------------------------------------------------- relations
 
 
+def constant_evaluation(ir: Any, ctx: Context) -> SegResult | None:
+    """Exact constant comparison (spec §9.2 row 10), e.g. 1 + 1 = 2."""
+    if ir[0] != "Equal":
+        return None
+    try:
+        L, u1 = conv_expr(ir[1], ctx)
+        R, u2 = conv_expr(ir[2], ctx)
+    except CasUnsupported:
+        return None  # e.g. x = ±2 is a solution set, handled by relation_compare
+    Ld, Rd = _doit(L), _doit(R)
+    if Ld.free_symbols or Rd.free_symbols or Ld.atoms(AppliedUndef) or Rd.atoms(AppliedUndef):
+        return None
+    res = compare_values(L, R, ctx, ir[1], ir[2], "CONSTANT_EVALUATION")
+    res.depends_on |= u1 | u2
+    return res
+
+
 def relation_target(ir: Any, ctx: Context) -> SegResult:
-    for check in (equation_from_context, separation_check, solution_check):
+    for check in (equation_from_context, constant_evaluation, separation_check, solution_check):
         r = check(ir, ctx)
         if r is not None:
             return r

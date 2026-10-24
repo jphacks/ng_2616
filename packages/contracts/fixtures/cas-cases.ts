@@ -164,6 +164,13 @@ export const CAS_CASES: CasCase[] = [
     lines: first('$\\sin(\\pi x)$'), target: T('$= 0$'), expect: { status: 'wrong' },
   },
   { id: 'CF-22', note: 'skip undefined sample points', problem: {}, lines: first('$\\frac{x+1}{x}$'), target: T('$= \\frac{1}{x}$'), expect: { status: 'wrong' } },
+  { id: 'CE-01', note: 'constant evaluation ok', problem: {}, lines: [], target: T('$1 + 1 = 2$'), expect: { status: 'ok', method: 'eval' } },
+  { id: 'CE-02', note: 'constant evaluation wrong', problem: {}, lines: [], target: T('$1 + 1 = 3$'), expect: { status: 'wrong', category: 'UNCLASSIFIED' } },
+  {
+    id: 'CE-03', note: 'completed RHS of an incomplete first line', problem: {},
+    lines: [], target: T('$\\frac{1}{2} + \\frac{1}{3} = \\frac{5}{6}$'), expect: { status: 'ok', method: 'eval' },
+  },
+  { id: 'CE-04', note: 'incomplete line', problem: {}, lines: [], target: T('$1 + 1 =$'), expect: { status: 'unknown', reason: 'INCOMPLETE' } },
   {
     id: 'PH-01', note: 'sign error in the TDSE with V = 0',
     problem: { conditions: [TDSE_LATEX], functions: SCHRODINGER_FUNCTIONS, assumptions: SCHRODINGER_ASSUMPTIONS },

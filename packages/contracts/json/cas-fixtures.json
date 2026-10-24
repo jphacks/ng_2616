@@ -2440,6 +2440,182 @@
     }
   },
   {
+    "id": "CE-01",
+    "note": "constant evaluation ok",
+    "expect": {
+      "status": "ok",
+      "method": "eval"
+    },
+    "payload": {
+      "problem": {
+        "id": "P",
+        "title": "fixture",
+        "statement": [],
+        "definitions": [],
+        "conditions": [],
+        "assumptions": [],
+        "unknowns": [],
+        "functions": []
+      },
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": [
+              "Equal",
+              [
+                "Add",
+                1,
+                1
+              ],
+              2
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
+    "id": "CE-02",
+    "note": "constant evaluation wrong",
+    "expect": {
+      "status": "wrong",
+      "category": "UNCLASSIFIED"
+    },
+    "payload": {
+      "problem": {
+        "id": "P",
+        "title": "fixture",
+        "statement": [],
+        "definitions": [],
+        "conditions": [],
+        "assumptions": [],
+        "unknowns": [],
+        "functions": []
+      },
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": [
+              "Equal",
+              [
+                "Add",
+                1,
+                1
+              ],
+              3
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
+    "id": "CE-03",
+    "note": "completed RHS of an incomplete first line",
+    "expect": {
+      "status": "ok",
+      "method": "eval"
+    },
+    "payload": {
+      "problem": {
+        "id": "P",
+        "title": "fixture",
+        "statement": [],
+        "definitions": [],
+        "conditions": [],
+        "assumptions": [],
+        "unknowns": [],
+        "functions": []
+      },
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": [
+              "Equal",
+              [
+                "Add",
+                [
+                  "Divide",
+                  1,
+                  2
+                ],
+                [
+                  "Divide",
+                  1,
+                  3
+                ]
+              ],
+              [
+                "Divide",
+                5,
+                6
+              ]
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
+    "id": "CE-04",
+    "note": "incomplete line",
+    "expect": {
+      "status": "unknown",
+      "reason": "INCOMPLETE"
+    },
+    "payload": {
+      "problem": {
+        "id": "P",
+        "title": "fixture",
+        "statement": [],
+        "definitions": [],
+        "conditions": [],
+        "assumptions": [],
+        "unknowns": [],
+        "functions": []
+      },
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": [
+              "Equal",
+              [
+                "Add",
+                1,
+                1
+              ],
+              null
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
     "id": "PH-01",
     "note": "sign error in the TDSE with V = 0",
     "expect": {
