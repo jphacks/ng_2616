@@ -30,6 +30,7 @@ const NONE_LABEL: Record<string, string> = {
   PREMISE: 'status.premise',
   ASSUMPTION: 'status.assumption',
   FUNCTION: 'status.function',
+  DECLARATION: 'status.declaration',
   TEXT_ONLY: 'status.text',
 };
 
