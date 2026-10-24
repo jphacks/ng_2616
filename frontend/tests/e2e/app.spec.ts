@@ -136,7 +136,7 @@ test('iPad frame for demos rotates between landscape and portrait', async ({ pag
   await openHome(page, '?frame=ipad');
   const rotate = page.getByRole('button', { name: 'Rotate' });
   await expect(rotate).toBeVisible();
-  const frame = page.locator('div.rounded-\\[28px\\]');
+  const frame = page.locator('[data-device-screen]');
   const landscape = (await frame.boundingBox())!;
   expect(landscape.width).toBeGreaterThan(landscape.height);
   await rotate.click();

@@ -117,8 +117,8 @@ export function Workspace({ notebookId }: { notebookId: string }) {
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-        <AlertTriangle className="text-wrong-strong" />
-        <p className="text-[15px] text-ink-soft">{error === 'not_found' ? 'Notebook not found.' : error}</p>
+        <AlertTriangle className="text-danger" />
+        <p className="text-base text-ink-soft">{error === 'not_found' ? 'Notebook not found.' : error}</p>
         <Link href="/notebooks" className="text-accent underline">
           {t('top.notebooks')}
         </Link>

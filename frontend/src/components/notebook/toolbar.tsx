@@ -12,6 +12,7 @@ import { IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
 import { useHoldRepeat } from './gestures';
+import { enter } from '@/ui/motion';
 
 const TOOLS: { tool: Tool; icon: typeof PenLine; key: string }[] = [
   { tool: 'pen', icon: PenLine, key: 'tool.pen' },
@@ -50,14 +51,14 @@ export function Toolbar() {
     if (from === null || !el) return;
     x.set(0);
     x.set(from - el.getBoundingClientRect().left);
-    animate(x, 0, { duration: 0.2, ease: 'easeOut' });
+    animate(x, 0, enter);
   }, [side, x]);
   // holding Undo or Redo keeps stepping through history
   const undoPress = useHoldRepeat(() => engine.undo(), canUndo);
   const redoPress = useHoldRepeat(() => engine.redo(), canRedo);
 
   return (
-    <div ref={lane} className={clsx('pointer-events-none absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-30 flex px-4', SIDE_CLASS[side])}>
+    <div ref={lane} className={clsx('pointer-events-none absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-sticky flex px-4', SIDE_CLASS[side])}>
       <motion.div
         ref={bar}
         style={{ x }}
@@ -73,7 +74,7 @@ export function Toolbar() {
           const next = at < 1 / 3 ? 'left' : at > 2 / 3 ? 'right' : 'center';
           dropped.current = bar.current.getBoundingClientRect().left;
           if (next === side) {
-            animate(x, 0, { duration: 0.2, ease: 'easeOut' });
+            animate(x, 0, enter);
             dropped.current = null;
           } else setPref('toolbarSide', next);
         }}
@@ -116,7 +117,7 @@ export function Toolbar() {
         <button
           type="button"
           onClick={() => void engine.requestSuggestion(true)}
-          className="ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-[15px] font-medium text-white hover:bg-accent-strong"
+          className="ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-base font-medium text-on-solid hover:bg-accent-strong"
         >
           {suggesting ? <Spinner size={18} /> : <Sparkles size={18} />}
           <span className="hidden sm:inline">{t('tool.suggest')}</span>
@@ -125,8 +126,8 @@ export function Toolbar() {
 
       <Popover.Root open={weightsOpen} onOpenChange={setWeightsOpen}>
         <Popover.Portal>
-          <Popover.Positioner anchor={penButton} side="top" sideOffset={10} className="z-50">
-            <Popover.Popup className="origin-[var(--transform-origin)] rounded-2xl bg-sheet p-1.5 shadow-float outline-none transition-[scale,opacity] duration-150 ease-out motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+          <Popover.Positioner anchor={penButton} side="top" sideOffset={10} className="z-popover">
+            <Popover.Popup className="origin-[var(--transform-origin)] rounded-2xl bg-sheet p-1.5 shadow-float outline-none transition-[scale,opacity] duration-fast ease-out motion-reduce:transition-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
               <Popover.Title className="sr-only">{t('tool.inkWeight')}</Popover.Title>
               <div className="flex gap-1">
                 {WEIGHTS.map((w) => (
@@ -140,7 +141,7 @@ export function Toolbar() {
                       setPref('inkWeight', w);
                       setWeightsOpen(false);
                     }}
-                    className={clsx('flex size-11 items-center justify-center rounded-xl', inkWeight === w ? 'bg-accent-soft' : 'hover:bg-black/5')}
+                    className={clsx('flex size-11 items-center justify-center rounded-xl', inkWeight === w ? 'bg-accent-soft' : 'hover:bg-hover')}
                   >
                     <span className="rounded-full bg-ink" style={{ width: INK_WEIGHTS[w] * 2.4, height: INK_WEIGHTS[w] * 2.4 }} />
                   </button>

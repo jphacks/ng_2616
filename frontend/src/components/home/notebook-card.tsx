@@ -9,6 +9,7 @@ import { useState, useSyncExternalStore, type MouseEvent } from 'react';
 import type { NotebookSummary } from '@/core/persistence/repo';
 import { useLocale, useT } from '@/i18n';
 import { NotebookPreview } from './notebook-preview';
+import { enter, exit } from '@/ui/motion';
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
@@ -97,7 +98,7 @@ export function NotebookCard({
       ref={setNodeRef}
       data-card-id={nb.id}
       style={{ transform: reorderable ? CSS.Translate.toString(transform) : undefined, transition }}
-      className={clsx('relative select-none [-webkit-touch-callout:none]', isDragging ? 'z-20' : 'z-0')}
+      className={clsx('relative select-none [-webkit-touch-callout:none]', isDragging ? 'z-lifted' : 'z-base')}
       onContextMenu={onContextMenu}
       {...listeners}
     >
@@ -108,8 +109,8 @@ export function NotebookCard({
         onPointerUp={release}
         onPointerCancel={release}
         onPointerLeave={release}
-        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15, ease: 'easeOut' } }}
-        transition={{ duration: 0.2, ease: 'easeOut', delay: stagger ? Math.min(index, 8) * 0.03 : 0, scale: { duration: 0.15 } }}
+        exit={{ opacity: 0, scale: 0.96, transition: exit }}
+        transition={{ ...enter, delay: stagger ? Math.min(index, 8) * 0.03 : 0, scale: exit }}
         className={clsx(
           'group relative overflow-hidden rounded-3xl bg-sheet',
           lifted ? 'shadow-float' : 'shadow-card',
@@ -124,10 +125,10 @@ export function NotebookCard({
         >
           <NotebookPreview preview={nb.preview} />
           <span className="block space-y-1 border-t border-border px-4 pt-3 pb-4">
-            <span className="line-clamp-2 text-[15px] leading-snug font-medium text-balance">{nb.title}</span>
-            <span className="flex items-center gap-2 text-[12px] text-muted tabular-nums">
+            <span className="line-clamp-2 text-base leading-snug font-medium text-balance">{nb.title}</span>
+            <span className="flex items-center gap-2 text-xs text-muted tabular-nums">
               <span className="truncate">{edited}</span>
-              {nb.demo && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-strong">{t('home.demo')}</span>}
+              {nb.demo && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-2xs font-medium text-accent-strong">{t('home.demo')}</span>}
             </span>
           </span>
         </button>
@@ -136,7 +137,7 @@ export function NotebookCard({
             aria-hidden
             className={clsx(
               'pointer-events-none absolute top-3 left-3 flex size-7 items-center justify-center rounded-full ring-2',
-              selection ? 'bg-accent text-white ring-accent' : 'bg-sheet/90 ring-border',
+              selection ? 'bg-accent text-on-solid ring-accent' : 'bg-sheet/90 ring-border',
             )}
           >
             {selection && <Check size={16} />}
@@ -151,7 +152,7 @@ export function NotebookCard({
           onTouchStart={(e) => e.stopPropagation()}
           className="absolute top-1.5 right-1.5 inline-flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
-          <span className="flex size-8 items-center justify-center rounded-full bg-sheet/90 text-ink-soft shadow-card transition-transform duration-150 active:scale-90">
+          <span className="flex size-8 items-center justify-center rounded-full bg-sheet/90 text-ink-soft shadow-card transition-transform duration-fast active:scale-90">
             <MoreHorizontal size={18} aria-hidden />
           </span>
         </button>
@@ -176,7 +177,7 @@ export function NotebookCardSkeleton() {
 
 function Bone({ className }: { className: string }) {
   return (
-    <div className={clsx('relative overflow-hidden bg-black/[0.05]', className)}>
+    <div className={clsx('relative overflow-hidden bg-fill', className)}>
       <div className="shimmer absolute inset-0" />
     </div>
   );

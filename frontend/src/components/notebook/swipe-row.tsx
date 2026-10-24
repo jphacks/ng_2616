@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { animate, motion, useMotionValue } from 'motion/react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { create } from 'zustand';
+import { enter } from '@/ui/motion';
 
 export interface SwipeAction {
   label: string;
@@ -38,7 +39,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
   const open = openId === id;
 
   useEffect(() => {
-    animate(x, open ? -width : 0, { duration: 0.2, ease: 'easeOut' });
+    animate(x, open ? -width : 0, enter);
   }, [open, width, x]);
 
   // touching anywhere outside an open row closes it
@@ -71,7 +72,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
               setOpen(null);
               a.onClick();
             }}
-            className={clsx('flex flex-1 flex-col items-center justify-center gap-1 text-[13px] font-medium', TONE[a.tone ?? 'neutral'])}
+            className={clsx('flex flex-1 flex-col items-center justify-center gap-1 text-sm font-medium', TONE[a.tone ?? 'neutral'])}
           >
             {a.icon}
             {a.label}
@@ -93,7 +94,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
           const closing = info.offset.x > width / 2 || info.velocity.x > 400;
           const next = open ? !closing : opening;
           setOpen(next ? id : open ? null : openId);
-          animate(x, next ? -width : 0, { duration: 0.2, ease: 'easeOut' });
+          animate(x, next ? -width : 0, enter);
           // the click that ends a swipe must not also press what is under the finger
           setTimeout(() => (dragged.current = false), 0);
         }}

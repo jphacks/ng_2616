@@ -60,7 +60,7 @@ export function StatusBadge({ line, ancestor, onClick, compact }: { line: Line; 
     <button
       type="button"
       onClick={onClick}
-      className={clsx('inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full px-3 text-left text-[13px] font-medium transition-opacity hover:opacity-85', TONE_CLASS[tone])}
+      className={clsx('inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full px-3 text-left text-sm font-medium transition-opacity hover:opacity-85', TONE_CLASS[tone])}
       title={detail ? `${text} · ${detail}` : text}
     >
       <Icon size={16} className="shrink-0" aria-hidden />

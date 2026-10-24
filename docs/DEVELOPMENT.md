@@ -48,3 +48,20 @@ set `LLM_PROVIDER=mock`: the demo notebook maps any ink to its scripted lines.
 ## Layout
 See `docs/plans/stage-1.md` for the repository map and `docs/design/v2.1-deltas.md` for how the
 build differs from the v2.0 spec.
+
+## Design system
+Everything visual is defined once, in `frontend/src/app/globals.css`:
+
+- **Brand inputs** (`:root`): `--brand-accent`, `--brand-ink`, `--brand-paper` and the status hues.
+  Editing these re-skins the app; every other color (hover and soft shades, neutrals, borders,
+  shadows, the loading shimmer) is mixed from them.
+- **Semantic tokens** (`@theme`): colors (`accent`, `ink`, `muted`, `fill`, `hover`, `danger`, …),
+  the type scale (`text-2xs` … `text-4xl`), radii, shadows, plus named layers (`z-sticky`,
+  `z-overlay`, `z-popover`, …) and durations (`duration-fast`, `duration-base`).
+- Components use only these tokens through Tailwind utilities. ESLint rejects raw colors,
+  arbitrary font sizes, `white`/`black` utilities and numeric `z-*` in `.tsx` files.
+- Code that draws outside CSS reads tokens through `frontend/src/ui/tokens.ts` (canvas ink, the
+  browser theme color); JS animation takes its durations from `frontend/src/ui/motion.ts`, which
+  mirrors the CSS durations.
+- Exceptions: the handwriting-recognition image (`core/ink/raster.ts`) is always black on white,
+  and the Google logo keeps its brand colors.

@@ -42,13 +42,13 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
   if (!enabled) return <div className="h-dvh">{children}</div>;
   const { w, h } = SIZES[orientation];
   return (
-    <div className="flex h-dvh flex-col items-center justify-center gap-4 overflow-hidden bg-[#dcdad4]">
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 overflow-hidden bg-frame-backdrop">
       <div style={{ width: (w + 36) * scale, height: (h + 36) * scale }}>
         <div
-          className="origin-top-left rounded-[44px] bg-[#1c1d20] p-[18px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45)]"
+          className="origin-top-left rounded-frame bg-frame-bezel p-[18px] shadow-frame"
           style={{ width: w + 36, height: h + 36, transform: `scale(${scale})` }}
         >
-          <div className="relative overflow-hidden rounded-[28px] bg-paper" style={{ width: w, height: h, transform: 'translateZ(0)' }}>
+          <div data-device-screen className="relative overflow-hidden rounded-frame-screen bg-paper" style={{ width: w, height: h, transform: 'translateZ(0)' }}>
             {children}
           </div>
         </div>
@@ -56,7 +56,7 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
       <button
         type="button"
         onClick={() => setOrientation((o) => (o === 'landscape' ? 'portrait' : 'landscape'))}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/80 px-4 text-sm font-medium text-ink shadow-card hover:bg-white"
+        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-raised/80 px-4 text-md font-medium text-ink shadow-card hover:bg-raised"
       >
         <RotateCw size={16} /> {t('frame.rotate')}
       </button>
