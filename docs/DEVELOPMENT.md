@@ -67,6 +67,21 @@ build downloads Mathlib's cache (an image of about 16 GB; about 6 minutes on the
 - Checked in the container on the VM: the REPL runs through `lake env` on the read-only root, the
   default imports load in about 6 s using about 1 GB, and all 37 worker tests pass.
 
+## CAS on the Azure VM (optional)
+By default the browser runs the CAS in Pyodide. With `NEXT_PUBLIC_CAS_RUNTIME=azure` it sends each
+check to `cas-worker` on the VM through `POST /api/v1/cas/verify` instead; same rules
+(`packages/cas-core`), same payload, same 5 s budget ([ADR 0009](adr/0009-cas-on-azure.md)).
+
+Locally: `pnpm cas:dev` (port 8200), then in `frontend/.env.local` set
+`NEXT_PUBLIC_CAS_RUNTIME=azure` and `CAS_WORKER_URL=http://127.0.0.1:8200`. `pnpm cas:worker-test`
+sends every shared oracle case through the worker's HTTP API.
+
+On the VM, `backend/compose.azure.yaml` runs `cas-worker` on `compiler-private` (read-only root,
+no capabilities, 1 GB, 1.5 CPUs). `start-report-service.sh` creates `backend/.env.cas` once (a
+random `CAS_WORKER_KEY`), and `Caddyfile.azure` serves it at `https://<vm-host>/cas/health` and
+`/cas/verify`. On Vercel set `NEXT_PUBLIC_CAS_RUNTIME=azure`, `CAS_WORKER_URL=https://<vm-host>/cas`
+and `CAS_WORKER_KEY` from `backend/.env.cas`, then redeploy: `NEXT_PUBLIC_` values are fixed at build.
+
 ## Supabase setup
 1. Run the migrations in order (SQL editor or `npx supabase db push`):
    `0001_mn_notebooks.sql`, then `0002_mn_cloud_sync.sql` (autosave RPC, ink table, resources,
