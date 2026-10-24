@@ -31,8 +31,16 @@ export function useSessionUser(): { user: SessionUser | null; loading: boolean }
     const sb = supabaseBrowser();
     const map = (u: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null): SessionUser | null =>
       u ? { id: u.id, email: u.email, name: (u.user_metadata?.full_name as string) ?? undefined, avatar: (u.user_metadata?.avatar_url as string) ?? undefined } : null;
-    sb.auth.getUser().then(({ data }) => setState({ user: map(data.user), loading: false }));
-    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => setState({ user: map(session?.user ?? null), loading: false }));
+    // getUser and every auth event (initial session, token refresh) report the same user: keep
+    // the object, so effects keyed on it do not run again
+    const apply = (u: SessionUser | null) =>
+      setState((prev) =>
+        !prev.loading && prev.user?.id === u?.id && prev.user?.email === u?.email && prev.user?.name === u?.name && prev.user?.avatar === u?.avatar
+          ? prev
+          : { user: u, loading: false },
+      );
+    sb.auth.getUser().then(({ data }) => apply(map(data.user)));
+    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => apply(map(session?.user ?? null)));
     return () => sub.subscription.unsubscribe();
   }, []);
   return state;
