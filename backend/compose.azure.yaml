@@ -1,3 +1,8 @@
+# Everything the Azure VM runs, started from a git clone (scripts/deploy.sh). Only `https` is
+# reachable from the internet; services on compiler-private have no egress.
+# CAS and Lean services join here later: add the service on compiler-private and a route in
+# Caddyfile.azure.
+name: math-notebook-pdf
 services:
   pdf-compiler:
     build:
@@ -27,7 +32,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile.report:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.azure:/etc/caddy/Caddyfile:ro
+      # Volume names are kept from compose.report.yaml so existing certificates are reused.
       - report-caddy-data:/data
       - report-caddy-config:/config
     depends_on:
