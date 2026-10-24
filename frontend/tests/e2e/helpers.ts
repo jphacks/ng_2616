@@ -7,7 +7,7 @@ export const rows = (page: Page) => page.locator('[data-line-id]');
 export async function openHome(page: Page, query = '') {
   await page.goto(`/notebooks${query}`);
   await page.waitForLoadState('networkidle');
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
   await page.waitForTimeout(1000);
 }
 

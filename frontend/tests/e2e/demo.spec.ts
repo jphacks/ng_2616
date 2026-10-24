@@ -6,7 +6,7 @@ import { ARTIFACTS } from '../../playwright.config';
 async function openHome(page: Page) {
   await page.goto('/notebooks');
   await page.waitForLoadState('networkidle');
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
   await page.waitForTimeout(1500);
 }
 
@@ -76,7 +76,7 @@ test('Schrödinger demo: student lines, CAS-gated AI steps, rejected wrong step,
 });
 
 test('undo and redo restore lines without re-checking', async ({ page }) => {
-  await openPreset(page, /Expansion/);
+  await openPreset(page, /Expand a polynomial/);
   await scribble(page, rows(page).last());
   await expect(page.getByRole('button', { name: 'Confirm' })).toBeEnabled();
   await page.keyboard.press('Control+z');

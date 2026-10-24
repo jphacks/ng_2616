@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { draw, inkPixels, openPreset, rows, scribble } from './helpers';
 
 test.describe('ink', () => {
-  test.beforeEach(async ({ page }) => openPreset(page, /Untitled notebook/));
+  test.beforeEach(async ({ page }) => openPreset(page, /New empty notebook/));
 
   test('every finished stroke stays visible (no flicker or lost strokes)', async ({ page }) => {
     const row = rows(page).last();
@@ -63,7 +63,7 @@ test.describe('ink', () => {
 });
 
 test('a two-finger tap undoes the last stroke and a three-finger tap redoes it', async ({ page }) => {
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   const row = rows(page).first();
   await scribble(page, row);
   const drawn = await inkPixels(row);

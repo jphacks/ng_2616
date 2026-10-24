@@ -127,7 +127,7 @@ export function NotebookGrid({
         }}
       >
         <SortableContext items={ids} strategy={reorderable ? rectSortingStrategy : () => null}>
-          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence initial={false}>
               {items.map((nb, i) => (
                 <NotebookCard
