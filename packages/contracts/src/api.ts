@@ -5,7 +5,6 @@ import {
   FunctionDeclSchema,
   MathJSONSchema,
   MetaSchema,
-  ProblemSchema,
   RoleSchema,
   SegmentSchema,
   StatusSchema,
@@ -67,7 +66,8 @@ export const CheckerFeedbackSchema = z.object({
 
 export const SuggestInputSchema = z.object({
   context: z.object({
-    problem: ProblemSchema,
+    /** v2.2: functions the notebook's lines declare (the problem card is gone) */
+    functions: z.array(FunctionDeclSchema).max(16).optional(),
     lines: z.array(SuggestContextLineSchema).max(64),
   }),
   mode: SuggestModeSchema,

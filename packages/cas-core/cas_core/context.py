@@ -1,7 +1,9 @@
 """Mathematical context for a target line (spec §9.1): assumptions, definitions, bindings, facts.
 
-The context is rebuilt from the problem card and the active lines before the target on every
-call, so results never depend on hidden state in the worker.
+The context is rebuilt from the active lines before the target on every call, so results never
+depend on hidden state in the worker. Since v2.2 there is no problem card: assumptions ("m > 0",
+"n \\in \\mathbb{Z}^{+}", "\\psi(x) \\ne 0") and function declarations ("\\Psi(x,t)") are lines,
+recognised by their shape whether or not the line is marked as given.
 """
 
 from __future__ import annotations
@@ -11,12 +13,16 @@ from typing import Any
 
 import sympy as sp
 
-from .ir import CasIncomplete, CasUnreadable, CasUnsupported, Env, ir_symbols, is_node, to_sympy
+from .ir import CONSTANTS, RELATION_HEADS, CasIncomplete, CasUnreadable, CasUnsupported, Env, ir_symbols, is_node, to_sympy
+
+
+def is_relation(e: Any) -> bool:
+    return is_node(e) and e[0] in RELATION_HEADS
 
 
 @dataclass
 class Fact:
-    line_id: str  # "problem" for problem conditions
+    line_id: str
     seg_index: int
     ir: Any
     status: str
@@ -28,15 +34,12 @@ class Fact:
 @dataclass
 class Context:
     env: Env
-    problem: dict
     facts: list[Fact] = field(default_factory=list)
     line_status: dict[str, str] = field(default_factory=dict)
     line_unverified: dict[str, list[str]] = field(default_factory=dict)
     known_names: set[str] = field(default_factory=set)
     def_names: set[str] = field(default_factory=set)
-    problem_definitions: list[Any] = field(default_factory=list)
     parent_id: str | None = None
-    unknowns: list[str] = field(default_factory=list)
 
 
 def _is_symbol_ir(e: Any) -> bool:
@@ -111,55 +114,129 @@ def _flatten(ir: Any) -> list[Any]:
     return [ir]
 
 
-def build_context(problem: dict, lines: list[dict], parent_id: str | None) -> Context:
-    env = Env()
-    ctx = Context(env=env, problem=problem, parent_id=parent_id, unknowns=list(problem.get("unknowns") or []))
+# ---------------------------------------------------------------- declarations
 
-    nonzero_ir: list[Any] = []
-    for a in problem.get("assumptions") or []:
-        if a["kind"] == "nonzero" and a.get("expr") is not None:
-            nonzero_ir.append(a["expr"])
-            continue
-        env.assumptions[a["symbol"]] = a["kind"]
-    for f in problem.get("functions") or []:
-        env.functions[f["name"]] = list(f["args"])
-        env.independent |= set(f["args"])
-    if problem.get("independent_var"):
-        env.independent.add(problem["independent_var"])
-    for a in problem.get("assumptions") or []:
-        if a["kind"] == "interval":
-            try:
-                lo = to_sympy(a.get("lower"), env, subst=False) if a.get("lower") is not None else -sp.oo
-                hi = to_sympy(a.get("upper"), env, subst=False) if a.get("upper") is not None else sp.oo
-                env.intervals[a["symbol"]] = (lo, hi)
-            except (CasUnsupported, CasUnreadable, CasIncomplete):
-                pass
-    for e in nonzero_ir:
+SET_KINDS = {
+    "PositiveIntegers": "positive_integer",
+    "NaturalNumbers": "nonnegative_integer",
+    "Integers": "integer",
+    "Reals": "real",
+}
+
+
+def function_declaration(ir: Any) -> tuple[str, list[str]] | None:
+    """A formula that is only f(x, t) with distinct variables declares f."""
+    if is_node(ir) and ir[0] == "Apply" and len(ir) > 2:
+        args = ir[2:]
+        if all(isinstance(a, str) and a not in CONSTANTS for a in args) and len(set(args)) == len(args):
+            return ir[1], list(args)
+    return None
+
+
+def _var(e: Any) -> bool:
+    return isinstance(e, str) and e not in CONSTANTS
+
+
+def _assumption(ir: Any) -> dict | None:
+    if not is_node(ir) or len(ir) != 3:
+        return None
+    h, a, b = ir
+    if h == "Element" and _var(a) and b in SET_KINDS:
+        return {"symbol": a, "kind": SET_KINDS[b]}
+    if h == "NotEqual" and b == 0 and (_var(a) or (is_node(a) and a[0] == "Apply")):
+        return {"symbol": a, "kind": "nonzero"} if _var(a) else {"kind": "nonzero", "expr": a}
+    if (h, b) in (("Greater", 0), ("GreaterEqual", 0)) and _var(a):
+        return {"symbol": a, "kind": "positive" if h == "Greater" else "nonnegative"}
+    if (h, a) in (("Less", 0), ("LessEqual", 0)) and _var(b):
+        return {"symbol": b, "kind": "positive" if h == "Less" else "nonnegative"}
+    return None
+
+
+def assumptions_of(ir: Any) -> list[dict] | None:
+    """The assumptions a formula states, or None when it is not purely assumptions.
+
+    Recognised: x > 0, x >= 0 (either way round), x != 0, f(x) != 0, x in a number set,
+    lo <= x <= hi, and comma lists of these.
+    """
+    one = _assumption(ir)
+    if one is not None:
+        return [one]
+    if not (is_node(ir) and ir[0] == "And"):
+        return None
+    parts = ir[1:]
+    if len(parts) == 2 and all(is_node(p) and p[0] in ("Less", "LessEqual") for p in parts):
+        (_, lo, x1), (_, x2, hi) = parts
+        if _var(x1) and x1 == x2:
+            return [{"symbol": x1, "kind": "interval", "lower": lo, "upper": hi}]
+    out: list[dict] = []
+    for p in parts:
+        a = _assumption(p)
+        if a is None:
+            return None
+        out.append(a)
+    return out
+
+
+def declaration_kind(ir: Any) -> str | None:
+    """"FUNCTION" or "ASSUMPTION" for a declaring formula, else None."""
+    if function_declaration(ir):
+        return "FUNCTION"
+    if assumptions_of(ir) is not None:
+        return "ASSUMPTION"
+    return None
+
+
+def _declare(lines: list[dict], env: Env) -> set[tuple[str, int]]:
+    """Registers every declaration in the lines; returns the (line id, segment) pairs that declare."""
+    found: set[tuple[str, int]] = set()
+    assumptions: list[dict] = []
+    for line in lines:
+        for i, seg in enumerate(line.get("segments") or []):
+            if seg.get("type") != "math" or seg.get("notation") == "continuation":
+                continue
+            fn = function_declaration(seg["expr"])
+            if fn:
+                env.functions.setdefault(fn[0], fn[1])
+                env.independent |= set(fn[1])
+                found.add((line["id"], i))
+                continue
+            stated = assumptions_of(seg["expr"])
+            if stated is not None:
+                assumptions += stated
+                found.add((line["id"], i))
+    for a in assumptions:
+        if "symbol" in a and a["kind"] != "interval":
+            env.assumptions[a["symbol"]] = a["kind"]
+    for a in assumptions:
         try:
-            env.nonzero.append(to_sympy(e, env, subst=False))
+            if a["kind"] == "interval":
+                lo = to_sympy(a["lower"], env, subst=False) if a["lower"] is not None else -sp.oo
+                hi = to_sympy(a["upper"], env, subst=False) if a["upper"] is not None else sp.oo
+                env.intervals[a["symbol"]] = (lo, hi)
+            elif "expr" in a:
+                env.nonzero.append(to_sympy(a["expr"], env, subst=False))
         except (CasUnsupported, CasUnreadable, CasIncomplete):
             pass
+    return found
+
+
+def build_context(lines: list[dict], parent_id: str | None) -> Context:
+    env = Env()
+    ctx = Context(env=env, parent_id=parent_id)
+    declaring = _declare(lines, env)
 
     order = 0
-    for d in problem.get("definitions") or []:
-        ctx.problem_definitions.append(d)
-        ctx.known_names |= ir_symbols(d)
-        register_definition(d, "problem", ctx)
-    for i, c in enumerate(problem.get("conditions") or []):
-        ctx.known_names |= ir_symbols(c)
-        for part in _flatten(c):
-            ctx.facts.append(Fact("problem", i, part, "none", "premise", order))
-        order += 1
-
     for line in lines:
         lid = line["id"]
         ctx.line_status[lid] = line.get("status") or "unknown"
         ctx.line_unverified[lid] = list(line.get("unverified_ancestors") or [])
         results = {r["segment_index"]: r for r in line.get("segment_results") or []}
         for i, seg in enumerate(line.get("segments") or []):
-            if seg.get("type") != "math":
+            if seg.get("type") != "math" or (lid, i) in declaring:
                 continue
             ir = seg["expr"]
+            if line.get("role") == "premise" and seg.get("notation") != "continuation" and not is_relation(ir):
+                continue  # "a particle in a box of width $L$": a given line's bare symbols state nothing
             ctx.known_names |= ir_symbols(ir)
             r = results.get(i, {})
             status = r.get("status") or line.get("status") or "unknown"

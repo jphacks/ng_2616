@@ -4,8 +4,10 @@
  */
 import { z } from 'zod';
 import type { MathJSON } from './ir/ops';
+import { migrateNotebook } from './legacy';
 
-export const SCHEMA_VERSION = '2.0.0' as const;
+// v2.2: the problem card is gone; a notebook is its lines (see legacy.ts for older snapshots)
+export const SCHEMA_VERSION = '2.2.0' as const;
 export const RULES_VERSION = '2.0.0' as const;
 
 export const MathJSONSchema: z.ZodType<MathJSON> = z.lazy(() =>
@@ -33,39 +35,21 @@ export const InputSegmentSchema = z.discriminatedUnion('type', [
 
 export const SegmentSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string().max(4000) }),
-  z.object({ type: z.literal('math'), expr: MathJSONSchema, notation: NotationSchema, latex: z.string() }),
+  z.object({
+    type: z.literal('math'),
+    expr: MathJSONSchema,
+    notation: NotationSchema,
+    latex: z.string(),
+    /** v2.2: the LaTeX as read, parsed again when a later line declares one of its functions */
+    source_latex: z.string().max(4000).optional(),
+  }),
 ]);
 
 export const StrokePointSchema = z.object({ x: z.number(), y: z.number(), t: z.number(), p: z.number() });
 export const StrokeSchema = z.object({ id: IdSchema, points: z.array(StrokePointSchema).max(20000) });
 
-export const AssumptionSchema = z.object({
-  symbol: z.string(),
-  kind: z.enum(['real', 'positive', 'nonnegative', 'nonzero', 'positive_integer', 'interval']),
-  lower: MathJSONSchema.optional(),
-  upper: MathJSONSchema.optional(),
-  /** v2.1: for kind 'nonzero', an expression such as ψ(x) instead of a bare symbol */
-  expr: MathJSONSchema.optional(),
-  source: z.enum(['user', 'adopted']),
-});
-
 /** v2.1: declared functions disambiguate ψ(x) (application) from a·(x) (product). */
 export const FunctionDeclSchema = z.object({ name: z.string(), args: z.array(z.string()).max(4) });
-
-export const ProblemSchema = z.object({
-  id: IdSchema,
-  title: z.string(),
-  statement: z.array(SegmentSchema),
-  definitions: z.array(MathJSONSchema).max(16),
-  conditions: z.array(MathJSONSchema).max(16),
-  assumptions: z.array(AssumptionSchema).max(32),
-  unknowns: z.array(z.string()).max(3),
-  independent_var: z.string().optional(),
-  functions: z.array(FunctionDeclSchema).max(16).optional(),
-  origin: z
-    .object({ kind: z.enum(['preset', 'pdf', 'resource']), name: z.string(), page: z.number().int().optional(), question_label: z.string().optional(), transcription: z.enum(['text', 'ai', 'fixture']).optional(), corrected: z.boolean().optional(), mock: z.boolean().optional() })
-    .optional(),
-});
 
 export const EvidenceSchema = z.object({
   kind: z.enum(['COUNTEREXAMPLE', 'SOLUTION_DIFF', 'DOMAIN_CONDITION', 'EXACT_MISMATCH']),
@@ -154,17 +138,19 @@ export const RecoverySchema = z.object({
   opened_at: z.record(z.string(), z.number()),
 });
 
-export const NotebookSchema = z.object({
-  schema_version: z.literal(SCHEMA_VERSION),
-  id: UuidSchema,
-  title: z.string().min(1).max(200),
-  mode: z.enum(['live', 'mock']),
-  domain: z.literal('Reals'),
-  problem: ProblemSchema,
-  lines: z.array(LineSchema),
-  recoveries: z.array(RecoverySchema),
-  extensions: z.record(z.string(), z.unknown()).optional(),
-});
+export const NotebookSchema = z.preprocess(
+  (raw) => migrateNotebook(raw, SCHEMA_VERSION),
+  z.object({
+    schema_version: z.literal(SCHEMA_VERSION),
+    id: UuidSchema,
+    title: z.string().min(1).max(200),
+    mode: z.enum(['live', 'mock']),
+    domain: z.literal('Reals'),
+    lines: z.array(LineSchema),
+    recoveries: z.array(RecoverySchema),
+    extensions: z.record(z.string(), z.unknown()).optional(),
+  }),
+);
 
 export const MetaSchema = z.object({
   request_id: UuidSchema,
@@ -228,9 +214,7 @@ export type InputSegment = z.infer<typeof InputSegmentSchema>;
 export type Segment = z.infer<typeof SegmentSchema>;
 export type StrokePoint = z.infer<typeof StrokePointSchema>;
 export type Stroke = z.infer<typeof StrokeSchema>;
-export type Assumption = z.infer<typeof AssumptionSchema>;
 export type FunctionDecl = z.infer<typeof FunctionDeclSchema>;
-export type Problem = z.infer<typeof ProblemSchema>;
 export type Evidence = z.infer<typeof EvidenceSchema>;
 export type SegmentProof = z.infer<typeof SegmentProofSchema>;
 export type Hint = z.infer<typeof HintSchema>;

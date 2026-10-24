@@ -20,10 +20,7 @@ export interface NotebookSummary {
 
 // Rows saved since ADR 0005 carry a `preview` column; older rows are previewed from a few
 // leading snapshot lines (superseded ones are skipped) instead of the whole snapshot.
-const LEGACY_PREVIEW_COLUMNS = [
-  'problem:snapshot->problem',
-  ...Array.from({ length: PREVIEW_LINES + 2 }, (_, i) => `l${i}:snapshot->lines->${i}`),
-].join(',');
+const LEGACY_PREVIEW_COLUMNS = Array.from({ length: PREVIEW_LINES + 2 }, (_, i) => `l${i}:snapshot->lines->${i}`).join(',');
 // a plain string: the column list is built at runtime, so the typed select parser cannot read it
 const LIST_COLUMNS: string = `id,title,updated_at,revision,mode:snapshot->>mode,demo:snapshot->extensions->demo->>script,preview,${LEGACY_PREVIEW_COLUMNS}`;
 
@@ -125,7 +122,6 @@ class SupabaseRepo implements NotebookRepository {
       mode: (r.mode as string | null) ?? undefined,
       demo: !!r.demo,
       preview: (r.preview as NotebookPreview | null) ?? buildPreview(
-        r.problem as { title?: unknown; statement?: unknown } | null,
         Array.from({ length: PREVIEW_LINES + 2 }, (_, i) => r[`l${i}`]).filter((l) => l != null),
       ),
     }));

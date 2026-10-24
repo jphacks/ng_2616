@@ -1,7 +1,7 @@
 """Worker entry point. The browser CAS controller calls verify_json() with validated IR only.
 
 Payload:
-  {"problem": Problem, "lines": [ContextLine], "target": Target, "parent_id": str | None}
+  {"lines": [ContextLine], "target": Target, "parent_id": str | None}
 ContextLine:
   {"id", "role", "segments": [InputSegment], "status", "unverified_ancestors": [id],
    "segment_results": [{"segment_index", "status", "reason"?, "method"?, "goal"?}]}
@@ -42,7 +42,7 @@ def _seg_dict(index: int, r: SegResult) -> dict:
 def verify(payload: dict) -> dict:
     t0 = time.perf_counter()
     try:
-        ctx = build_context(payload["problem"], payload.get("lines") or [], payload.get("parent_id"))
+        ctx = build_context(payload.get("lines") or [], payload.get("parent_id"))
         target = payload["target"]
         results: list[tuple[int, SegResult]] = []
         for i, seg in enumerate(target.get("segments") or []):
@@ -59,7 +59,6 @@ def verify(payload: dict) -> dict:
             depends |= r.depends_on
             if r.source_line_id:
                 depends.add(r.source_line_id)
-        depends.discard("problem")
         depends.discard(target.get("id"))
         unverified: set[str] = set()
         for d in depends:

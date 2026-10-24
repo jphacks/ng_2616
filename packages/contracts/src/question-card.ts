@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ImageInputSchema } from './api';
 import { WireSegmentSchema } from './llm';
-import { AssumptionSchema, FunctionDeclSchema, IdSchema, SegmentSchema, UiLangSchema } from './schemas';
+import { FunctionDeclSchema, IdSchema, SegmentSchema, UiLangSchema } from './schemas';
 import { wireToSegments, hasUnparsed, hasUnreadable } from './segments';
 import { freeSymbols, parseMathLatex, SYMBOL_NAME, validateExpr, type MathJSON } from './ir';
 import { canonicalJson } from './hash';
@@ -21,7 +21,7 @@ export const QuestionPageInputSchema = z.object({ page: z.number().int().min(1).
 export const QuestionLineSchema = z.object({ id: IdSchema, segments: z.array(SegmentSchema).min(1).max(16), has_unreadable: z.boolean() });
 export const PremiseCandidateSchema = z.object({
   id: IdSchema, kind: z.enum(['condition', 'definition', 'assumption']), latex: z.string(), source_line_ids: z.array(IdSchema),
-  selectable: z.boolean(), assumption: AssumptionSchema.optional(),
+  selectable: z.boolean(),
 });
 export const QuestionDraftSchema = z.object({
   id: IdSchema, label: z.string(), title: z.string(), line_ids: z.array(IdSchema), unknowns: z.array(SymbolSchema).max(3),
@@ -43,12 +43,6 @@ export function unsafeMath(expr: MathJSON): boolean {
 // Positional nodes/null are valid inside a validated tree, so do not revalidate every child.
 function unsafeMathNode(expr: MathJSON): boolean {
   return Array.isArray(expr) && (['Unparsed', 'Unreadable'].includes(expr[0]) || expr.slice(1).some(unsafeMathNode));
-}
-
-function assumptionFor(expr: MathJSON): z.infer<typeof AssumptionSchema> | undefined {
-  if (!Array.isArray(expr) || typeof expr[1] !== 'string' || expr[2] !== 0 || !SYMBOL_NAME.test(expr[1])) return;
-  const kind = { Greater: 'positive', GreaterEqual: 'nonnegative', NotEqual: 'nonzero' }[expr[0]] as 'positive' | 'nonnegative' | 'nonzero' | undefined;
-  return kind ? { symbol: expr[1], kind, source: 'adopted' } : undefined;
 }
 
 /** Check references and ground every premise in an actually transcribed math segment. */
@@ -73,8 +67,7 @@ export function normalizeQuestionPage(raw: unknown, page: number, method: Questi
       const refs = candidate.source_line_ids.map((id) => byId.get(id));
       const sourceMath = refs.flatMap((l) => l?.segments.filter((s) => s.type === 'math') ?? []);
       const grounded = r.ok && refs.every((l) => !!l && !l.has_unreadable && !hasUnparsed(l.segments)) && candidate.source_line_ids.every((id) => question.line_ids.includes(id)) && sourceMath.some((s) => canonicalJson(s.expr) === canonicalJson(r.expr));
-      const assumption = grounded && candidate.kind === 'assumption' ? assumptionFor(r.expr) : undefined;
-      return { ...candidate, selectable: !!grounded && r.ok && !unsafeMath(r.expr) && (candidate.kind !== 'assumption' || !!assumption), ...(assumption ? { assumption } : {}) };
+      return { ...candidate, selectable: !!grounded && r.ok && !unsafeMath(r.expr) };
     });
     return { ...question, premises };
   });

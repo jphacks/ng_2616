@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QuestionPageSchema, hasUnparsed, hasUnreadable, type QuestionPage } from '@mn/contracts';
 import { ApiCallError } from '@/core/api/client';
-import { prepareQuestionProblem, problemHash, parseStatement, statementSource, type QuestionSelection, type QuestionSource } from '@/core/resources/question-adoption';
+import { prepareQuestionLines, questionContextHash, parseStatement, statementSource, type QuestionSelection, type QuestionSource } from '@/core/resources/question-adoption';
 import { readQuestionPdf, type QuestionPdf } from '@/core/resources/question-pdf';
 import { canvasToBase64, closePdf, renderPage, type PdfDoc } from '@/core/resources/pdf';
 import { useNotebook } from '@/core/store/notebook-store';
@@ -93,7 +93,7 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const start = async () => {
     const nb = useNotebook.getState().notebook;
     if (!nb) return;
-    source.current = { fileName: '', notebookId: nb.id, problemHash: problemHash(nb.problem) };
+    source.current = { fileName: '', notebookId: nb.id, contextHash: questionContextHash(nb) };
     setOpen(true); setError(null); setSelection(null);
     if (loadFile) {
       const ctl = new AbortController(); controller.current = ctl; setBusy('file');
@@ -109,7 +109,7 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   };
   const selectQuestion = (questionId: string, result: QuestionPage = page!) => {
     const q = result.questions.find((item) => item.id === questionId);
-    setSelection(q ? { questionId: q.id, title: q.title, statement: statementSource(result, q.id), unknowns: q.unknowns.join(', '), independentVar: q.independent_var, premiseIds: [] } : null);
+    setSelection(q ? { questionId: q.id, title: q.title, statement: statementSource(result, q.id), premiseIds: [] } : null);
     setError(null);
   };
   const transcribe = async () => {
@@ -132,8 +132,8 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const adopt = () => {
     if (!page || !selection || !source.current) return;
     try {
-      const problem = prepareQuestionProblem(page, source.current, selection);
-      engine.adoptPdfQuestion(problem, source.current);
+      const lines = prepareQuestionLines(page, source.current, selection);
+      engine.adoptPdfQuestion(lines, source.current);
       close();
     } catch (e) { showError(e); }
   };
@@ -174,8 +174,7 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
             {needsReview && <p className="rounded-xl bg-unknown-soft p-3">{t('question.unreadable')}</p>}
             <label className="block font-medium">{t('question.edit')}<textarea rows={5} value={selection.statement} disabled={!!busy} onChange={(e) => setSelection({ ...selection, statement: e.target.value })} className="mt-1 w-full rounded-xl bg-paper p-3 text-sm ring-1 ring-border" /></label>
             <p className="text-xs text-muted">{t('question.editHelp')}</p>
-            <label className="block font-medium">{t('question.unknowns')}<input value={selection.unknowns} disabled={!!busy} onChange={(e) => setSelection({ ...selection, unknowns: e.target.value })} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border" /></label>
-            <label className="block font-medium">{t('question.independentVar')}<input value={selection.independentVar} disabled={!!busy} onChange={(e) => setSelection({ ...selection, independentVar: e.target.value })} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border" /></label>
+            <p className="text-xs text-muted">{t('question.autoSymbols')}</p>
             <fieldset className="space-y-2"><legend className="mb-2 font-medium">{t('question.premises')}</legend>
               {!question.premises.length && <p>{t('question.noPremises')}</p>}
               {question.premises.map((candidate) => <label key={candidate.id} className="flex min-h-11 items-start gap-3 rounded-xl bg-paper p-3">

@@ -40,6 +40,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       (candidate.mode === 'COMPLETE_RHS' && candidate.targetLineId === line.id));
   const showGhost = (ghostHere || ghostWithoutTarget) && line.ink.length === 0;
   const showRejection = rejection && line.state === 'DRAFT' && isLastDraft;
+  const pdfQuestion = line.extensions?.pdf_question as { label?: string; title?: string; mock?: boolean; corrected?: boolean } | undefined;
   const openDetails = () => engine.openLine(line.id);
 
   if (line.state === 'SUPERSEDED') {
@@ -78,6 +79,14 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
     >
       <Gutter n={number} line={line} />
       <div className="min-w-0 flex-1 py-2">
+        {line.document_origin && <p className="mb-1 break-all text-xs text-muted">
+          {line.document_origin.name} · p.{line.document_origin.page}
+          {pdfQuestion?.label && <> · {t('question.number', { n: pdfQuestion.label })}</>}
+          {pdfQuestion?.title && <> · {pdfQuestion.title}</>}
+          {pdfQuestion?.mock && <> · {t('question.mock')}</>}
+          {pdfQuestion?.corrected && <> · {t('question.corrected')}</>}
+          {line.document_origin.has_unreadable && <> · {t('question.unreadable')}</>}
+        </p>}
         {revisionOf !== null && (
           <div className="mb-1 inline-flex items-center gap-1 text-sm font-medium text-unknown">
             <CornerUpLeft size={14} /> {t('line.revising', { n: revisionOf })}
@@ -194,6 +203,9 @@ function Gutter({ n, line }: { n: number; line: Line }) {
   return (
     <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-sm tabular-nums text-faint">
       <span>{n}</span>
+      {line.role === 'premise' && (
+        <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>
+      )}
       {line.source === 'ai' && (
         <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-2xs font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
           <Sparkles size={11} />

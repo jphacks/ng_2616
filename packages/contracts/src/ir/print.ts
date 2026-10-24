@@ -3,7 +3,7 @@
  * parses back to the identical IR (round-trip tested). It never simplifies.
  */
 import type { MathJSON } from './ops';
-import { constantToLatex, isConstant, symbolToLatex } from './symbols';
+import { NUMBER_SETS, constantToLatex, isConstant, symbolToLatex, type NumberSet } from './symbols';
 
 const REL = 1;
 const ADD = 2;
@@ -153,6 +153,7 @@ function render(e: MathJSON): Out {
     case 'Greater': return [`${p(a0, ADD)} > ${p(a1, ADD)}`, REL];
     case 'GreaterEqual': return [`${p(a0, ADD)} \\ge ${p(a1, ADD)}`, REL];
     case 'NotEqual': return [`${p(a0, ADD)} \\ne ${p(a1, ADD)}`, REL];
+    case 'Element': return [`${p(a0, ADD)} \\in ${NUMBER_SETS[a1 as NumberSet]}`, REL];
     case 'And':
       return [a.map((x) => p(x, REL)).join(', '), 0];
     case 'Or':

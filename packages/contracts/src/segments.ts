@@ -40,7 +40,7 @@ export function wireToSegments(wire: readonly WireSegment[], options: WireOption
       }
       return { ok: false, code: r.error.code, message: r.error.message, segment_index: i, latex: content };
     }
-    out.push({ type: 'math', expr: r.expr, notation: r.notation, latex: printSegmentLatex(r.expr, r.notation) });
+    out.push({ type: 'math', expr: r.expr, notation: r.notation, latex: printSegmentLatex(r.expr, r.notation), source_latex: content });
   }
   if (out.length > 16) return { ok: false, code: 'IR_INVALID', message: 'more than 16 segments', segment_index: 16, latex: '' };
   return { ok: true, segments: out };

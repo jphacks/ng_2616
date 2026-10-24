@@ -85,7 +85,7 @@ export class DirectAiService implements AiService {
     if (!wire.success) throw new AiError('SCHEMA_INVALID', 'suggestion output did not match the schema');
     if (process.env.NODE_ENV === 'development') console.info('[suggest]', input.mode, JSON.stringify(raw).slice(0, 600));
     if (!wire.data.has_candidate) return { state: 'NONE', reason: 'MODEL_DECLINED', mock: false };
-    const parsed = wireToSegments(wire.data.segments, { functions: input.context.problem.functions });
+    const parsed = wireToSegments(wire.data.segments, { functions: input.context.functions ?? [] });
     if (!parsed.ok) {
       if (process.env.NODE_ENV === 'development') console.info('[suggest] unparsable', parsed.message, parsed.latex);
       return { state: 'NONE', reason: 'IR_INVALID', mock: false };

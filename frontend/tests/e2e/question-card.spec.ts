@@ -30,19 +30,18 @@ async function openImport(page: Page, buffer?: Buffer) {
   return page.getByRole('dialog');
 }
 
-test('real worksheet → ten questions → card, undo/redo and save/reopen, without AI calls', async ({ page }) => {
+test('real worksheet → ten questions → given lines, undo/redo and save/reopen, without AI calls', async ({ page }) => {
   const calls: string[] = [];
   page.on('request', (r) => { if (r.url().includes('/resources/questions')) calls.push(r.url()); });
   const dialog = await openImport(page);
   const questions = dialog.getByRole('combobox', { name: 'Question', exact: true });
   await expect(questions.locator('option')).toHaveCount(11);
   await questions.selectOption({ label: 'Question 1' });
-  await expect(dialog.getByLabel('Unknowns', { exact: false })).toHaveValue('chi');
   await expect(dialog.getByLabel('Review / correct the transcription')).toHaveValue(/\\chi\^\{2\}/);
   await expect(dialog.getByText('No additional premises adopted.')).toBeVisible();
-  await dialog.getByRole('button', { name: 'Adopt into problem card' }).click();
+  await dialog.getByRole('button', { name: 'Adopt as given lines' }).click();
   await expect(dialog).toHaveCount(0);
-  const card = page.getByRole('region', { name: 'Problem card' });
+  const card = page.locator('main');
   await expect(card).toContainText('test_questioncard.pdf');
   await expect(card).toContainText('Question 1');
   await expect.poll(() => inkPixels(page.locator('[data-line-id]').last())).toBeGreaterThan(10);
@@ -53,7 +52,6 @@ test('real worksheet → ten questions → card, undo/redo and save/reopen, with
   await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
   await page.reload();
   await expect(card).toContainText('test_questioncard.pdf');
-  await expect(card).toContainText('No additional premises adopted.');
   await expect.poll(() => inkPixels(page.locator('[data-line-id]').last())).toBeGreaterThan(10);
   expect(calls).toEqual([]);
 });
@@ -82,10 +80,9 @@ test('explicit page AI path reviews a grounded premise and isolates unreadable/i
   await expect(boxes.nth(1)).toBeDisabled();
   await expect(boxes.nth(2)).toBeDisabled();
   await boxes.nth(0).check();
-  await dialog.getByRole('button', { name: 'Adopt into problem card' }).click();
-  const card = page.getByRole('region', { name: 'Problem card' });
+  await dialog.getByRole('button', { name: 'Adopt as given lines' }).click();
+  const card = page.locator('main');
   await expect(card).toContainText('Parameterized problem');
-  await expect(card).toContainText('Assumptions');
   expect(input?.page).toBe(1); expect(input?.image.mime).toBe('image/jpeg');
   expect(input?.image.data.length).toBeGreaterThan(1000);
   expect(input?.text.length).toBeGreaterThan(60);
@@ -97,8 +94,8 @@ test('unconfigured image OCR reports an error once and keeps local extraction us
   await dialog.getByRole('button', { name: 'Transcribe this page with AI' }).click();
   await expect(dialog.getByRole('alert')).toContainText('configured Gemini');
   await dialog.getByRole('combobox', { name: 'Question', exact: true }).selectOption({ label: 'Question 10' });
-  await dialog.getByRole('button', { name: 'Adopt into problem card' }).click();
-  await expect(page.getByRole('region', { name: 'Problem card' })).toContainText('Question 10');
+  await dialog.getByRole('button', { name: 'Adopt as given lines' }).click();
+  await expect(page.locator('main')).toContainText('Question 10');
 });
 
 test('closing a pending transcription discards its late result and retains the existing card/ink', async ({ page }) => {
@@ -117,7 +114,7 @@ test('closing a pending transcription discards its late result and retains the e
   await dialog.getByRole('button', { name: 'close', exact: true }).last().click();
   finish();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Problem card' })).toContainText('Untitled notebook');
+  await expect(page.locator('main')).not.toContainText('test_questioncard.pdf');
   await expect.poll(() => inkPixels(page.locator('[data-line-id]').last())).toBeGreaterThan(10);
 });
 
@@ -126,5 +123,5 @@ test('corrupt and oversized files leave the notebook unchanged', async ({ page }
   await expect(dialog.getByRole('alert')).toContainText('readable PDF');
   await dialog.locator('input[type=file]').setInputFiles({ name: 'large.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(10 * 1024 * 1024 + 1) });
   await expect(dialog.getByRole('alert')).toContainText('10 MiB');
-  await expect(dialog.getByRole('button', { name: 'Adopt into problem card' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Adopt as given lines' })).toBeDisabled();
 });
