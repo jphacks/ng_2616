@@ -88,11 +88,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   });
 
   useEffect(() => {
-    backingDirty.current = true;
-    setHeight((h) => (liveStroke.current ? Math.max(h, inkHeight(strokes)) : inkHeight(strokes)));
-  }, [strokes]);
-
-  useEffect(() => {
     const el = wrap.current;
     if (!el) return;
     const ro = new ResizeObserver(([e]) => {
@@ -202,6 +197,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     }
     strokesRef.current = Array.from(map.values());
     backingDirty.current = true;
+    if (!liveStroke.current) {
+      setHeight(inkHeight(strokesRef.current));
+    }
     drawRef.current();
   }, [strokes]);
 
@@ -261,6 +259,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
       strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
       backingDirty.current = true;
+      setHeight(inkHeight(strokesRef.current));
       drawRef.current();
       propsRef.current.onScratchOut?.(scratched);
     } else {
@@ -401,6 +400,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
           pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
           strokesRef.current = strokesRef.current.filter((s) => !drop.has(s.id));
           backingDirty.current = true;
+          setHeight(inkHeight(strokesRef.current));
           propsRef.current.onErase?.(ids);
         }
         drawRef.current();
