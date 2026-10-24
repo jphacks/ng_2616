@@ -1,6 +1,6 @@
 # AI数式補完 実装メモ
 
-最終更新：2026-10-24（段階2 完了時点。main の b1622c5 を取り込み済み）。担当：AI数式補完（M-06）。
+最終更新：2026-10-24（段階3 完了時点。①の関数の変更を含む。main は取り込み済みで、取り込むものは無かった）。担当：AI数式補完（M-06）。
 
 **方針（人間の決定）**：案A＝Python の suggest は作らない。既存の TypeScript 実装を仕上げる。基準設計書は `docs/design/v2.0-en.md` + `v2.1-deltas.md` + ADR。`docs/tasks/AI_COMPLETION_TASK.md`（v1.9 前提）は担当範囲の考え方と「他担当の領域に触らない」ルールだけを参照する。v1.9 前提の部分は失効しており、末尾の「履歴」にある。
 
@@ -24,23 +24,23 @@
 ### 構成
 
 - **`frontend/src/core/candidates/`**（③の純関数。`engine.ts` が呼んでいる）：`blocker.ts`（`suggestBlockerOf`、`suggestModeOf`、`blockerToastKey`）、`slot.ts`（`matchesSlot`、`suggestFingerprint`）、`rejection.ts`（`rejectionKey`、`addRejection`、`rejectionsFor`、`isRecordable`）、`epoch.ts`（`abortOnEpochChange`）、`label.ts`（`candidateAncestorId`）、`hash.ts`（`lineHash`、`candidateHash`）。
-- **`engine.ts` の補完まわり**はこれらを呼ぶだけ（判定の重複は無い）。`candidate.ts` は `hash.ts` を使う。
+- **`engine.ts`**：補完まわりはこれらを呼ぶだけ。**段階3で①の関数にも触った**（コンストラクタ、`addStroke`、`dispose`）。詳細は下の「①のレビューが必要な変更」。`NotebookEngine` は偽の CAS と api を受け取れる。
 - **ストア**：候補の却下履歴は `rejections`（`rejectionKey` ごと）。`Candidate` に `rejectKey` を追加。
-- **テスト**：`frontend/tests/unit/suggest/`（下表）。
+- **テスト**：`frontend/tests/unit/suggest/`。エンジンを偽の CAS・api で動かす `harness.ts` がある。
 
 ### 最新のテスト結果
 
-環境はすべて **mock（`LLM_PROVIDER=mock`、台本 AI）＋実 CAS（Pyodide 314.0.7 + SymPy、ブラウザ内）、ローカル（Windows 11、Chromium 1248、`next dev` :3100、認証はバイパス）**。live の LLM では未実施なので、live の合格としては数えない。
+環境はすべて **mock（`LLM_PROVIDER=mock`、台本 AI）＋実 CAS（Pyodide 314.0.7 + SymPy、ブラウザ内）、ローカル（Windows 11、Chromium 1248、`next dev` :3100、認証はバイパス）**。単体テストは LLM も CAS も呼ばない（偽物）。live の LLM では未実施なので、live の合格としては数えない。
 
 | 対象 | 結果 | 日時 | 環境（コミット） |
 | --- | --- | --- | --- |
-| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 94 件：88 通過／0 失敗／6 skip | 2026-10-24 | mock（LLM 呼び出しなし）、ローカル、141a417（main 取り込み後） |
+| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 147 件：146 通過／0 失敗／1 skip | 2026-10-24 | ローカル、`9ba3c49`（main 取り込み済み） |
 | `tsc --noEmit`（frontend） | エラー 0 | 2026-10-24 | 同上 |
 | `eslint`（src、tests） | エラー 0（警告 7 件は今回触っていない既存ファイル） | 2026-10-24 | 同上 |
-| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分） | 2026-10-24 | mock＋実 CAS、ローカル、141a417（main 取り込み後） |
+| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.4 分） | 2026-10-24 | mock＋実 CAS、ローカル、`9ba3c49` |
 
-ファイル別の内訳（`tests/unit/suggest/`）：candidate 11／pure 37／model 10／service 13／client 9／epoch 5／pending-fixes 6（すべて skip）＝ 91 件（85 通過、6 skip）。`history.test.ts` 3 件（3 通過）。skip の理由は下の「段階2の記録」に書いた。
-過去の試験記録（段階1 時点、コミット `0548c91`）は末尾の「履歴」にある。
+`tests/unit/suggest/` の内訳（件数／通過／skip）：candidate 11／11／0、pure 37／37／0、model 10／10／0、service 13／13／0、client 9／9／0、epoch 5／5／0、engine-suggest 36／36／0、engine-held 8／8／0、engine-adopt 14／14／0、pending-fixes 1／0／1（`GhostLine` の描画テスト I2。jsdom と React Testing Library が無い）。`history.test.ts` は 3／3／0。
+過去の試験記録（段階1、コミット `0548c91`）は末尾の「履歴」にある。
 
 ### 実行コマンド
 
@@ -69,17 +69,16 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 **決定済み（2026-10-24）**
 
-1. **R27 の案内文言**：4 件とも確定（「仮」は外した）。`toast.suggestHeld` だけは **暫定の文言** に変えてある。
+1. **R27 の案内文言**：4 件とも確定（「仮」は外した）。`toast.suggestHeld` は一度「書いている途中なので、提案を隠しています。」に変えたが、R14 を実装した（筆跡から 1.2 秒で表示）ので **元の文言に戻した**。
 
    | キー | en | ja |
    | --- | --- | --- |
    | `toast.suggestPending` | Wait until the line is checked, then try again. | 行の確認が終わってから、もう一度押してください。 |
    | `toast.suggestCannotContinue` | This line cannot be continued yet. Check it, or fix it first. | この行からはまだ続けられません。先に確認するか、直してください。 |
    | `toast.suggestBusy` | A suggestion is already being prepared or waiting for you. | 提案を作成中か、採用待ちの提案があります。 |
-   | `toast.suggestHeld` | A suggestion is hidden while you are writing. | 書いている途中なので、提案を隠しています。 |
+   | `toast.suggestHeld` | A suggestion is ready. It will appear when you stop writing. | 提案の準備ができています。書き終えると表示されます。 |
 
-   - **`toast.suggestHeld` を元に戻す条件**：R14（①と合意する「筆記が止まった」の定義）が **「ペンを離して 1.2 秒で表示」（案 B）に決まったら**、次の文言に戻す。en「A suggestion is ready. It will appear when you stop writing.」／ja「提案の準備ができています。書き終えると表示されます。」。案 A（現状維持＝下書きに筆跡がある間は隠す）のままなら今の文言を使い続ける。`en.ts`／`ja.ts` の該当行に `TODO(R14)` を残してある。
-   - 理由：現状は筆跡が残る限り HELD のままで「書き終えると表示されます」と言うと嘘になる（確定するまで出ない）ため。
+   - **`toast.suggestHeld` の条件は満たされた**：R14（最後の筆跡から 1.2 秒で表示）を `030de5d` で実装したため、元の文言が事実どおりになった。ただし、候補の対象の下書きそのものに筆跡があるうちは表示されない（その下書きを置き換える提案になるため）。この場合も文言は「書き終えると表示されます」で正しい（確定するか消すと表示される）。
 2. **R12 のアイコン**：**Sparkles のまま**（確定行の CircleDashed にはそろえない）。候補は「AI の提案」であることをアイコンで示し、検証状態は文言（`status.local`）で示す。
 3. **R29 AI-S の token／timeout**：**変えない**（`maxOutputTokens: 8192`、`timeoutMs: 40_000`）。`server/ai/direct/index.ts` のその箇所に、「Gemini の thinking のトークンが出力上限に含まれるため v2.0 の 600 tokens／20 秒より大きくしている」という趣旨のコメントを足した。**この根拠は推測で、計測していない**（コメントにも明記）。実機の遅延と打ち切りのデータが取れたら見直す。
 
@@ -89,17 +88,19 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 ### 次にやること
 
-1. ①の回答待ち：R13（`addStroke`）、R14（筆記停止の定義）、コンストラクタの差し替え口。回答が来たら skip の G3・G4・G5・G6・G9 を有効にする。
+1. ①のレビュー待ち：「①のレビューが必要な変更」の 3 つ（コンストラクタ、R13、R14）。
 2. ⑤の回答待ち：`Job.meta` の照合（R16）、BRIDGE の 403（R28）、`test` script、描画テスト基盤（I2）。
-3. R14 が案 B に決まったら `toast.suggestHeld` を元の文言に戻す。R30 は②の回答後に決める。
+3. R30 は②の回答後に決める。
 4. E2E を live の LLM で一度流す（live の記録はまだ無い）。
 
 ## 依頼事項（縦割りの役割ごと・現在有効）
 
 **① 筆記・Canvas・履歴担当**
-- [ ] **R13**：`engine.ts` の `addStroke` が候補を HELD にする条件を「候補の対象行に書いたとき」から「アクティブな下書きに書いたとき」に。③の関数では実現できない。
-- [ ] **R14**：「筆記が止まった」の定義。案 A＝現状維持（下書きに筆跡がある間は書いている扱い。消しゴム・行クリアで空になったら READY）／案 B＝最後の pointerup から 1.2 秒（C-01 と同じ値）。決まったら③が `maybeReleaseHeld` を直す。
-- [ ] **コンストラクタの差し替え口**：`NotebookEngine` のコンストラクタが `getCas()`（Web Worker）を直接呼ぶため、偽物の CAS と api を差し込めない。差し込めれば skip の G5・G6・G9 を有効にできる。
+- [x] **実装済み・レビュー待ち**（「①のレビューが必要な変更」の節を参照）
+  - **コンストラクタの差し替え口**（`eb59d8f`）：`NotebookEngine` が CAS と api を省略可能な引数で受け取る。
+  - **R13**（`8d69a6b`）：`addStroke` が候補を HELD にする条件を「下書きに書いたとき」に。
+  - **R14**（`030de5d`）：最後の筆跡から 1.2 秒（案 B）、文脈が同じなら HELD を READY に戻す。`addStroke` に呼び出しを 1 行、`dispose` にタイマー解除を 1 行足した。
+- [ ] **レビューで見てほしい点**：R14 の「1.2 秒」で良いか（案 A＝現状維持に戻すなら `HELD_QUIET_MS` と `addStroke` の 1 行を戻すだけ）。`dispose` への 1 行の追加で良いか。
 - [ ] **連絡（事後報告）**：`notebook-store.ts` の次の変更は③が行った。(1) `rejectedHashes`／`rejectedLatex` を `rejections`（文脈ごとの却下履歴）に置換し、`Candidate` に `rejectKey` を追加。(2) `undo()` の中の候補用の 2 行（`rejectedHashes: []`、`rejectedLatex: []`）を削除（`rejections` は文脈ごとなので Undo で消さない）。`load()` の同じリセットは `rejections: {}` に置換。`undo()` の振る舞い（行・epoch・履歴）は変えていない。
 
 **② CAS・復帰（修正）担当**
@@ -118,6 +119,53 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - [ ] **I2 の描画テスト基盤**：jsdom と React Testing Library の導入（`GhostLine` のラベルの描画テスト用）。
 - [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンを `disabled` にしない（R27 の案内が出なくなる）。
 - [ ] **live の E2E**：実 LLM での通しは未実施。実施者と環境。
+
+## ①のレビューが必要な変更
+
+①の関数に触る変更。自分のブランチ `Riku_feature` で先に実装した。PR で①にレビューしてもらう。**補完以外の動きは変えていない**（変えていないことは各項に書いた）。
+行番号は `9ba3c49` 時点の `frontend/src/core/engine.ts`。
+
+### 1. コンストラクタの差し替え口 — `eb59d8f`
+
+| 変更した場所 | 内容 |
+| --- | --- |
+| 46〜54 行 | `CasPort`、`ApiPort`、`EngineOverrides` の型を追加（`CasController` と `api` から必要な部分だけを `Pick`） |
+| 59〜60 行 | `private cas: CasPort`、`private api: ApiPort`（以前は `private cas: CasController = getCas()` の初期化子だった） |
+| 72〜74 行 | `constructor(private deps: EngineDeps, overrides: EngineOverrides = {})`、`this.cas = overrides.cas ?? getCas()`、`this.api = overrides.api ?? api` |
+| 本体の `api.recognize(`／`api.suggest(`／`api.ocrPage(` の 3 呼び出し | `this.api.…` に置換 |
+
+**変えていない動き**：引数を省略すれば、従来どおり `getCas()` と `api` を使う（アプリ側の生成箇所 `workspace.tsx:46` の `new NotebookEngine({…})` は無変更）。CAS の起動・購読・`recognize`／`verifyLine` の処理内容は同じ。
+
+### 2. R13：どの下書きに書いても READY を HELD にする — `8d69a6b`
+
+| 変更した場所 | 内容 |
+| --- | --- |
+| `addStroke` 内の 1 条件（139 行） | `s.candidate.targetLineId === lineId` を `findLine(this.nb, lineId)?.state === 'DRAFT'` に置換 |
+
+**変えていない動き**：筆跡の追加（`commit('ADD_STROKE', …)`）、`cancelSuggestion()` の呼び出し、候補が無い・READY 以外のときの扱い。
+
+### 3. R14：筆跡から 1.2 秒で HELD を READY に戻す — `030de5d`
+
+| 変更した場所 | 内容 |
+| --- | --- |
+| `addStroke` の末尾（142 行） | `this.restartHeldTimer();` を **1 行足した**（`addStroke` への追加はこの 1 行と上の 1 条件だけ） |
+| `dispose`（91 行） | `if (this.heldTimer) clearTimeout(this.heldTimer);` を **1 行足した**（タイマーを残さないため。`dispose` は①でも③でもない共通部分なので、ここも見てほしい） |
+| クラスのフィールド（63〜64 行） | `heldTimer`、`lastStrokeAt` |
+| 定数 | `export const HELD_QUIET_MS = 1200;`（C-01 の「最後の pointerup から 1.2 秒」と同じ値） |
+| `maybeReleaseHeld` の隣 | `restartHeldTimer`、`armHeldTimer`、`releaseHeldAfterQuiet`（③の関数） |
+| `verifyCandidate` の末尾 | 書いている最中に届いて HELD になった候補にも `armHeldTimer()`（最後の筆跡から既に 1.2 秒たっていれば直ちに戻る） |
+
+`releaseHeldAfterQuiet` の判定：最後の筆跡から 1.2 秒たった、かつ `isStale(suggestSlot)` が偽（要求・epoch・基準行の version・文脈の指紋が同じ）なら READY。文脈が変わっていれば STALE として候補を捨てる。**例外**：NEXT_STEP の候補の対象が、いま筆跡のある下書きそのものなら HELD のまま（READY にすると、その下書きを置き換える提案を出すことになり、採用で筆跡が消えるため）。下書きを空にするか確定すると従来どおり戻る/消える。
+
+**変えていない動き**：消しゴム・行クリアで下書きが空になったときの即時 READY（`maybeReleaseHeld`）、確定・Undo などでの候補破棄、`scheduleSuggestion` の 1.2 秒（`SUGGEST_IDLE_MS`、別のタイマー）、筆跡の保存と履歴。
+
+### 4. 同じ作業で直した③側の不具合 — `d4ffffa`
+
+検証中に Esc で却下しても、CAS の検証が終わると却下した候補が再表示された（段階2より前からの不具合。単体テスト G9 で見つかった）。`reject()` で要求のスロットを無効にして防いだ。③の関数のみ。
+
+### テスト
+
+`tests/unit/suggest/engine-*.test.ts` が上の変更をカバーする（偽の CAS・api、時間は `mock.timers`）：R13＝G4（3 件）、R14＝G3（8 件。1.2 秒ちょうど、筆跡ごとの再開、文脈変化で STALE、対象の下書きは HELD のまま、到着後の復帰、dispose）、コンストラクタ＝全 engine テスト。E2E（`checking.spec.ts`、`demo.spec.ts`）は 10 件通過。
 
 ## 段階2の記録：③担当としての補完まわり修正（a〜f）
 
@@ -157,7 +205,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 段階1 の 73 件から 91 件に増えた（純関数・epoch のテスト）。skip は 8 件から 6 件に減った（D3 と F3 を有効化、G9 は純関数部分を有効化して engine 配線部分だけ skip を残した）。
 
-### skip のまま残した 6 件と理由
+### skip のまま残した 6 件と理由（段階3で G3・G4・G5・G6・G9 を有効にし、残りは I2 の 1 件だけ）
 
 | テスト | 理由 | 待ち |
 | --- | --- | --- |
