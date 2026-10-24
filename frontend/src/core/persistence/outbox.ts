@@ -32,8 +32,33 @@ function outbox(ownerId: string): OutboxDb {
   return db;
 }
 
+const entry = (nb: Notebook, baseRevision: number | null): PendingEdit => ({ notebook_id: nb.id, snapshot: nb, base_revision: baseRevision, saved_at: new Date().toISOString() });
+
 export async function putPending(ownerId: string, nb: Notebook, baseRevision: number | null) {
-  await outbox(ownerId).pending.put({ notebook_id: nb.id, snapshot: nb, base_revision: baseRevision, saved_at: new Date().toISOString() });
+  await outbox(ownerId).pending.put(entry(nb, baseRevision));
+}
+
+/** Opens the outbox ahead of time, so a write while the page unloads can start at once. */
+export function openOutbox(ownerId: string) {
+  void outbox(ownerId).open().catch((e) => console.warn('[outbox] unavailable', e));
+}
+
+/**
+ * Write issued synchronously and committed explicitly, for pagehide / visibilitychange:
+ * a promise-chained write can be aborted when the page goes away before it starts.
+ */
+export function putPendingNow(ownerId: string, nb: Notebook, baseRevision: number | null): boolean {
+  const db = outbox(ownerId);
+  if (!db.isOpen()) return false;
+  try {
+    const tx = db.backendDB().transaction('pending', 'readwrite');
+    tx.objectStore('pending').put(entry(nb, baseRevision));
+    tx.commit?.();
+    return true;
+  } catch (e) {
+    console.warn('[outbox] immediate write failed', e);
+    return false;
+  }
 }
 
 export async function getPending(ownerId: string, id: string): Promise<PendingEdit | undefined> {

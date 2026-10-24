@@ -81,7 +81,7 @@ function harness(saveCloud: (nb: Notebook, rev: number | null) => Promise<SaveRe
   const clock = fakeTimers();
   let state: AutosaveState = { notebook: notebook([]), dirty: false, cloudRevision: 1 };
   const listeners = new Set<(s: AutosaveState, p: AutosaveState) => void>();
-  const log = { cloud: [] as { title: string; rev: number | null }[], local: [] as { title: string; rev: number | null }[], cleared: 0, statuses: [] as SyncState[] };
+  const log = { cloud: [] as { title: string; rev: number | null }[], local: [] as { title: string; rev: number | null }[], now: [] as { title: string; rev: number | null }[], cleared: 0, statuses: [] as SyncState[] };
   const saver = new Autosaver({
     getState: () => state,
     subscribe: (fn) => (listeners.add(fn), () => listeners.delete(fn)),
@@ -90,6 +90,7 @@ function harness(saveCloud: (nb: Notebook, rev: number | null) => Promise<SaveRe
       return saveCloud(nb, rev);
     },
     saveLocal: async (nb, rev) => void log.local.push({ title: nb.title, rev }),
+    saveLocalNow: (nb, rev) => (log.now.push({ title: nb.title, rev }), true),
     clearLocal: async () => void (log.cleared += 1),
     onSaved: (nb, rev) => {
       state = { ...state, cloudRevision: rev, dirty: state.notebook !== nb };
@@ -198,6 +199,18 @@ describe('autosave', () => {
     assert.equal(await done, true);
     assert.deepEqual(h.log.local, [{ title: 'a', rev: 1 }]);
     assert.deepEqual(h.log.cloud, [{ title: 'a', rev: 1 }]);
+  });
+
+  it('writes the outbox synchronously when the page goes away, once per state', async () => {
+    rev = 1;
+    const h = harness(okSave);
+    h.edit('a');
+    h.saver.flushLocal();
+    assert.deepEqual(h.log.now, [{ title: 'a', rev: 1 }], 'written before any timer or promise runs');
+    h.saver.flushLocal();
+    assert.equal(h.log.now.length, 1, 'nothing new to write');
+    await h.clock.advance(TIMING.localDebounce);
+    assert.equal(h.log.local.length, 0, 'the debounced write was replaced by the immediate one');
   });
 
   it('flush after stop still sends the last edit (leaving the notebook)', async () => {

@@ -26,7 +26,7 @@ import {
   proofOf,
 } from '@/core/notebook/model';
 import { Autosaver } from '@/core/persistence/autosave';
-import { clearPending, putPending } from '@/core/persistence/outbox';
+import { clearPending, openOutbox, putPending, putPendingNow } from '@/core/persistence/outbox';
 import { getRepository } from '@/core/persistence/repo';
 import { demoBinding } from '@/core/presets';
 import { buildReferences } from '@/core/resources/references';
@@ -60,6 +60,7 @@ export class NotebookEngine {
       subscribe: (fn) => store.subscribe(fn),
       saveCloud: (nb, rev) => getRepository(deps.ownerId).save(nb, rev),
       saveLocal: (nb, rev) => putPending(deps.ownerId, nb, rev),
+      saveLocalNow: (nb, rev) => putPendingNow(deps.ownerId, nb, rev),
       clearLocal: (id) => clearPending(deps.ownerId, id),
       onSaved: (nb, rev) => store.getState().markSaved(nb, rev),
       onStatus: (state, message) => {
@@ -68,6 +69,7 @@ export class NotebookEngine {
         if (s.saveError !== message) s.set('saveError', message);
       },
     });
+    openOutbox(deps.ownerId);
     this.autosave.start();
     this.offAutosave = watchPage(this.autosave);
     this.unsub = this.cas.onChange((state, detail) => {
@@ -766,7 +768,10 @@ export class NotebookEngine {
 function watchPage(saver: Autosaver): () => void {
   if (typeof window === 'undefined') return () => undefined;
   const onHide = () => {
-    if (document.visibilityState === 'hidden') void saver.flush();
+    if (document.visibilityState !== 'hidden') return;
+    // the page may be about to unload (reload, tab closed): device copy first, synchronously
+    saver.flushLocal();
+    void saver.flush();
   };
   const onOnline = () => saver.retry();
   const onPageHide = () => saver.flushLocal();

@@ -17,6 +17,8 @@ export interface AutosaveDeps {
   subscribe(listener: (s: AutosaveState, prev: AutosaveState) => void): () => void;
   saveCloud(nb: Notebook, expectedRevision: number | null): Promise<SaveResult>;
   saveLocal(nb: Notebook, baseRevision: number | null): Promise<void>;
+  /** the same write issued synchronously (page unloading); false when it could not start */
+  saveLocalNow?(nb: Notebook, baseRevision: number | null): boolean;
   clearLocal(id: string): Promise<void>;
   /** the cloud now holds `nb` at `revision` */
   onSaved(nb: Notebook, revision: number): void;
@@ -84,6 +86,8 @@ export class Autosaver {
   private inFlight: Promise<void> | null = null;
   /** newest edited state not yet in the cloud, and the revision the cloud is at */
   private latest: Notebook | null = null;
+  /** newest state already handed to the device outbox */
+  private written: Notebook | null = null;
   private revision: number | null;
   private failures = 0;
   private lastFailure: SyncState = 'error';
@@ -154,11 +158,13 @@ export class Autosaver {
     return this.latest === null;
   }
 
-  /** The page is going away: only the device write is likely to finish. */
+  /** The page is going away: write the outbox synchronously, the only write likely to finish. */
   flushLocal() {
-    if (!this.local.pending) return;
+    const nb = this.latest;
+    if (!nb || nb === this.written) return;
     this.local.cancel();
-    void this.writeLocal();
+    if (this.deps.saveLocalNow?.(nb, this.revision)) this.written = nb;
+    else void this.writeLocal();
   }
 
   private changed(nb: Notebook) {
@@ -177,6 +183,7 @@ export class Autosaver {
     const nb = this.latest;
     if (!nb) return this.localChain;
     const base = this.revision;
+    this.written = nb;
     this.localChain = this.localChain
       .then(() => this.deps.saveLocal(nb, base))
       .catch((e) => console.warn('[autosave] device copy failed', e));
