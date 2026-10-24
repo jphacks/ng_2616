@@ -3,12 +3,15 @@ import { segmentsFromSource, toInputSegments } from '@mn/contracts/segments';
 
 export const rows = (page: Page) => page.locator('[data-line-id]');
 
-/** A cold dev server reloads pages while it compiles routes; wait until the home page is stable. */
+/**
+ * The home page, hydrated: the loading skeleton is server-rendered and only the client
+ * replaces it, so its absence means buttons now respond. Routes are compiled up front
+ * (global-setup.ts), so no reload arrives afterwards.
+ */
 export async function openHome(page: Page, query = '') {
   await page.goto(`/notebooks${query}`);
-  await page.waitForLoadState('networkidle');
   await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
-  await page.waitForTimeout(1000);
+  await expect(page.locator('ul[aria-busy="true"]')).toHaveCount(0);
 }
 
 export async function openPreset(page: Page, name: RegExp) {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { inkPixels, mockRecognition, mockSuggestions, openPreset, rows, statusOf, writeAndConfirm } from './helpers';
 
 test('a failed recognition keeps the ink, offers Retry and Back to ink', async ({ page }) => {

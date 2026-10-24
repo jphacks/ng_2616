@@ -1,21 +1,7 @@
 import { join } from 'node:path';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './fixtures';
 import { ARTIFACTS } from '../../playwright.config';
-
-/** A cold dev server reloads pages while it compiles routes; wait until the home page is stable. */
-async function openHome(page: Page) {
-  await page.goto('/notebooks');
-  await page.waitForLoadState('networkidle');
-  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
-  await page.waitForTimeout(1500);
-}
-
-async function openPreset(page: Page, name: RegExp) {
-  await openHome(page);
-  await page.getByRole('button', { name }).first().click();
-  await page.waitForURL(/\/notebooks\/[0-9a-f-]{36}$/, { timeout: 60_000 });
-  await expect(page.getByText('Checker ready')).toBeVisible({ timeout: 120_000 });
-}
+import { openPreset } from './helpers';
 
 /** Any ink works: the mock recognizer maps the n-th student line to the scripted line. */
 async function scribble(page: Page, row: Locator) {

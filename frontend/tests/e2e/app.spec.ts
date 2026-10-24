@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { mockRecognition, mockSuggestions, openHome, openPreset, rows, statusOf, writeAndConfirm } from './helpers';
 
 test('autosave, reload and reopen keep lines and verification', async ({ page }) => {
