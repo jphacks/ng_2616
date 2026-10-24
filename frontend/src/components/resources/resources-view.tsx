@@ -46,31 +46,32 @@ export function ResourcesView({ ownerId }: { ownerId: string }) {
             return (
               <div
                 key={r.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelected(r.id)}
-                onKeyDown={(e) => e.key === 'Enter' && setSelected(r.id)}
-                className={clsx('group flex min-h-16 cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 transition-colors', r.id === selected ? 'bg-sheet shadow-card' : 'hover:bg-black/[0.04]')}
+                className={clsx('group flex min-h-16 items-center gap-1 rounded-2xl pr-1 transition-colors', r.id === selected ? 'bg-sheet shadow-card' : 'hover:bg-black/[0.04]')}
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Icon size={19} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-medium">{r.name}</span>
-                  <span className="block text-[12px] text-muted">
-                    {t(`res.kind.${r.kind}`)} · {r.builtin ? t('res.builtin') : t('res.pages', { n: r.pages.length })}
+                <button type="button" onClick={() => setSelected(r.id)} aria-pressed={r.id === selected} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-3 py-2 text-left">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                    <Icon size={19} />
                   </span>
-                </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium">{r.name}</span>
+                    <span className="block text-[12px] text-muted">
+                      {t(`res.kind.${r.kind}`)} · {r.builtin ? t('res.builtin') : t('res.pages', { n: r.pages.length })}
+                    </span>
+                  </span>
+                </button>
                 <button
                   type="button"
                   aria-label={t('res.delete')}
-                  onClick={async (e) => {
-                    e.stopPropagation();
+                  onClick={async () => {
                     if (!window.confirm(t('res.deleteConfirm', { name: r.name }))) return;
                     await removeResource(ownerId, r.id);
                     void refresh();
                   }}
-                  className="hidden h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-black/5 group-hover:inline-flex"
+                  // touch screens have no hover: always shown on the selected resource
+                  className={clsx(
+                    'h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-black/5',
+                    r.id === selected ? 'inline-flex' : 'hidden group-hover:inline-flex',
+                  )}
                 >
                   <Trash2 size={16} />
                 </button>
