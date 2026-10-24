@@ -62,6 +62,11 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
           <CasPill state={cas.state} />
           {demo && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-strong">{t('top.demo')}</span>}
           {mockAi && <span className="rounded-full bg-unknown-soft px-2 py-0.5 font-medium text-unknown">{t('top.mock')}</span>}
+          {process.env.NEXT_PUBLIC_COMMIT_SHA && (
+            <span className="font-mono text-[10px] text-faint" title="Build Commit">
+              #{process.env.NEXT_PUBLIC_COMMIT_SHA}
+            </span>
+          )}
         </div>
       </div>
       <div className="absolute left-1/2 -translate-x-1/2 max-md:static max-md:translate-x-0">

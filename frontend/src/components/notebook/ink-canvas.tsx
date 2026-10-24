@@ -39,6 +39,12 @@ interface Props {
   onPenDown?: () => void;
 }
 
+interface LiveStroke {
+  id: string;
+  points: StrokePoint[];
+  t0: number;
+}
+
 /**
  * Line-local ink surface. Pointer Events with capture, coalesced events and pressure;
  * logical CSS-pixel coordinates (spec §8.1). Buttons live outside the canvas.
@@ -46,7 +52,7 @@ interface Props {
 export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onActivate, onPenDown }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const live = useRef<{ id: number; points: StrokePoint[]; t0: number } | null>(null);
+  const activeStrokes = useRef<Map<number, LiveStroke>>(new Map());
   const erasing = useRef<Set<string> | null>(null);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
   const frame = useRef(0);
@@ -69,7 +75,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     heightRef.current = height;
   });
 
-  useEffect(() => setHeight((h) => Math.max(inkHeight(strokes), live.current ? h : 0)), [strokes]);
+  useEffect(() => setHeight((h) => Math.max(inkHeight(strokes), activeStrokes.current.size > 0 ? h : 0)), [strokes]);
 
   useEffect(() => {
     const el = wrap.current;
@@ -96,9 +102,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       ctx.fillStyle = hidden?.has(s.id) ? 'rgba(26,32,48,0.18)' : dim ? 'rgba(26,32,48,0.55)' : '#1a2030';
       drawStroke(ctx, s.points, undefined, true);
     }
-    if (live.current) {
+    for (const live of activeStrokes.current.values()) {
       ctx.fillStyle = '#1a2030';
-      drawStroke(ctx, live.current.points, undefined, false);
+      drawStroke(ctx, live.points, undefined, false);
     }
   }, [width, height, dim]);
 
@@ -131,20 +137,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     return { x: (e.clientX - rLeft) / scale, y: (e.clientY - rTop) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
   };
 
-  const commitLive = () => {
-    const l = live.current;
-    if (!l) return;
-    live.current = null;
-    rectRef.current = null;
-    if (l.points.length > 0) {
-      const stroke = { id: shortId('s'), points: l.points };
-      pendingStrokesRef.current.push(stroke);
-      strokesRef.current = [...strokesRef.current, stroke];
-      draw();
-      propsRef.current.onStroke?.(stroke);
-    }
-  };
-
   const eraseAt = (e: PointerEvent) => {
     const p = local(e, 0);
     for (const id of strokesHit(strokesRef.current, p.x, p.y)) erasing.current?.add(id);
@@ -156,27 +148,19 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     if (!c) return;
 
     const onDown = (e: PointerEvent) => {
-      // If a previous stroke was not finished before this new pointerdown (e.g. rapid pen gestures on iPad),
-      // salvage and commit it so the 1st stroke is never lost!
-      if (live.current && live.current.points.length > 0) {
-        commitLive();
-      }
       rectRef.current = c.getBoundingClientRect();
       if (e.pointerType === 'pen') markPenSeen();
 
       const { editable, tool, onActivate, onPenDown } = propsRef.current;
-      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
+      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen && e.pressure === 0);
 
       if (fingerScroll || !editable) {
         if (!editable && tool !== 'view') onActivate?.();
         scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
-        window.addEventListener('pointermove', onMove, { passive: false });
-        window.addEventListener('pointerup', onUp, { passive: false });
-        window.addEventListener('pointercancel', onUp, { passive: false });
         return;
       }
 
-      // Stylus or drawing: prevent default WebKit gestures (double-tap zoom, text selection, pan) immediately!
+      // Drawing with pen / stylus / touch: prevent default WebKit gestures immediately!
       e.preventDefault();
       onPenDown?.();
 
@@ -184,15 +168,11 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         erasing.current = new Set();
         eraseAt(e);
       } else {
-        live.current = { id: e.pointerId, points: [], t0: e.timeStamp };
-        live.current.points.push(local(e, e.timeStamp));
+        const strokeId = shortId('s');
+        const p = local(e, e.timeStamp);
+        activeStrokes.current.set(e.pointerId, { id: strokeId, points: [p], t0: e.timeStamp });
         schedule();
       }
-
-      // Track moves and pointer-up globally on window so fast strokes exiting canvas are never dropped!
-      window.addEventListener('pointermove', onMove, { passive: false });
-      window.addEventListener('pointerup', onUp, { passive: false });
-      window.addEventListener('pointercancel', onUp, { passive: false });
     };
 
     const onMove = (e: PointerEvent) => {
@@ -208,9 +188,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
-      const l = live.current;
+      const l = activeStrokes.current.get(e.pointerId);
       if (!l) return;
-      if (l.id !== e.pointerId && e.pointerType !== 'pen') return;
 
       e.preventDefault();
 
@@ -227,10 +206,6 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     };
 
     const onUp = (e: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-
       if (scrolling.current?.id === e.pointerId) {
         scrolling.current = null;
         return;
@@ -250,16 +225,27 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
-      const l = live.current;
+      const l = activeStrokes.current.get(e.pointerId);
       if (!l) return;
-      if (l.id === e.pointerId || e.pointerType === 'pen') {
-        commitLive();
+      activeStrokes.current.delete(e.pointerId);
+
+      if (l.points.length > 0) {
+        const stroke = { id: l.id, points: l.points };
+        pendingStrokesRef.current.push(stroke);
+        strokesRef.current = [...strokesRef.current, stroke];
+        draw();
+        propsRef.current.onStroke?.(stroke);
       }
-      rectRef.current = null;
+      if (activeStrokes.current.size === 0) {
+        rectRef.current = null;
+      }
       schedule();
     };
 
     c.addEventListener('pointerdown', onDown, { passive: false });
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp, { passive: false });
+    window.addEventListener('pointercancel', onUp, { passive: false });
 
     return () => {
       c.removeEventListener('pointerdown', onDown);
