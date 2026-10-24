@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-paper: #f7f5f0;
+  --color-sheet: #fffefb;
+  --color-ink: #1a2030;
+  --color-ink-soft: #3b4357;
+  --color-muted: #6b7280;
+  --color-faint: #9aa1ad;
+  --color-rule: #e8e3d8;
+  --color-border: #e3e0d8;
+  --color-accent: #4f46e5;
+  --color-accent-strong: #4338ca;
+  --color-accent-soft: #eef0ff;
+  --color-ok: #15803d;
+  --color-ok-soft: #ecfbf1;
+  --color-wrong: #c2410c;
+  --color-wrong-strong: #b42318;
+  --color-wrong-soft: #fff1ec;
+  --color-unknown: #b45309;
+  --color-unknown-soft: #fff8e6;
+  --color-none: #52607a;
+  --color-none-soft: #f1f3f7;
+
+  --font-sans: var(--font-inter), var(--font-noto-jp), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-float: 0 8px 28px -10px rgb(26 32 48 / 0.28), 0 2px 6px -2px rgb(26 32 48 / 0.12);
+  --shadow-card: 0 1px 2px rgb(26 32 48 / 0.06), 0 0 0 1px rgb(26 32 48 / 0.05);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-rise: rise 180ms ease-out;
+}
+
+@keyframes shimmer {
+  from { background-position: -320px 0; }
+  to { background-position: 320px 0; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Notebook paper: faint ruling inside each line row */
+.ruled {
+  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--color-rule) calc(100% - 1px));
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 0, rgb(79 70 229 / 0.08) 50%, transparent 100%) no-repeat;
+  background-size: 320px 100%;
+  animation: var(--animate-shimmer);
+}
+
+.katex {
+  font-size: 1.28em;
+}
+
+.ghost .katex {
+  color: var(--color-ink-soft);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
+}
