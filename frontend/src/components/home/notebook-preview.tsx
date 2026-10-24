@@ -6,7 +6,6 @@ import { Check, CircleHelp, X } from 'lucide-react';
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { outlineToPath, strokeOutline, strokesBounds } from '@/core/ink/stroke';
 import type { NotebookPreview as Preview, PreviewLine } from '@/core/notebook/preview';
-import { InlineSegments } from '@/components/notebook/segments';
 import { Tex } from '@/ui/tex';
 
 // the miniature is laid out at this width, then scaled to the card; the height follows the
@@ -32,11 +31,7 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
     <div ref={box} aria-hidden className="absolute inset-0 overflow-hidden bg-paper">
       {scale !== null && (
         <div className="absolute top-0 left-0 origin-top-left p-4" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
-          <div className="rounded-2xl bg-sheet px-5 py-4 shadow-card">
-            <div className="truncate text-xl font-semibold">{preview?.problemTitle}</div>
-            {!!preview?.statement.length && <InlineSegments segments={preview.statement} className="mt-1.5 line-clamp-3 text-base text-ink-soft" />}
-          </div>
-          <div className="mt-3 rounded-2xl bg-sheet shadow-card">
+          <div className="rounded-2xl bg-sheet shadow-card">
             {lines.map((line, i) => (
               <PreviewRow key={i} number={i + 1} line={line} />
             ))}

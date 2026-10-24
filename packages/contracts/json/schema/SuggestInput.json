@@ -5,202 +5,29 @@
     "context": {
       "type": "object",
       "properties": {
-        "problem": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[A-Za-z0-9_-]+$"
-            },
-            "title": {
-              "type": "string"
-            },
-            "statement": {
-              "type": "array",
-              "items": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "type": {
-                        "type": "string",
-                        "const": "text"
-                      },
-                      "text": {
-                        "type": "string",
-                        "maxLength": 4000
-                      }
-                    },
-                    "required": [
-                      "type",
-                      "text"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "type": {
-                        "type": "string",
-                        "const": "math"
-                      },
-                      "expr": {
-                        "$ref": "#/$defs/__schema0"
-                      },
-                      "notation": {
-                        "type": "string",
-                        "enum": [
-                          "plain",
-                          "continuation"
-                        ]
-                      },
-                      "latex": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "type",
-                      "expr",
-                      "notation",
-                      "latex"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
-            },
-            "definitions": {
-              "maxItems": 16,
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/__schema0"
-              }
-            },
-            "conditions": {
-              "maxItems": 16,
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/__schema0"
-              }
-            },
-            "assumptions": {
-              "maxItems": 32,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "symbol": {
-                    "type": "string"
-                  },
-                  "kind": {
-                    "type": "string",
-                    "enum": [
-                      "real",
-                      "positive",
-                      "nonnegative",
-                      "nonzero",
-                      "positive_integer",
-                      "interval"
-                    ]
-                  },
-                  "lower": {
-                    "$ref": "#/$defs/__schema0"
-                  },
-                  "upper": {
-                    "$ref": "#/$defs/__schema0"
-                  },
-                  "expr": {
-                    "$ref": "#/$defs/__schema0"
-                  },
-                  "source": {
-                    "type": "string",
-                    "enum": [
-                      "user",
-                      "adopted"
-                    ]
-                  }
-                },
-                "required": [
-                  "symbol",
-                  "kind",
-                  "source"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "unknowns": {
-              "maxItems": 3,
-              "type": "array",
-              "items": {
+        "functions": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
                 "type": "string"
-              }
-            },
-            "independent_var": {
-              "type": "string"
-            },
-            "functions": {
-              "maxItems": 16,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "args": {
-                    "maxItems": 4,
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "name",
-                  "args"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "origin": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "preset",
-                    "pdf",
-                    "resource"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "page": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                }
               },
-              "required": [
-                "kind",
-                "name"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "id",
-            "title",
-            "statement",
-            "definitions",
-            "conditions",
-            "assumptions",
-            "unknowns"
-          ],
-          "additionalProperties": false
+              "args": {
+                "maxItems": 4,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "args"
+            ],
+            "additionalProperties": false
+          }
         },
         "lines": {
           "maxItems": 64,
@@ -279,6 +106,10 @@
                         },
                         "latex": {
                           "type": "string"
+                        },
+                        "source_latex": {
+                          "type": "string",
+                          "maxLength": 4000
                         }
                       },
                       "required": [
@@ -304,7 +135,6 @@
         }
       },
       "required": [
-        "problem",
         "lines"
       ],
       "additionalProperties": false

@@ -36,7 +36,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
 
 def hints_for(category: str | None, source_line_id: str | None) -> list[dict]:
     cat = category if category in TEMPLATES else "UNCLASSIFIED"
-    refs = [source_line_id] if source_line_id and source_line_id != "problem" else []
+    refs = [source_line_id] if source_line_id else []
     slots = {"line": source_line_id} if refs else {}
     out = []
     for level, text in ((1, TEMPLATES[cat][0]), (2, TEMPLATES[cat][1])):
