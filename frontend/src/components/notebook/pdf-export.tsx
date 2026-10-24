@@ -76,27 +76,27 @@ export function PdfExport() {
         <span className="hidden lg:inline">{t('pdf.export')}</span>
         <span className="sr-only lg:hidden">{t('pdf.export')}</span>
       </Button>
-      {open && createPortal(<div className="fixed inset-0 z-50"><Sheet open={open} onClose={close} title={t('pdf.export')} footer={
+      {open && createPortal(<div className="fixed inset-0 z-overlay"><Sheet open={open} onClose={close} title={t('pdf.export')} footer={
         busy ? <Button className="w-full" onClick={close}>{t('pdf.cancel')}</Button>
-          : result ? <a href={result.url} download={result.name} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-[15px] font-medium text-white"><Download size={18} />{t('pdf.download')}</a>
+          : result ? <a href={result.url} download={result.name} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-base font-medium text-on-solid"><Download size={18} />{t('pdf.download')}</a>
             : <Button variant="primary" className="w-full" onClick={() => void run()}>{t(error ? 'pdf.retry' : 'pdf.generate')}</Button>
       }>
-        <div className="space-y-4 text-[15px]">
+        <div className="space-y-4 text-base">
           <p>{t('pdf.local')}</p>
-          <p className="text-[13px] text-muted">{t('pdf.snapshot')}</p>
+          <p className="text-sm text-muted">{t('pdf.snapshot')}</p>
           <div className="space-y-3">
             {(['title', 'author', 'studentId'] as const).map((key) => (
-              <label key={key} className="block text-[13px] font-medium">
+              <label key={key} className="block text-sm font-medium">
                 {t(`pdf.${key}`)}
-                <input className="mt-1 h-11 w-full rounded-xl bg-paper px-3 text-[15px] ring-1 ring-border" value={report[key]} maxLength={key === 'title' ? 200 : 100} disabled={busy}
+                <input className="mt-1 h-11 w-full rounded-xl bg-paper px-3 text-base ring-1 ring-border" value={report[key]} maxLength={key === 'title' ? 200 : 100} disabled={busy}
                   onChange={(e) => { setReport((r) => ({ ...r, [key]: e.target.value })); setResult(null); setError(null); }} />
               </label>
             ))}
           </div>
           {busy && <p role="status" className="flex items-center gap-2"><Spinner />{progress ? t('pdf.progress', { done: progress.done, total: progress.total }) : t('pdf.preparing')}</p>}
-          {result && <><p role="status">{t('pdf.ready')}</p><p className="break-all text-[13px] text-muted">{result.name}</p>{result.omitted > 0 && <p>{t('pdf.omitted', { n: result.omitted })}</p>}</>}
+          {result && <><p role="status">{t('pdf.ready')}</p><p className="break-all text-sm text-muted">{result.name}</p>{result.omitted > 0 && <p>{t('pdf.omitted', { n: result.omitted })}</p>}</>}
           {error && <p role="alert" className="rounded-xl bg-wrong-soft p-3 text-wrong-strong">{t(error)}</p>}
-          <p className="text-[12px] text-muted">{t('pdf.imageNote')}</p>
+          <p className="text-xs text-muted">{t('pdf.imageNote')}</p>
         </div>
       </Sheet></div>, document.body)}
     </>

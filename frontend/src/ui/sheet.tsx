@@ -17,7 +17,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
   if (!open) return null;
   const side = orientation === 'landscape';
   return (
-    <div className="absolute inset-0 z-40 flex" role="dialog" aria-modal="true">
+    <div className="absolute inset-0 z-overlay flex" role="dialog" aria-modal="true">
       <button type="button" aria-label="close" className="absolute inset-0 bg-ink/20" onClick={onClose} />
       <div
         className={clsx(
@@ -26,8 +26,8 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
         )}
       >
         <div className="flex items-start gap-3 border-b border-border px-6 pt-5 pb-4">
-          <div className="min-w-0 flex-1 text-lg font-semibold">{title}</div>
-          <button type="button" aria-label="close" onClick={onClose} className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:bg-black/5">
+          <div className="min-w-0 flex-1 text-2xl font-semibold">{title}</div>
+          <button type="button" aria-label="close" onClick={onClose} className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:bg-hover">
             <X size={20} />
           </button>
         </div>

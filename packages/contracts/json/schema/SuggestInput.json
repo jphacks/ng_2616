@@ -341,6 +341,36 @@
         "maxLength": 4000
       }
     },
+    "checker_feedback": {
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "latex": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "evidence": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        },
+        "required": [
+          "latex",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
     "reference": {
       "maxItems": 16,
       "type": "array",

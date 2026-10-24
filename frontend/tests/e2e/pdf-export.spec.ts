@@ -4,6 +4,7 @@ import path from 'node:path';
 import { segmentsFromSource, type Line, type Notebook, type Proof } from '@mn/contracts';
 import { buildNotebook } from '../../src/core/presets';
 import { inputHash, payloadForLine } from '../../src/core/cas/payload';
+import { openHome } from './helpers';
 
 function fixture(): Notebook {
   const n = buildNotebook('integral', 'ja');
@@ -36,8 +37,7 @@ async function openFixture(page: import('@playwright/test').Page, notebook = fix
   page.on('console', (message) => { if (message.text().startsWith('[pdf-export]')) console.log(message.text()); });
   // PDF output works independently of CAS/network readiness; prevent downloading the runtime.
   await page.route('https://cdn.jsdelivr.net/**', (r) => r.abort());
-  await page.goto('/notebooks');
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await openHome(page);
   await page.evaluate(async (raw) => {
     const snapshot = JSON.parse(raw);
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -61,7 +61,7 @@ test('exports a real multipage PDF locally, preserving unsaved title and noteboo
   const title = page.locator('header input');
   await title.fill('未保存のPDF出力テスト');
   await title.press('Enter');
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '未保存のPDF出力テスト', exact: true })).toBeVisible();
   const rowsBefore = await page.locator('[data-line-id]').count();
   const posts: string[] = [];
   page.on('request', (r) => { if (r.method() === 'POST') posts.push(r.url()); });
@@ -115,7 +115,7 @@ test('exports a real multipage PDF locally, preserving unsaved title and noteboo
   await page.getByRole('button', { name: 'close', exact: true }).last().click();
   await expect(page.locator('iframe[data-pdf-export]')).toHaveCount(0);
   expect(await page.locator('[data-line-id]').count()).toBe(rowsBefore);
-  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '未保存のPDF出力テスト', exact: true })).toBeVisible();
 });
 
 test('cancels without changing the notebook or leaving rendering frames', async ({ page }) => {

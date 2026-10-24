@@ -9,9 +9,13 @@ export const ARTIFACTS = join(tmpdir(), 'math-notebook-e2e');
 /** E2E against the real UI and real Pyodide CAS, with the scripted (mock) AI provider. */
 export default defineConfig({
   testDir: './tests/e2e',
+  globalSetup: './tests/e2e/global-setup.ts',
   timeout: 300_000,
   expect: { timeout: 30_000 },
-  workers: 1,
+  // tests are independent (each gets a fresh browser context), so they run side by side;
+  // each worker adds a browser with Pyodide (about 1 GB), so the count stays modest
+  workers: Number(process.env.E2E_WORKERS ?? (process.env.CI ? 2 : 3)),
+  fullyParallel: true,
   reporter: [['list']],
   outputDir: ARTIFACTS,
   use: {

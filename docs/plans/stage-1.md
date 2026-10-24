@@ -19,7 +19,7 @@ The FastAPI backend exists as a template; no Lean, no Azure.
 | CAS | Pyodide v314.0.7 + SymPy 1.14.0 in a module Web Worker (`frontend/public/cas/worker.js`) |
 | LLM | Gemini (Interactions API): `gemini-3.8-flash` recognition (thinking low) and suggestions (medium); `gemini-3.5-flash-lite` page OCR |
 | Sign-in | Supabase magic link + Google; open sign-up |
-| Storage | Notebooks in Supabase `mn_notebooks` (owner-only RLS); resources on the device (IndexedDB) |
+| Storage | Notebooks (autosaved), resources (Storage bucket `mn-resources`) and account settings in Supabase, owner-only RLS; IndexedDB as cache/outbox ([ADR 0005](../adr/0005-cloud-sync.md)) |
 | AI steps the CAS cannot confirm | Shown as amber "unverified" ghosts; adoption needs a second confirmation |
 | Deliberate wrong step | AI step φ(t)=e^{+iEt/ħ} is rejected by the checker → chip → explanation sheet → regenerated |
 | Tablet testing | Vercel CLI deploys (GitHub org integration not required) |
