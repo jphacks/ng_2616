@@ -50,11 +50,12 @@ const JOB_ROUTES: Record<string, JobRoute> = {
     deadlineMs: 45_000,
     run: (input, user, signal) => getAiService().ocrPage(input, { userId: user.id, signal }),
   },
-  // ADR 0007: up to three translations plus their Lean checks (spec §14.4 allows 90 s for proving)
+  // ADR 0007: up to three translations plus their Lean checks. Longer than spec §14.4's 90 s:
+  // one translation of a hard step took 110 s in testing (thinking tokens), see LeanService
   'lean/check': {
     kind: 'lean_check',
     input: LeanCheckInputSchema,
-    deadlineMs: 150_000,
+    deadlineMs: 300_000,
     run: (input, user, signal) => getLeanService().check(input, { userId: user.id, signal }),
   },
 };

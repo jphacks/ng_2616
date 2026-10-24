@@ -121,7 +121,9 @@ export class LeanService {
       parts: leanParts(input, feedback),
       schema: LEAN_STEP_JSON_SCHEMA,
       maxOutputTokens: 16_384,
-      timeoutMs: 45_000,
+      // measured with gemini-3.8-flash at high thinking: 5–30 s for a one-line step, up to 110 s for
+      // an ε–δ estimate written as one line
+      timeoutMs: 120_000,
       signal: ctx.signal,
     });
     const wire = LeanStepWireSchema.safeParse(raw);

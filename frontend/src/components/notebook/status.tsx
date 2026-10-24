@@ -11,7 +11,8 @@ export type Tone = 'ok' | 'local' | 'wrong' | 'unknown' | 'none';
 /** Lean's verdict on a proof line (ADR 0007): never "wrong", since an unproved step is not a false one. */
 function leanTone(lean: LineLean): Tone {
   if (lean.step === 'ok') return lean.after_failure ? 'local' : 'ok';
-  if (lean.step === 'empty') return 'none';
+  // "so the formula holds, which completes the proof": nothing new, but the proof is done
+  if (lean.step === 'empty') return lean.proof === 'proved' ? 'ok' : 'none';
   return 'unknown';
 }
 
@@ -20,7 +21,7 @@ function leanLabel(lean: LineLean): string {
     case 'ok':
       return lean.after_failure ? 'status.leanAfterFailure' : lean.proof === 'proved' ? 'status.leanProved' : 'status.leanStep';
     case 'empty':
-      return 'status.leanEmpty';
+      return lean.proof === 'proved' ? 'status.leanProved' : 'status.leanEmpty';
     case 'failed':
       return 'status.leanFailed';
     case 'unchecked':
