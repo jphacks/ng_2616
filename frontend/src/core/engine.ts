@@ -550,6 +550,17 @@ export class NotebookEngine {
     this.suggestSlot = slot;
     // any epoch bump (confirm, Undo/Redo, revision, problem edit, notebook switch) cancels this request
     const stopWatching = abortOnEpochChange(store, ctl);
+    // a later request owns the slot (and any candidate in progress) once it has started
+    const superseded = () => {
+      const cur = this.aborts.get('suggest');
+      return !!cur && cur !== ctl;
+    };
+    // ending without a candidate to show: drop this request's "generating"/"checking" placeholder,
+    // or it would stay on the page and block every later suggestion as busy
+    const release = () => {
+      const c = store.getState().candidate;
+      if (!superseded() && c && (c.state === 'GENERATING' || c.state === 'VERIFYING')) store.getState().set('candidate', null);
+    };
     try {
       const recentText = ctxLines.slice(-8).map(mathLatexOf).join(' ');
       const reference = await buildReferences(this.deps.ownerId, nb.id, recentText).catch(() => []);
@@ -580,11 +591,15 @@ export class NotebookEngine {
         if (feedback.length) cur.set('candidate', pending);
         const res = await this.api.suggest(this.meta(last.id, last.version), input, ctl.signal);
         if (this.isStale(epoch, last)) return { kind: 'stale' };
-        if (res.state === 'NONE' || !res.candidate) return { kind: 'none' };
+        if (res.state === 'NONE' || !res.candidate) return res.reason === 'REJECTED_BEFORE' || res.reason === 'DUPLICATE' ? { kind: 'repeat' } : { kind: 'none' };
         store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
         return this.verifyCandidate(res.candidate, pending, ctxLines);
       });
-      if (result.kind === 'stale') return;
+      if (result.kind === 'stale') {
+        release();
+        if (!this.disposed) this.scheduleSuggestion();
+        return;
+      }
       if (result.kind === 'show') {
         const cur = store.getState();
         const active = cur.activeLineId ? findLine(this.nb, cur.activeLineId) : undefined;
@@ -593,17 +608,20 @@ export class NotebookEngine {
         if (writing) this.armHeldTimer();
         return;
       }
-      store.getState().set('candidate', null);
+      release();
       // after checker rejections the rejected-suggestion marker explains the empty result
       if (manual && result.rejected === 0) store.getState().showToast(this.deps.t('toast.noSuggestion'));
     } catch (e) {
+      release();
       if ((e as Error).name === 'AbortError') return this.discard(pending);
-      if (store.getState().candidate?.id === pending.id || store.getState().candidate?.state === 'GENERATING') store.getState().set('candidate', null);
       if (manual) store.getState().showToast(this.deps.t('toast.suggestFailed'), 'error');
       console.warn('[suggest]', e);
     } finally {
       stopWatching();
-      store.getState().set('suggesting', false);
+      if (!superseded()) {
+        this.aborts.delete('suggest');
+        store.getState().set('suggesting', false);
+      }
     }
   }
 
@@ -652,7 +670,7 @@ export class NotebookEngine {
     let policy: CandidatePolicy = 'verified';
     for (const cl of draft.lines) {
       const target = { ...cl.target };
-      const payload = payloadForCandidate(nb, pending.mode === 'COMPLETE_RHS' ? contextLinesFor(nb, basedOn.id) : chain, target);
+      const payload = pending.mode === 'COMPLETE_RHS' ? payloadForCandidate(nb, contextLinesFor(nb, basedOn.id), target, 'identity') : payloadForCandidate(nb, chain, target);
       const casVersion = this.cas.versionString;
       const hash = inputHash(nb, payload, casVersion);
       const out = await this.cas.verify(payload);
@@ -706,7 +724,7 @@ export class NotebookEngine {
     const first = c.lines[0]!;
     // adoption re-checks the verification input against the current context (spec §11)
     const ctx = c.mode === 'COMPLETE_RHS' ? contextLinesFor(nb, basedOn.id) : [...contextLinesFor(nb, basedOn.id), basedOn];
-    const recheck = inputHash(nb, payloadForCandidate(nb, ctx, first.target), this.cas.versionString);
+    const recheck = inputHash(nb, payloadForCandidate(nb, ctx, first.target, c.mode === 'COMPLETE_RHS' ? 'identity' : undefined), this.cas.versionString);
     if (recheck !== first.verified?.input_hash) {
       s.set('candidate', null);
       return 'stale';

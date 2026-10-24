@@ -27,6 +27,8 @@ export interface CasCase {
   lines: FixtureLine[];
   target: { id: string; src?: string; text?: string; unparsed?: string; role?: Role };
   parent?: string;
+  /** the target completes an "LHS =" line (COMPLETE_RHS): its sides must agree as expressions */
+  claim?: 'identity';
   expect: {
     status: Status;
     reason?: string;
@@ -230,6 +232,54 @@ export const CAS_CASES: CasCase[] = [
     ],
     target: T('$i\\hbar \\frac{\\partial \\Psi}{\\partial t} = \\frac{\\hbar^2}{2m}\\frac{\\partial^2 \\Psi}{\\partial x^2}$'),
     expect: { status: 'wrong', category: 'SIGN' },
+  },
+  {
+    id: 'CF-30', note: 'a factorization is an identity, not an equation to compare with the given one',
+    lines: [{ id: 'G', src: '$x^2 - 5x + 6 = 0$', role: 'premise', status: 'none', reason: 'PREMISE' }],
+    target: T('$x^2 - 5x + 6 = (x-2)(x-3)$'), expect: { status: 'ok', method: 'sym' },
+  },
+  {
+    id: 'CF-31', note: 'an identity after an unrelated step about x', lines: first('$x = 2$'),
+    target: T('$x^2 - 1 = (x-1)(x+1)$'), expect: { status: 'ok', method: 'sym' },
+  },
+  {
+    id: 'CF-32', note: 'a completed "LHS =" with a wrong factorization', lines: [], claim: 'identity',
+    target: T('$x^2 - 5x + 6 = (x-1)(x-6)$'), expect: { status: 'wrong' },
+  },
+  {
+    id: 'CF-33', note: 'a completed "LHS =" with a correct factorization', claim: 'identity',
+    lines: [{ id: 'G', src: '$x^2 - 5x + 6 = 0$', role: 'premise', status: 'none', reason: 'PREMISE' }],
+    target: T('$x^2 - 5x + 6 = (x-2)(x-3)$'), expect: { status: 'ok' },
+  },
+  {
+    id: 'CF-34', note: 'completing "1 + 1 =" is constant evaluation', lines: [], claim: 'identity',
+    target: T('$1 + 1 = 2$'), expect: { status: 'ok' },
+  },
+  {
+    id: 'CF-35', note: 'completing a name keeps the definition reading', lines: [], claim: 'identity',
+    target: T('$k = \frac{\sqrt{2mE}}{\hbar}$'), expect: { status: 'none', reason: 'DEFINITION' },
+  },
+  {
+    id: 'CF-36', note: 'restating an equation is still compared by solution sets', lines: first('$x^2 - 5x + 6 = 0$'),
+    target: T('$(x-2)(x-3) = 0$'), expect: { status: 'ok', method: 'sets' },
+  },
+  {
+    id: 'CF-37', note: 'one factor alone loses a solution',
+    lines: [...first('$x^2 + 7x + 12 = 0$'), { id: 'L2', src: '$(x+3)(x+4) = 0$', status: 'ok', method: 'sets' }],
+    target: T('よって $x + 3 = 0$'), expect: { status: 'wrong', category: 'MISSING_SOLUTION', missing: ['-4'] },
+  },
+  {
+    id: 'CF-38', note: 'both factors, one formula per segment, are the solutions',
+    lines: [...first('$x^2 + 7x + 12 = 0$'), { id: 'L2', src: '$(x+3)(x+4) = 0$', status: 'ok', method: 'sets' }],
+    target: T('$x + 3 = 0$ または $x + 4 = 0$'), expect: { status: 'ok', method: 'sets' },
+  },
+  {
+    id: 'CF-39', note: 'a comma list of values is the solution set', lines: first('$(x+3)(x+4) = 0$'),
+    target: T('$x = -3, x = -4$'), expect: { status: 'ok', method: 'sets' },
+  },
+  {
+    id: 'CF-40', note: 'a solution list with a wrong value', lines: first('$(x+3)(x+4) = 0$'),
+    target: T('$x = -3, x = 4$'), expect: { status: 'wrong', category: 'MISSING_SOLUTION', missing: ['-4'], extra: ['4'] },
   },
 ];
 
