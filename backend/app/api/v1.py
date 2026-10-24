@@ -36,7 +36,11 @@ def capabilities(_owner: str = Depends(require_internal), settings: Settings = D
             "features": {f: f in settings.features for f in FEATURES},
             "cas_runtime": "pyodide",
             "ai_execution": "relay",
-            "llm": {"provider": settings.llm_provider, "configured": bool(settings.gemini_api_key), "mock": settings.llm_provider == "mock"},
+            "llm": {
+                "provider": settings.llm_provider,
+                "configured": bool(settings.gemini_api_key),
+                "mock": settings.llm_provider == "mock",
+            },
             "lean": {"available": False},
         }
     )

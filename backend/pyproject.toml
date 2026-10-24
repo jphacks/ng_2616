@@ -24,8 +24,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.ruff]
-line-length = 120
+line-length = 140
 target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+# FastAPI's dependency injection uses Depends() in argument defaults by design
+ignore = ["B008"]
