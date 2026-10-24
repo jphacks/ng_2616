@@ -9,6 +9,7 @@ import { deleteLocalNotebooks, getRepository, isCloudUnavailable, type NotebookS
 import { buildNotebook, presetText, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
 import { deleteOwnerResources } from '@/core/resources/db';
 import { addBuiltinResource } from '@/core/resources/service';
+import { APP_BUILD_VERSION } from '@/core/version';
 import { useLocale, useT } from '@/i18n';
 import { Button } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
@@ -85,7 +86,12 @@ export function NotebookHome() {
           <Sigma size={19} />
         </span>
         <div className="flex-1">
-          <div className="text-[16px] font-semibold">{t('app.name')}</div>
+          <div className="flex items-center gap-2">
+            <span className="text-[16px] font-semibold">{t('app.name')}</span>
+            <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+              {APP_BUILD_VERSION}
+            </span>
+          </div>
           <div className="text-[12px] text-muted">{user?.email}</div>
         </div>
         <Button variant="ghost" icon={<Languages size={18} />} onClick={() => setLocale(locale === 'en' ? 'ja' : 'en')}>

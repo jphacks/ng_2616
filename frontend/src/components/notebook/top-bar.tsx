@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { demoBinding } from '@/core/presets';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useLocale, useT } from '@/i18n';
+import { APP_BUILD_VERSION } from '@/core/version';
 import { Button } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { SegmentedTabs } from '@/ui/tabs';
@@ -62,11 +63,9 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
           <CasPill state={cas.state} />
           {demo && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-strong">{t('top.demo')}</span>}
           {mockAi && <span className="rounded-full bg-unknown-soft px-2 py-0.5 font-medium text-unknown">{t('top.mock')}</span>}
-          {process.env.NEXT_PUBLIC_COMMIT_SHA && (
-            <span className="font-mono text-[10px] text-faint" title="Build Commit">
-              #{process.env.NEXT_PUBLIC_COMMIT_SHA}
-            </span>
-          )}
+          <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+            {APP_BUILD_VERSION}
+          </span>
         </div>
       </div>
       <div className="absolute left-1/2 -translate-x-1/2 max-md:static max-md:translate-x-0">
