@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 import type { CandidateDraftResult } from '@mn/contracts';
+import { SUGGEST_ATTEMPTS } from '../../../src/core/suggest/attempts';
 import { line, settled, stroke } from './fixtures';
 import { candidateOf, casStatus, deferred, draftFor, fakeApi, fakeCas, lineOf, rig, tick, until, writeStroke, type Rig } from './harness';
 
@@ -181,9 +182,9 @@ describe('results that no longer match (R15, R16, R17)', () => {
     assert.equal(r.store.getState().suggesting, false);
   });
 
-  it('G5 adding a line cancels the request', async () => {
+  it('G5 changing the problem (marking a line as given) cancels the request', async () => {
     const { gate, call } = await inFlight();
-    r.engine.newLine();
+    r.engine.setGiven('L1', true);
     assert.equal(call.signal!.aborted, true);
     gate.resolve(draftFor(call.input, 'x = 2'));
     await tick();
@@ -228,15 +229,16 @@ describe('results that no longer match (R15, R16, R17)', () => {
 });
 
 describe('checker verdicts on candidates (ADR 0003)', () => {
-  it('G7 a wrong candidate is never shown; it is asked for again once, without the rejected one', async () => {
+  it('G7 a wrong candidate is never shown; it is asked for again, up to three calls, without the rejected ones', async () => {
     let n = 0;
     r = rig();
     r.api.answer = (input) => draftFor(input, `x = ${n + 2}`, `sha256:${String(n++ + 1).repeat(64)}`);
     r.cas.answer = () => casStatus('wrong');
     await r.engine.requestSuggestion(true);
-    await until(() => r.api.suggestCalls.length === 2 && !r.store.getState().suggesting && candidateOf(r) === null, 'both attempts to end');
-    assert.equal(r.api.suggestCalls.length, 2, 'exactly one regeneration');
+    await until(() => r.api.suggestCalls.length === SUGGEST_ATTEMPTS && !r.store.getState().suggesting && candidateOf(r) === null, 'all attempts to end');
+    assert.equal(r.api.suggestCalls.length, SUGGEST_ATTEMPTS, 'retried with the checker feedback, then given up (PR #50)');
     assert.deepEqual(r.api.suggestCalls[1]!.input.rejected_hashes, [`sha256:${'1'.repeat(64)}`]);
+    assert.deepEqual(r.api.suggestCalls[2]!.input.rejected_hashes, [`sha256:${'1'.repeat(64)}`, `sha256:${'2'.repeat(64)}`]);
     assert.ok(r.store.getState().rejection, 'the "checker rejected a suggestion" chip is available');
   });
 
