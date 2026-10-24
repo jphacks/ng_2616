@@ -190,7 +190,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     if (!c) return;
 
     const onDown = (e: PointerEvent) => {
-      rectRef.current = c.getBoundingClientRect();
+      if (!rectRef.current) rectRef.current = c.getBoundingClientRect();
       if (e.pointerType === 'pen') markPenSeen();
       if (e.pointerType === 'touch' && fingersDown() > 1) return;
 

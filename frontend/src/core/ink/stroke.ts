@@ -35,16 +35,30 @@ export function drawStroke(ctx: CanvasRenderingContext2D, points: StrokePoint[],
     ctx.fill();
     return;
   }
-  let bySize = last ? pathCache.get(points) : undefined;
-  let path = bySize?.get(size);
-  if (!path) {
-    path = new Path2D(outlineToPath(strokeOutline(points, size, last)));
-    if (last) {
+  if (last) {
+    let bySize = pathCache.get(points);
+    let path = bySize?.get(size);
+    if (!path) {
+      path = new Path2D(outlineToPath(strokeOutline(points, size, last)));
       if (!bySize) pathCache.set(points, (bySize = new Map()));
       bySize.set(size, path);
     }
+    ctx.fill(path);
+    return;
   }
-  ctx.fill(path);
+
+  // Live drawing: bypass SVG string generation and Path2D parsing for zero-latency, GC-free direct rendering
+  const outline = strokeOutline(points, size, false);
+  if (outline.length < 2) return;
+  const avg = (a: number, b: number) => (a + b) / 2;
+  ctx.beginPath();
+  ctx.moveTo(outline[0]![0]!, outline[0]![1]!);
+  for (let i = 0; i < outline.length; i++) {
+    const [x0, y0] = outline[i]!;
+    const [x1, y1] = outline[(i + 1) % outline.length]!;
+    ctx.quadraticCurveTo(x0!, y0!, avg(x0!, x1!), avg(y0!, y1!));
+  }
+  ctx.fill();
 }
 
 function distToSegment(px: number, py: number, a: StrokePoint, b: StrokePoint): number {

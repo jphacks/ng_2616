@@ -1,1 +1,1 @@
-export const APP_BUILD_VERSION = 'v-ink-map-1024';
+export const APP_BUILD_VERSION = 'v-ink-perf-1025';
