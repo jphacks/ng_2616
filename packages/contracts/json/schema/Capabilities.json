@@ -73,6 +73,12 @@
       "properties": {
         "available": {
           "type": "boolean"
+        },
+        "toolchain": {
+          "type": "string"
+        },
+        "mathlib": {
+          "type": "string"
         }
       },
       "required": [

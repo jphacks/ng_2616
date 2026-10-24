@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { CAS_CASES, buildCasPayload, demoCases } from '../fixtures';
 import * as api from '../src/api';
+import * as lean from '../src/lean';
 import * as schemas from '../src/schemas';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'json');
@@ -30,6 +31,8 @@ const exported: Record<string, z.ZodType> = {
   OcrPageResult: api.OcrPageResultSchema,
   Capabilities: api.CapabilitiesSchema,
   Health: api.HealthSchema,
+  LeanCheckInput: lean.LeanCheckInputSchema,
+  LeanCheckResult: lean.LeanCheckResultSchema,
 };
 for (const [name, schema] of Object.entries(exported)) {
   writeFileSync(join(root, 'schema', `${name}.json`), `${JSON.stringify(z.toJSONSchema(schema, { unrepresentable: 'any' }), null, 2)}\n`);
