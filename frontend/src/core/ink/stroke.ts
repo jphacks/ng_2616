@@ -23,6 +23,9 @@ export function outlineToPath(outline: number[][]): string {
   return `${d} Z`;
 }
 
+// finished strokes never change, so their outline is computed once instead of on every frame
+const pathCache = new WeakMap<StrokePoint[], Path2D>();
+
 export function drawStroke(ctx: CanvasRenderingContext2D, points: StrokePoint[], size = INK_SIZE, last = true) {
   if (points.length === 0) return;
   if (points.length === 1) {
@@ -32,7 +35,13 @@ export function drawStroke(ctx: CanvasRenderingContext2D, points: StrokePoint[],
     ctx.fill();
     return;
   }
-  ctx.fill(new Path2D(outlineToPath(strokeOutline(points, size, last))));
+  const cacheable = last && size === INK_SIZE;
+  let path = cacheable ? pathCache.get(points) : undefined;
+  if (!path) {
+    path = new Path2D(outlineToPath(strokeOutline(points, size, last)));
+    if (cacheable) pathCache.set(points, path);
+  }
+  ctx.fill(path);
 }
 
 function distToSegment(px: number, py: number, a: StrokePoint, b: StrokePoint): number {
