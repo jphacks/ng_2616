@@ -333,6 +333,14 @@
         "type": "string"
       }
     },
+    "rejected_latex": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 4000
+      }
+    },
     "reference": {
       "maxItems": 16,
       "type": "array",

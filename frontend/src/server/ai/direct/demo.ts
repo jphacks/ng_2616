@@ -45,6 +45,9 @@ export async function scriptedSuggestion(input: SuggestInput, signal: AbortSigna
     }
     const segments = segmentsFromSource(step.src, OPTS);
     if (lineHashes.has(hashOf(toInputSegments(segments)))) continue;
+    // the deliberately wrong step is offered once: never again after its correction is in the notebook
+    const next = SCHRODINGER_SCRIPT[index + 1];
+    if (step.rejected && next && lineHashes.has(hashOf(toInputSegments(segmentsFromSource(next.src, OPTS))))) continue;
     const result = finalizeCandidate({ ...input, mode: 'NEXT_STEP' }, segments, step.role, true);
     if (result.state === 'NONE') continue; // rejected before (the wrong step) → offer the next
     await sleep(800 + ((index * 137) % 800), signal);

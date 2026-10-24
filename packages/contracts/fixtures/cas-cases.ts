@@ -192,6 +192,19 @@ export function demoCases(): CasCase[] {
       parent: accepted[accepted.length - 1]?.id,
       expect: step.expect,
     });
+    if (step.id === 'a10') {
+      // regression: once φ(t) = e^{-iEt/ħ} is established, the sign-flipped version must stay wrong
+      const wrong = SCHRODINGER_SCRIPT.find((s) => s.rejected)!;
+      out.push({
+        id: 'DEMO-a9x-after-a9',
+        note: 'wrong step proposed again after its correction',
+        problem,
+        lines: accepted.map((l) => ({ ...l })),
+        target: { id: 'a9x2', src: wrong.src, role: wrong.role },
+        parent: accepted[accepted.length - 1]?.id,
+        expect: { status: 'wrong' },
+      });
+    }
     if (!step.rejected) {
       accepted.push({
         id: step.id,

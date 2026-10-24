@@ -373,6 +373,15 @@ def _mentions_defined(lhs: Any, ctx: Context) -> bool:
     return isinstance(lhs, str) and lhs in env.sym_defs
 
 
+def _at_own_variables(lhs: Any, ctx: Context) -> bool:
+    if is_node(lhs) and lhs[0] == "Prime":
+        lhs = lhs[1]
+    if not (is_node(lhs) and lhs[0] == "Apply"):
+        return False
+    args = list(lhs[2:]) or ctx.env.functions.get(lhs[1], [])
+    return bool(args) and all(isinstance(a, str) and a in ctx.env.independent for a in args)
+
+
 def equation_from_context(ir: Any, ctx: Context) -> SegResult | None:
     """Value of a defined function/symbol/derivative (spec §9.2 row 7). Only identity claims:
     any free unknown left after substitution makes it a constraint, handled by relation_compare."""
@@ -382,7 +391,9 @@ def equation_from_context(ir: Any, ctx: Context) -> SegResult | None:
     L, u1 = conv_expr(ir[1], ctx)
     R, u2 = conv_expr(ir[2], ctx)
     free = sp.sympify(L).free_symbols | sp.sympify(R).free_symbols
-    if any(not (env.is_parameter(s.name) or s.name in env.independent) for s in free):
+    # φ(t) = … or f(x) = … at the function's own variables is an identity claim (other symbols are
+    # parameters); at specific points with unknowns left over (ψ(L) = 0) it is a constraint
+    if not _at_own_variables(ir[1], ctx) and any(not (env.is_parameter(s.name) or s.name in env.independent) for s in free):
         return None
     res = compare_values(L, R, ctx, None, ir[2], "EQUATION_FROM_CONTEXT")
     res.depends_on |= u1 | u2
