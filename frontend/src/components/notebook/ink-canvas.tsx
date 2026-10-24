@@ -240,16 +240,24 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   };
 
   return (
-    <div ref={wrap} className="relative w-full" style={{ height, touchAction: 'none' }}>
+    <div ref={wrap} className="relative w-full select-none" style={{ height, touchAction: 'none', WebkitUserSelect: 'none' }}>
       <canvas
         ref={canvas}
-        className="absolute inset-0 h-full w-full"
-        style={{ touchAction: 'none', cursor: editable ? (tool === 'eraser' ? 'cell' : tool === 'view' ? 'grab' : 'crosshair') : 'default' }}
+        className="absolute inset-0 h-full w-full select-none"
+        style={{
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
+          cursor: editable ? (tool === 'eraser' ? 'cell' : tool === 'view' ? 'grab' : 'crosshair') : 'default',
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finish}
         onPointerCancel={finish}
         onLostPointerCapture={finish}
+        onDoubleClick={(e) => e.preventDefault()}
+        onContextMenu={(e) => e.preventDefault()}
       />
     </div>
   );
