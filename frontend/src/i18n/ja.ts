@@ -311,6 +311,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.casLoading': 'チェッカーを準備中です。',
   'toast.writeFirst': 'まず一行書いて確定してください。',
   'toast.confirmFirst': '書いている行を先に確定してください。',
+  'toast.cannotContinue': '最後の行を検証できなかったため、次の一歩を提案できません。先に書き直してください。',
   'toast.noSuggestion': 'この行に対する提案はありません。',
   'toast.suggestFailed': '提案を生成できませんでした。',
   'toast.waitForChecks': '現在の検証が終わるまでお待ちください。',

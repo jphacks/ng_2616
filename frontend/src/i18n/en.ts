@@ -309,6 +309,7 @@ export const en = {
   'toast.casLoading': 'The checker is still loading.',
   'toast.writeFirst': 'Write and confirm a line first.',
   'toast.confirmFirst': 'Confirm the line you are writing first.',
+  'toast.cannotContinue': 'The last line could not be checked, so there is no next step to suggest. Rewrite it first.',
   'toast.noSuggestion': 'No suggestion for this step.',
   'toast.suggestFailed': 'The suggestion could not be generated.',
   'toast.waitForChecks': 'Wait for the current checks to finish.',

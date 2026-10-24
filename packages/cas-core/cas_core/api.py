@@ -1,7 +1,8 @@
 """Worker entry point. The browser CAS controller calls verify_json() with validated IR only.
 
 Payload:
-  {"lines": [ContextLine], "target": Target, "parent_id": str | None}
+  {"lines": [ContextLine], "target": Target, "parent_id": str | None, "claim"?: "identity"}
+  claim "identity": the target completes an "LHS =" line, so its sides must agree as expressions.
 ContextLine:
   {"id", "role", "segments": [InputSegment], "status", "unverified_ancestors": [id],
    "segment_results": [{"segment_index", "status", "reason"?, "method"?, "goal"?}]}
@@ -17,7 +18,7 @@ import traceback
 import sympy
 
 from . import RULES_VERSION
-from .checks import SegResult, verify_segment
+from .checks import SegResult, solution_list, verify_segment
 from .context import build_context
 from .hints import hints_for
 
@@ -48,7 +49,13 @@ def verify(payload: dict) -> dict:
         for i, seg in enumerate(target.get("segments") or []):
             if seg.get("type") != "math":
                 continue
-            results.append((i, verify_segment(seg["expr"], seg.get("notation", "plain"), target.get("role", "step"), ctx)))
+            results.append((i, verify_segment(seg["expr"], seg.get("notation", "plain"), target.get("role", "step"), ctx, payload.get("claim"))))
+        plain = [seg for seg in target.get("segments") or [] if seg.get("type") == "math" and seg.get("notation", "plain") == "plain"]
+        if len(results) >= 2 and len(plain) == len(results) and any(r.status in ("wrong", "unknown") for _, r in results):
+            # "x + 3 = 0 または x + 4 = 0": one formula per segment, read together as the solutions
+            listed = solution_list([seg["expr"] for seg in plain], ctx)
+            if listed is not None:
+                results = [(i, listed) for i, _ in results]
         declares = {r.reason for _, r in results}
         if not results:
             primary = SegResult("none", reason="TEXT_ONLY")

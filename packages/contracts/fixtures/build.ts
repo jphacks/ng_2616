@@ -39,5 +39,6 @@ export function buildCasPayload(c: CasCase) {
     lines,
     target: { id: c.target.id, role: c.target.role ?? 'step', segments: targetSegments },
     parent_id: c.parent ?? lines[lines.length - 1]?.id ?? null,
+    ...(c.claim ? { claim: c.claim } : {}),
   };
 }
