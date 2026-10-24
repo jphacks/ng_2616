@@ -25,7 +25,7 @@ export function RichText({ text, className }: { text: string; className?: string
         }
         const heading = /^(#{1,3})\s+(.*)$/.exec(trimmed);
         if (heading) {
-          const size = heading[1]!.length === 1 ? 'text-xl font-semibold' : 'text-lg font-semibold';
+          const size = heading[1]!.length === 1 ? 'text-3xl font-semibold' : 'text-2xl font-semibold';
           return <h3 key={i} className={size}>{inline(heading[2]!)}</h3>;
         }
         return <p key={i}>{inline(trimmed)}</p>;

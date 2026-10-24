@@ -41,7 +41,7 @@ const TEXT: Record<PresetId, Record<UiLang, PresetText>> = {
   },
 };
 
-export const PRESET_IDS: PresetId[] = ['schrodinger', 'blank', 'integral', 'expansion', 'solutions'];
+export const PRESET_IDS: PresetId[] = ['blank', 'schrodinger', 'integral', 'expansion', 'solutions'];
 
 export function presetText(id: PresetId, lang: UiLang): PresetText {
   return TEXT[id][lang];

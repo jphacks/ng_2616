@@ -23,8 +23,8 @@ export function outlineToPath(outline: number[][]): string {
   return `${d} Z`;
 }
 
-// finished strokes never change, so their outline is computed once instead of on every frame
-const pathCache = new WeakMap<StrokePoint[], Path2D>();
+// finished strokes never change, so their outline is computed once per width instead of on every frame
+const pathCache = new WeakMap<StrokePoint[], Map<number, Path2D>>();
 
 export function drawStroke(ctx: CanvasRenderingContext2D, points: StrokePoint[], size = INK_SIZE, last = true) {
   if (points.length === 0) return;
@@ -35,11 +35,14 @@ export function drawStroke(ctx: CanvasRenderingContext2D, points: StrokePoint[],
     ctx.fill();
     return;
   }
-  const cacheable = last && size === INK_SIZE;
-  let path = cacheable ? pathCache.get(points) : undefined;
+  let bySize = last ? pathCache.get(points) : undefined;
+  let path = bySize?.get(size);
   if (!path) {
     path = new Path2D(outlineToPath(strokeOutline(points, size, last)));
-    if (cacheable) pathCache.set(points, path);
+    if (last) {
+      if (!bySize) pathCache.set(points, (bySize = new Map()));
+      bySize.set(size, path);
+    }
   }
   ctx.fill(path);
 }
