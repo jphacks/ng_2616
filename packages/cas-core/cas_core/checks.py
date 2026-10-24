@@ -95,7 +95,7 @@ def conv_rel(ir: Any, ctx: Context) -> tuple[Rel | None, set[str]]:
 # ---------------------------------------------------------------- entry point
 
 
-def verify_segment(ir: Any, notation: str, role: str, ctx: Context) -> SegResult:
+def verify_segment(ir: Any, notation: str, role: str, ctx: Context, claim: str | None = None) -> SegResult:
     declares = declaration_kind(ir) if notation == "plain" else None
     if declares:
         return _none(declares, declares)
@@ -118,6 +118,8 @@ def verify_segment(ir: Any, notation: str, role: str, ctx: Context) -> SegResult
             return expression_equivalence(ir, ctx)
         if ir[0] == "And":
             return and_target(ir, ctx)
+        if claim == "identity" and ir[0] == "Equal":
+            return completion_check(ir, ctx)
         return relation_target(ir, ctx)
     except CasUnreadable:
         return _unknown("UNREADABLE")
@@ -368,8 +370,54 @@ def constant_evaluation(ir: Any, ctx: Context) -> SegResult | None:
     return res
 
 
+def _identity_sides(ir: Any, ctx: Context) -> tuple[sp.Expr, sp.Expr, set[str]] | None:
+    if not (is_node(ir) and ir[0] == "Equal" and ir[2] is not None):
+        return None
+    try:
+        L, u1 = conv_expr(ir[1], ctx)
+        R, u2 = conv_expr(ir[2], ctx)
+    except CasUnsupported:
+        return None  # e.g. x = ±2 is a solution set, handled by relation_compare
+    return L, R, u1 | u2
+
+
+def identity_check(ir: Any, ctx: Context) -> SegResult | None:
+    """Both sides equal as expressions, e.g. x^2 - 5x + 6 = (x - 2)(x - 3): true on its own,
+    whatever the earlier lines say (comparing its solution set, all x, with theirs is meaningless)."""
+    sides = _identity_sides(ir, ctx)
+    if sides is None:
+        return None
+    L, R, used = sides
+    if not is_zero(_doit(L) - _doit(R)):
+        return None
+    res = compare_values(L, R, ctx, ir[1], ir[2], "IDENTITY")
+    res.depends_on |= used
+    return res
+
+
+def _is_name(e: Any) -> bool:
+    return isinstance(e, str) or (is_node(e) and e[0] in ("Apply", "Prime"))
+
+
+def completion_check(ir: Any, ctx: Context) -> SegResult:
+    """A completed "LHS =": the student asked what LHS equals, so the claim is an identity.
+    Follows-from-context steps still count; otherwise both sides must agree as expressions.
+    "k =" or "ψ(x) =" (a name, not an expression) and lines with unknown functions keep the usual checks."""
+    r = relation_target(ir, ctx)
+    sides = _identity_sides(ir, ctx)
+    if r.status == "ok" or sides is None or _is_name(ir[1]):
+        return r
+    L, R, used = sides
+    Ld, Rd = _doit(L), _doit(R)
+    if Ld.atoms(AppliedUndef, sp.Derivative) or Rd.atoms(AppliedUndef, sp.Derivative):
+        return r
+    res = compare_values(L, R, ctx, ir[1], ir[2], "IDENTITY")
+    res.depends_on |= used
+    return res
+
+
 def relation_target(ir: Any, ctx: Context) -> SegResult:
-    for check in (equation_from_context, constant_evaluation, separation_check, solution_check):
+    for check in (equation_from_context, constant_evaluation, identity_check, separation_check, solution_check):
         r = check(ir, ctx)
         if r is not None:
             return r
@@ -377,6 +425,9 @@ def relation_target(ir: Any, ctx: Context) -> SegResult:
 
 
 def and_target(ir: Any, ctx: Context) -> SegResult:
+    listed = solution_list(list(ir[1:]), ctx)
+    if listed is not None:
+        return listed
     T, _ = conv_rel(ir, ctx)
     if T is not None and not rel_functions(T):
         r = system_compare(T, ctx)
@@ -692,9 +743,14 @@ def _transcendental_in(rel: Rel, x: sp.Symbol) -> bool:
 
 
 def solution_set_compare(T: Rel, S: Rel, x: sp.Symbol, ctx: Context) -> SegResult | None:
-    goal = "SOLUTION_SET_EQUIVALENCE"
     Ts = None if _transcendental_in(T, x) else _solve(T, x, ctx)
     Ss = None if _transcendental_in(S, x) else _solve(S, x, ctx)
+    return _compare_solution_sets(Ts, Ss, S, x, ctx)
+
+
+def _compare_solution_sets(
+    Ts: sp.Set | None, Ss: sp.Set | None, S: Rel, x: sp.Symbol, ctx: Context, goal: str = "SOLUTION_SET_EQUIVALENCE",
+) -> SegResult | None:
     if Ts is not None and Ss is not None:
         eq = _sets_equal(Ts, Ss)
         if eq is True:
@@ -715,11 +771,76 @@ def solution_set_compare(T: Rel, S: Rel, x: sp.Symbol, ctx: Context) -> SegResul
             }
             return SegResult("wrong", goal=goal, method="sets", category=category, evidence=[evidence])
     # implication only: every solution of this line satisfies the source, but not shown equivalent
-    if isinstance(Ts, sp.FiniteSet) and len(Ts) > 0 and S.op == "Equal":
+    if isinstance(Ts, sp.FiniteSet) and len(Ts) > 0 and S is not None and S.op == "Equal":
         dS = _doit(S.lhs) - _doit(S.rhs)
         if all(is_zero(dS.subs(x, t)) for t in Ts):
             return _unknown("SUBSET_OF_SOLUTIONS", goal, conditions=["other solutions were not ruled out"])
     return None
+
+
+def _single_unknown_equations(parts: list[Any], ctx: Context) -> tuple[list[Rel], sp.Symbol, set[str]] | None:
+    """Equations that all constrain the same one unknown, e.g. x + 3 = 0, x + 4 = 0."""
+    rels: list[Rel] = []
+    used: set[str] = set()
+    for p in parts:
+        if not (is_node(p) and p[0] == "Equal" and p[2] is not None):
+            return None
+        try:
+            r, u = conv_rel(p, ctx)
+        except (CasUnsupported, CasUnreadable, CasIncomplete):
+            return None
+        if r is None or r.op not in ("Equal", "EqualAny") or rel_functions(r):
+            return None
+        rels.append(r)
+        used |= u
+    unknowns = [{s for s in rel_free_symbols(r) if not ctx.env.is_parameter(s.name)} for r in rels]
+    if any(len(u) != 1 for u in unknowns) or len(set().union(*unknowns)) != 1:
+        return None
+    return rels, next(iter(unknowns[0])), used
+
+
+def _union_solutions(rels: list[Rel], x: sp.Symbol, ctx: Context) -> sp.Set | None:
+    sets = [None if _transcendental_in(r, x) else _solve(r, x, ctx) for r in rels]
+    return None if any(s is None for s in sets) else sp.Union(*sets)
+
+
+def solution_list(parts: list[Any], ctx: Context) -> SegResult | None:
+    """Equations in one unknown listed on a line ("x + 3 = 0 または x + 4 = 0", "x = -3, x = -4")
+    give its solutions: a disjunction, compared by the union of their solution sets."""
+    if len(parts) < 2:
+        return None
+    found = _single_unknown_equations(parts, ctx)
+    if found is None:
+        return None
+    rels, x, used = found
+    Ts = _union_solutions(rels, x, ctx)
+    if Ts is None:
+        return None
+    by_line: dict[str, list[Fact]] = {}
+    for f in _ranked_facts(ctx):
+        by_line.setdefault(f.line_id, []).append(f)
+    for lid, facts in by_line.items():
+        source = _single_unknown_equations([f.ir for f in facts], ctx) if len(facts) > 1 else None
+        if source is not None:
+            s_rels, sx, us = source
+            S = None
+        else:
+            try:
+                S, us = conv_rel(facts[0].ir, ctx)
+            except (CasUnsupported, CasUnreadable, CasIncomplete):
+                continue
+            if S is None or S.op not in ("Equal", "EqualAny") or rel_functions(S) or _is_trivial(S):
+                continue
+            s_rels, sx = [S], x
+        if sx != x or x not in set().union(*(rel_free_symbols(r) for r in s_rels)):
+            continue
+        r = _compare_solution_sets(Ts, _union_solutions(s_rels, x, ctx), S, x, ctx, "SOLUTION_LIST")
+        if r is None:
+            continue
+        r.source_line_id = lid
+        r.depends_on |= {lid} | us | used
+        return r
+    return _no_parent("SOLUTION_LIST", ctx)
 
 
 def _witnesses(Ts: sp.Set, Ss: sp.Set, x: sp.Symbol, ctx: Context) -> tuple[list, list]:
