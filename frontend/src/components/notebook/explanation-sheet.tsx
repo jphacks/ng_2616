@@ -1,6 +1,6 @@
 'use client';
 
-import type { Evidence, Line, Notebook, Proof } from '@mn/contracts';
+import { leanOf, type Evidence, type Line, type Notebook, type Proof } from '@mn/contracts';
 import clsx from 'clsx';
 import { CornerUpLeft, Flag, Lightbulb, Search, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
@@ -12,6 +12,7 @@ import { Sheet } from '@/ui/sheet';
 import { Tex } from '@/ui/tex';
 import { useEngine } from './engine-context';
 import { Segments } from './segments';
+import { LeanBody, LeanTheoremNote } from './lean-body';
 import { StatusBadge } from './status';
 
 const RELATION_GOALS = new Set(['SOLUTION_CHECK', 'EQUATION_EQUIVALENCE']);
@@ -173,8 +174,12 @@ export function ExplanationSheet() {
   const proof = line?.verified?.proof;
   if (!line || !proof) return null;
   const n = lineNumber(nb, line.id) ?? 0;
-  const title =
-    proof.status === 'wrong'
+  // a proof line Lean checked shows Lean's verdict, not the CAS's "cannot read this" (ADR 0007)
+  const lean = leanOf(line);
+  const leanChecked = lean?.proof ? lean : undefined;
+  const title = leanChecked
+    ? t('sheet.leanTitle', { n })
+    : proof.status === 'wrong'
       ? t('sheet.wrongTitle', { category: t(`cat.${proof.category ?? 'UNCLASSIFIED'}`), n })
       : proof.status === 'ok'
         ? t(proof.unverified_ancestors.length ? 'sheet.localTitle' : 'sheet.okTitle', { n })
@@ -185,7 +190,7 @@ export function ExplanationSheet() {
     <Sheet
       open
       onClose={close}
-      title={<span className={clsx(proof.status === 'wrong' && 'text-wrong-strong')}>{title}</span>}
+      title={<span className={clsx(!leanChecked && proof.status === 'wrong' && 'text-wrong-strong')}>{title}</span>}
       footer={
         proof.status === 'wrong' && line.state === 'SETTLED' ? (
           <Button variant="primary" icon={<CornerUpLeft size={18} />} className="w-full" onClick={() => engine.startRevision(line.id)}>
@@ -199,7 +204,14 @@ export function ExplanationSheet() {
           <Segments segments={line.segments} />
           <StatusBadge line={line} ancestor={proof.unverified_ancestors[0] ? lineNumber(nb, proof.unverified_ancestors[0]) : null} />
         </div>
-        {proof.status === 'wrong' ? <WrongBody line={line} nb={nb} proof={proof} /> : <DetailBody line={line} nb={nb} proof={proof} />}
+        {leanChecked ? (
+          <LeanBody line={line} nb={nb} lean={leanChecked} />
+        ) : proof.status === 'wrong' ? (
+          <WrongBody line={line} nb={nb} proof={proof} />
+        ) : (
+          <DetailBody line={line} nb={nb} proof={proof} />
+        )}
+        {isGiven(line) && <LeanTheoremNote nb={nb} />}
         {line.state === 'SETTLED' && (
           <div className="space-y-2 border-t border-border pt-4">
             <Button

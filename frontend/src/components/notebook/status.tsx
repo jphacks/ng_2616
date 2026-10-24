@@ -1,6 +1,6 @@
 'use client';
 
-import type { Line } from '@mn/contracts';
+import { leanOf, type Line, type LineLean } from '@mn/contracts';
 import clsx from 'clsx';
 import { CircleCheck, CircleDashed, CircleHelp, CircleMinus, CircleX } from 'lucide-react';
 import { proofOf } from '@/core/notebook/model';
@@ -8,7 +8,30 @@ import { useT } from '@/i18n';
 
 export type Tone = 'ok' | 'local' | 'wrong' | 'unknown' | 'none';
 
+/** Lean's verdict on a proof line (ADR 0007): never "wrong", since an unproved step is not a false one. */
+function leanTone(lean: LineLean): Tone {
+  if (lean.step === 'ok') return lean.after_failure ? 'local' : 'ok';
+  if (lean.step === 'empty') return 'none';
+  return 'unknown';
+}
+
+function leanLabel(lean: LineLean): string {
+  switch (lean.step) {
+    case 'ok':
+      return lean.after_failure ? 'status.leanAfterFailure' : lean.proof === 'proved' ? 'status.leanProved' : 'status.leanStep';
+    case 'empty':
+      return 'status.leanEmpty';
+    case 'failed':
+      return 'status.leanFailed';
+    case 'unchecked':
+      return 'status.leanUnchecked';
+  }
+  return lean.proof === 'unavailable' ? 'status.leanUnavailable' : lean.proof === 'timeout' ? 'status.leanTimeout' : 'status.leanInvalid';
+}
+
 export function toneOf(line: Line): Tone | null {
+  const lean = leanOf(line);
+  if (lean?.proof) return leanTone(lean);
   const p = proofOf(line);
   if (!p) return null;
   if (p.status === 'ok') return p.unverified_ancestors.length ? 'local' : 'ok';
@@ -38,6 +61,11 @@ export function useStatusLabel() {
   const t = useT();
   /** `ancestor` is the visible number of the first unverified line this one depends on. */
   return (line: Line, ancestor: number | null): { label: string; detail?: string } => {
+    const lean = leanOf(line);
+    if (lean?.proof) {
+      const why = lean.step === 'ok' || lean.step === 'empty' ? undefined : lean.message?.split('\n')[0]?.slice(0, 160);
+      return { label: t(leanLabel(lean)), ...(why ? { detail: why } : {}) };
+    }
     const p = proofOf(line);
     if (!p) return { label: '' };
     switch (p.status) {

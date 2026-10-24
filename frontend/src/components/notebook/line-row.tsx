@@ -33,6 +33,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   const active = useNotebook((s) => s.activeLineId === line.id);
   const candidate = useNotebook((s) => s.candidate);
   const rejection = useNotebook((s) => s.rejection);
+  const leanChecking = useNotebook((s) => !!s.leanPending[line.id]);
 
   const ghostHere =
     candidate &&
@@ -179,6 +180,11 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </span>
         )}
         {line.state === 'SETTLED' && <StatusBadge line={line} ancestor={ancestor} onClick={openDetails} />}
+        {line.state === 'SETTLED' && leanChecking && (
+          <span className="inline-flex items-center gap-2 text-sm text-muted" data-lean="checking">
+            <Spinner size={14} /> {t('line.leanChecking')}
+          </span>
+        )}
         {line.state === 'SETTLED' && line.verified?.proof.status === 'wrong' && (
           <Button size="sm" variant="ghost" icon={<CornerUpLeft size={15} />} onClick={() => engine.startRevision(line.id)}>
             {t('line.revise')}
