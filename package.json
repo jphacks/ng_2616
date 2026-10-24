@@ -1,0 +1,25 @@
+{
+  "name": "math-notebook",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter frontend dev",
+    "build": "pnpm --filter frontend build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter frontend test:e2e",
+    "lint": "pnpm -r lint",
+    "contracts:emit": "pnpm --filter @mn/contracts emit",
+    "cas:build": "node packages/cas-core/build.mjs",
+    "cas:test": "cd packages/cas-core && uv run pytest",
+    "backend:test": "cd backend && uv run pytest"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
