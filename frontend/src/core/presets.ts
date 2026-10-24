@@ -1,5 +1,5 @@
 import { SCHEMA_VERSION, declaredFunctions, segmentsFromSource, type Line, type Notebook, type Role, type UiLang } from '@mn/contracts';
-import { SCHRODINGER_GIVEN } from '@mn/contracts/fixtures';
+import { TDSE_LATEX } from '@mn/contracts/fixtures';
 import { uuid } from '@/core/ids';
 import { newDraftLine } from '@/core/notebook/model';
 
@@ -53,25 +53,35 @@ interface OpeningLine {
   role: Extract<Role, 'premise' | 'definition'>;
 }
 
-const given = (latex: string): OpeningLine => ({ src: `$${latex}$`, role: 'premise' });
+const given = (src: string): OpeningLine => ({ src, role: 'premise' });
+
+const SCHRODINGER_FUNCTIONS = '$\\Psi(x,t)$ $\\psi(x)$ $\\phi(t)$ $V(x)$';
+const SCHRODINGER_CONDITIONS = '$m > 0, L > 0, n \\in \\mathbb{Z}^{+}, \\psi(x) \\neq 0, \\phi(t) \\neq 0$';
 
 /**
- * The lines a template opens with after its statement, one formula each: what the problem card
- * used to show (given equations, definitions, assumptions, functions). A student can write the
- * same lines in an empty notebook; assumptions, function declarations and definitions are
- * recognised without the given mark, which only equations such as the TDSE need.
+ * The lines a template opens with after its statement: what the problem card used to show, kept
+ * compact: each given equation and definition on its own line, the functions on one line and the
+ * conditions on one more (or both on one). A student can write the same lines in an empty
+ * notebook; assumptions, function declarations and definitions are recognised without the given
+ * mark, which only equations such as the TDSE need.
  */
-const OPENING: Record<PresetId, OpeningLine[]> = {
-  blank: [],
-  schrodinger: SCHRODINGER_GIVEN.map(given),
-  integral: [{ src: '$I(a) = \\int_0^a (3x^2 + 2x) \\, dx$', role: 'definition' }, given('a > 0'), given('I(a)')],
-  expansion: [],
-  solutions: [],
+const OPENING: Record<PresetId, Record<UiLang, OpeningLine[]>> = {
+  blank: { en: [], ja: [] },
+  schrodinger: {
+    en: [given(`$${TDSE_LATEX}$`), given(`Given ${SCHRODINGER_FUNCTIONS}`), given(`where ${SCHRODINGER_CONDITIONS}`)],
+    ja: [given(`$${TDSE_LATEX}$`), given(`関数 ${SCHRODINGER_FUNCTIONS}`), given(`ただし ${SCHRODINGER_CONDITIONS}`)],
+  },
+  integral: {
+    en: [{ src: '$I(a) = \\int_0^a (3x^2 + 2x) \\, dx$', role: 'definition' }, given('Given $I(a)$ where $a > 0$')],
+    ja: [{ src: '$I(a) = \\int_0^a (3x^2 + 2x) \\, dx$', role: 'definition' }, given('関数 $I(a)$ ただし $a > 0$')],
+  },
+  expansion: { en: [], ja: [] },
+  solutions: { en: [], ja: [] },
 };
 
 function openingLines(id: PresetId, lang: UiLang): Line[] {
   const statement = TEXT[id][lang].statement;
-  const sources: OpeningLine[] = [...(statement ? [{ src: statement, role: 'premise' as const }] : []), ...OPENING[id]];
+  const sources: OpeningLine[] = [...(statement ? [given(statement)] : []), ...OPENING[id][lang]];
   // declarations hold for the whole page: read every line with the functions any of them declares
   const functions = declaredFunctions(sources.map((s) => ({ state: 'SETTLED', segments: segmentsFromSource(s.src) })));
   return sources.map((s) => ({ ...newDraftLine(), role: s.role, state: 'SETTLED', segments: segmentsFromSource(s.src, { functions }) }));

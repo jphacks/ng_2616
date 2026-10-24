@@ -1,6 +1,7 @@
 import 'server-only';
-import { hashOf, toInputSegments, type CandidateDraftResult, type MathJSON, type Role, type Segment, type SuggestInput } from '@mn/contracts';
+import { toInputSegments, type CandidateDraftResult, type MathJSON, type Role, type Segment, type SuggestInput } from '@mn/contracts';
 import { printSegmentLatex } from '@mn/contracts/ir';
+import { candidateHash, lineHash } from '@/core/candidates/hash';
 
 const none = (reason: string, mock: boolean): CandidateDraftResult => ({ state: 'NONE', reason, mock });
 
@@ -10,8 +11,9 @@ function sameIr(a: unknown, b: unknown): boolean {
 
 /**
  * Server-side candidate guards (spec §11): discard prose-only output, a changed LHS,
- * and exact repeats of existing or rejected lines. The result is still unverified;
- * the browser CAS decides what may be shown.
+ * and exact repeats of existing or rejected lines. A repeat means the same formulas (IR and
+ * notation, in order); prose never makes a candidate new, and CAS-equivalence is not a repeat.
+ * The result is still unverified; the browser CAS decides what may be shown.
  */
 export function finalizeCandidate(input: SuggestInput, segments: Segment[], role: Role, mock: boolean): CandidateDraftResult {
   if (!segments.some((s) => s.type === 'math')) return none('PROSE_ONLY', mock);
@@ -28,9 +30,9 @@ export function finalizeCandidate(input: SuggestInput, segments: Segment[], role
     segs = [{ type: 'math', expr, notation: 'plain', latex: printSegmentLatex(expr, 'plain') }];
   }
   const inputSegs = toInputSegments(segs);
-  const lineHash = hashOf(inputSegs);
-  if (input.context.lines.some((l) => hashOf(toInputSegments(l.segments)) === lineHash)) return none('DUPLICATE', mock);
-  const contentHash = hashOf({ mode: input.mode, lines: [inputSegs] });
+  const candidateLineHash = lineHash(inputSegs);
+  if (input.context.lines.some((l) => lineHash(l.segments) === candidateLineHash)) return none('DUPLICATE', mock);
+  const contentHash = candidateHash(input.mode, [inputSegs]);
   if (input.rejected_hashes.includes(contentHash)) return none('REJECTED_BEFORE', mock);
   return {
     state: 'GENERATED',

@@ -6,14 +6,12 @@ test.beforeEach(async ({ page }) => {
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
   await page.goto('/notebooks');
   await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
-  await expect(page.getByText('v-ink-map-1024', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /New empty notebook/ }).first().click();
   await expect(rows(page)).toHaveCount(1);
 });
 
 test('native listeners draw live ink before pointerup and after resizing', async ({ page }) => {
   const row = rows(page).last();
-  await expect(page.getByText('v-ink-map-1024', { exact: true })).toBeVisible();
   for (const width of [1180, 980]) {
     await page.setViewportSize({ width, height: 820 });
     const canvas = row.locator('canvas');

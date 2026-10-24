@@ -93,19 +93,23 @@ describe('pre-v2.2 snapshots', () => {
       ['premise', 'Solve x^{2} = 4 .'],
       ['premise', 'y = 1'],
       ['definition', 'f\\left(x\\right) = x^{2}'],
-      ['premise', 'm > 0'],
-      ['premise', 'n \\in \\mathbb{Z}^{+}'],
-      ['premise', '\\psi\\left(x\\right) \\ne 0'],
-      ['premise', '0 \\le x, x \\le L'],
+      // the functions on one line, the assumptions on the next, one formula per segment
       ['premise', 'f\\left(x\\right)'],
+      ['premise', 'm > 0 n \\in \\mathbb{Z}^{+} \\psi\\left(x\\right) \\ne 0 0 \\le x, x \\le L'],
       ['step', ''],
     ]);
     assert.ok(nb.lines.slice(0, -1).every((l) => l.state === 'SETTLED' && !l.verified));
   });
 
-  it('leaves current snapshots alone', () => {
+  it('never converts a notebook twice', () => {
     const nb = NotebookSchema.parse(legacy);
     assert.deepEqual(NotebookSchema.parse(nb), nb);
+    // an earlier conversion with one formula per line stays as it is
+    const earlier = {
+      ...nb,
+      lines: ['m > 0', 'n \\in \\mathbb{Z}^{+}'].map((latex, i) => ({ id: `given-${i + 1}`, version: 1, source: 'user', role: 'premise', state: 'SETTLED', ink: [], segments: segmentsFromSource(`$${latex}$`) })),
+    };
+    assert.deepEqual(NotebookSchema.parse(earlier), earlier);
   });
 
   it('preserves PDF provenance from an imported legacy problem card', () => {

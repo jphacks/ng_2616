@@ -11,7 +11,7 @@
     "start": "next start",
     "typecheck": "pnpm prepare-assets && tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test tests/unit/*.test.ts",
+    "test": "tsx --test --conditions=react-server tests/unit/*.test.ts tests/unit/suggest/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

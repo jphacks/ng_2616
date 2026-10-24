@@ -243,7 +243,8 @@ def build_context(lines: list[dict], parent_id: str | None) -> Context:
             is_def = line.get("role") == "definition" or r.get("reason") == "DEFINITION"
             if is_def:
                 register_definition(ir, lid, ctx)
-            elif status == "ok":
+            elif status == "ok" and r.get("goal") != "SOLUTION_LIST":
+                # x = -3 or x = -4 lists solutions; neither one is a value of x
                 register_binding(ir, lid, ctx, r)
             if seg.get("notation") == "continuation":
                 # continuation segments are expressions, used only as parents of later continuations

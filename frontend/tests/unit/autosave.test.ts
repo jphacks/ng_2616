@@ -76,7 +76,7 @@ const settle = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 
-function harness(saveCloud: (nb: Notebook, rev: number | null) => Promise<SaveResult>) {
+function harness(saveCloud: (nb: Notebook, rev: number | null) => Promise<SaveResult>, slowLocal?: () => Promise<void>) {
   const clock = fakeTimers();
   let state: AutosaveState = { notebook: notebook([]), dirty: false, cloudRevision: 1 };
   const listeners = new Set<(s: AutosaveState, p: AutosaveState) => void>();
@@ -88,7 +88,10 @@ function harness(saveCloud: (nb: Notebook, rev: number | null) => Promise<SaveRe
       log.cloud.push({ title: nb.title, rev });
       return saveCloud(nb, rev);
     },
-    saveLocal: async (nb, rev) => void log.local.push({ title: nb.title, rev }),
+    saveLocal: async (nb, rev) => {
+      log.local.push({ title: nb.title, rev });
+      await slowLocal?.();
+    },
     saveLocalNow: (nb, rev) => (log.now.push({ title: nb.title, rev }), true),
     clearLocal: async () => void (log.cleared += 1),
     onSaved: (nb, rev) => {
@@ -210,6 +213,22 @@ describe('autosave', () => {
     assert.equal(h.log.now.length, 1, 'nothing new to write');
     await h.clock.advance(TIMING.localDebounce);
     assert.equal(h.log.local.length, 0, 'the debounced write was replaced by the immediate one');
+  });
+
+  it('writes synchronously on the way out while a debounced device write is still unfinished', async () => {
+    rev = 1;
+    let finish!: () => void;
+    const h = harness(okSave, () => new Promise<void>((resolve) => (finish = resolve)));
+    h.edit('a');
+    await h.clock.advance(TIMING.localDebounce);
+    assert.deepEqual(h.log.local, [{ title: 'a', rev: 1 }], 'the debounced write has started');
+    // the page unloads before that write commits: only the synchronous write can still land
+    h.saver.flushLocal();
+    assert.deepEqual(h.log.now, [{ title: 'a', rev: 1 }]);
+    finish();
+    await h.clock.advance(0);
+    h.saver.flushLocal();
+    assert.equal(h.log.now.length, 1, 'once the device holds it, nothing new to write');
   });
 
   it('flush after stop still sends the last edit (leaving the notebook)', async () => {

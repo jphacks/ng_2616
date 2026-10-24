@@ -7,7 +7,8 @@ export const SUGGEST_ATTEMPTS = 3;
 export type Attempt<C> =
   | { kind: 'ready'; candidate: C } // verified, assumption or unverified: shown (unverified needs a second confirmation)
   | { kind: 'wrong'; hash: string; feedback: CheckerFeedback } // never shown, retried
-  | { kind: 'none' } // the model (or a server guard) returned nothing
+  | { kind: 'none' } // the model declined (or a server guard found nothing usable)
+  | { kind: 'repeat' } // the model repeated an existing line or a rejected suggestion: asked again
   | { kind: 'stale' }; // the context changed or the CAS went away: stop silently
 
 export type AttemptsResult<C> = { kind: 'show'; candidate: C } | { kind: 'none'; rejected: number } | { kind: 'stale' };
@@ -21,6 +22,7 @@ export async function runAttempts<C>(max: number, attempt: (feedback: CheckerFee
     if (out.kind === 'stale') return out;
     if (out.kind === 'ready') return { kind: 'show', candidate: out.candidate };
     if (out.kind === 'none') break;
+    if (out.kind === 'repeat') continue;
     feedback.push(out.feedback);
     tried.push(out.hash);
   }

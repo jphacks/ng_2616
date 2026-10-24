@@ -68,6 +68,8 @@ export class DirectAiService implements AiService {
 
   async suggest(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult> {
     if (input.mode === 'BRIDGE') throw new AiError('FEATURE_DISABLED', 'bridging is not enabled');
+    // an unresolved wrong line locks completion for every mode (spec §11): the model is not asked at all
+    if (input.context.lines.some((l) => l.status === 'wrong')) return { state: 'NONE', reason: 'UNRESOLVED_WRONG', mock: this.llm.mock };
     if (input.demo?.script === DEMO_SCRIPT_ID) return scriptedSuggestion(input, ctx.signal);
     if (this.llm.mock) return { state: 'NONE', reason: 'MOCK_PROVIDER', mock: true };
     const raw = await this.llm.generateJson({
@@ -77,6 +79,9 @@ export class DirectAiService implements AiService {
       system: SUGGEST_SYSTEM,
       parts: suggestParts(input),
       schema: SUGGEST_JSON_SCHEMA,
+      // Larger than the 600 tokens / 20 s of spec v2.0 §13 (AI-S), which predates Gemini's thinking_level: the model's
+      // thinking tokens count against the output limit, so 600 would cut the answer off. This reasoning is an
+      // assumption, not measured; v2.1 gives no figures. Revisit with real latency and truncation data (NOTES R29).
       maxOutputTokens: 8192,
       timeoutMs: 40_000,
       signal: ctx.signal,

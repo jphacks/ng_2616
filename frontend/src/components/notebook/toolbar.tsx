@@ -5,6 +5,8 @@ import clsx from 'clsx';
 import { Eraser, GripVertical, Hand, ListPlus, PenLine, Redo2, Sparkles, Undo2 } from 'lucide-react';
 import { animate, motion, useDragControls, useMotionValue } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { suggestBlockerOf } from '@/core/candidates/blocker';
+import { findLine } from '@/core/notebook/model';
 import { INK_WEIGHTS, useDevicePrefs, type InkWeight, type ToolbarSide } from '@/core/prefs/device';
 import { useNotebook, type Tool } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -32,7 +34,17 @@ export function Toolbar() {
   const canRedo = useNotebook((s) => s.future.length > 0);
   const suggesting = useNotebook((s) => s.suggesting);
   const set = useNotebook((s) => s.set);
-  const side = useDevicePrefs((s) => s.toolbarSide);
+  // an unresolved wrong line locks completion: grey the button, but a press still explains why (R27)
+  const locked = useNotebook(
+    (s) =>
+      suggestBlockerOf({
+        notebook: s.notebook,
+        casReady: s.cas.state === 'ready',
+        candidate: s.candidate?.state ?? null,
+        activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
+      }) === 'wrong',
+  );
+const side = useDevicePrefs((s) => s.toolbarSide);
   const inkWeight = useDevicePrefs((s) => s.inkWeight);
   const setPref = useDevicePrefs((s) => s.setPref);
   const drag = useDragControls();
@@ -56,6 +68,7 @@ export function Toolbar() {
   // holding Undo or Redo keeps stepping through history
   const undoPress = useHoldRepeat(() => engine.undo(), canUndo);
   const redoPress = useHoldRepeat(() => engine.redo(), canRedo);
+
 
   return (
     <div ref={lane} className={clsx('pointer-events-none absolute inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-sticky flex px-4', SIDE_CLASS[side])}>
@@ -117,7 +130,11 @@ export function Toolbar() {
         <button
           type="button"
           onClick={() => void engine.requestSuggestion(true)}
-          className="ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-base font-medium text-on-solid hover:bg-accent-strong"
+          aria-disabled={locked}
+          className={clsx(
+            'ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-medium',
+            locked ? 'bg-none-soft text-none' : 'bg-accent text-on-solid hover:bg-accent-strong',
+          )}
         >
           {suggesting ? <Spinner size={18} /> : <Sparkles size={18} />}
           <span className="hidden sm:inline">{t('tool.suggest')}</span>
