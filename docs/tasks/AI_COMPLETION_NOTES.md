@@ -1,5 +1,12 @@
 # AI数式補完 実装メモ
 
+**PR マージ済み**：PR #41 は main にマージ済み（マージコミット `47ae591`、2026-10-24）。この NOTES は main の `4f46b73`（PR #54 取り込み時点）から作った `Riku_feature2` で更新している。以下は、マージ後に ③ の Must 部分に残っている作業の整理（詳細は各節）。
+
+1. **S-01 の live 確認**：実 LLM での通しの E2E は未実施。実施者と環境を決めて流す（mock の結果は live の合格に数えない）。
+2. **②の回答待ち**：R3（`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`）、R10（修正行 unknown の直接判定）、R30（`Proof.mock` の意味。回答後に ③ が `verifyCandidate` と ghost-line の mock 表示を直す）。
+3. **⑤の作業待ち**：R16 の `Job.meta`、R28（BRIDGE の 403）、`test` script、MT-10／GT-7 の読み替えの承認、I2（描画テスト基盤）。
+
+
 最終更新：2026-10-24（段階3 完了時点。①の関数の変更を含む。main の PR #39 を取り込み済み、衝突なし）。担当：AI数式補完（M-06）。
 
 **方針（人間の決定）**：案A＝Python の suggest は作らない。既存の TypeScript 実装を仕上げる。基準設計書は `docs/design/v2.0-en.md` + `v2.1-deltas.md` + ADR。`docs/tasks/AI_COMPLETION_TASK.md`（v1.9 前提）は担当範囲の考え方と「他担当の領域に触らない」ルールだけを参照する。v1.9 前提の部分は失効しており、末尾の「履歴」にある。
@@ -88,10 +95,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 ### 次にやること
 
-1. ①のレビュー待ち：「①のレビューが必要な変更」の 3 つ（コンストラクタ、R13、R14）。
-2. ⑤の回答待ち：`Job.meta` の照合（R16）、BRIDGE の 403（R28）、`test` script、描画テスト基盤（I2）。
-3. R30 は②の回答後に決める。
-4. E2E を live の LLM で一度流す（live の記録はまだ無い）。
+上の「PR マージ済み」の 3 つ（S-01 の live 確認、②の回答待ち、⑤の作業待ち）。①のレビュー（R14 の 1.2 秒など）は PR #41 のマージで済んでいるが、結論の記録は無いので、あれば「①のレビューが必要な変更」の節に追記する。
 
 ## 依頼事項（縦割りの役割ごと・現在有効）
 
