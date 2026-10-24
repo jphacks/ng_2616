@@ -692,6 +692,8 @@ export class NotebookEngine {
     if (isRecordable(c.state)) s.set('rejections', addRejection(s.rejections, c.rejectKey, c.contentHash, latex));
     s.set('candidate', null);
     this.abortSlot('suggest');
+    // the request is over: a check that is still running must not bring the rejected candidate back
+    this.suggestSlot = null;
   }
 
   // ------------------------------------------------------------------ recovery
