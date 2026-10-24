@@ -46,7 +46,7 @@ export class DirectAiService implements AiService {
       parts: recognizeParts(input),
       schema: RECOGNIZE_JSON_SCHEMA,
       maxOutputTokens: 4096,
-      timeoutMs: 20_000,
+      timeoutMs: 30_000,
       signal: ctx.signal,
     });
     const wire = RecognizeWireSchema.safeParse(raw);
