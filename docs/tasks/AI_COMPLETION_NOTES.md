@@ -124,6 +124,46 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンは、wrong の行があるとき **灰色（`aria-disabled`）にするが `disabled` にはしない**（押すと理由を案内する。R27）。③が実装済み（`b671464`）。今後 `disabled` に変えないこと（案内が出なくなる）。
 - [ ] **live の E2E**：実 LLM での通しは未実施。実施者と環境。
 
+## PR #41 のマージ後に単体テストが 8 件落ちた件の調査（コードは直していない）
+
+**結論**：原因は PR #41 の取り込みで、**main の `13e1206` が修復済み**。`origin/main`（`98fa5f8`）では `tests/unit/suggest/*.test.ts` が 147 件：146 通過／0 失敗／1 skip。この `Riku_feature2` は `4f46b73`（修復前）から作ったので古い。**origin/main を取り込めば直る**（取り込みは未実施）。
+
+**単体テストの経過**（`tests/unit/suggest/*.test.ts`、`--conditions=react-server`、各コミットを checkout して実行）
+
+| コミット | 内容 | 通過／失敗 |
+| --- | --- | --- |
+| `d364016` | ③の最終（PR #41 の head の一つ前） | 146／0 |
+| `d90c6cb` | tarumikun による「Merge origin/main into Riku_feature（engine、toolbar、notebook-store の衝突を解消）」 | 96／**50** |
+| `47ae591` | PR #41 のマージ（`0570144` を含む） | 138／**8** |
+| `4f46b73` | PR #54 のマージ | 138／**8** |
+| `13e1206` | RedBlueBird「#41 のマージで失われた補完の流れを直し、CI で実行」 | 146／0 |
+| `origin/main` | PR #58 まで | 146／0 |
+
+壊したコミット：**`d90c6cb`**（PR #41 の取り込みの衝突解消。tarumikun、2026-10-25 00:30）。`0570144`（同じ人の型の整合）で 50→8 に減ったが、8 件は残った。`git bisect` は使わず、上の各コミットを直接 checkout して確かめた。
+
+**main の変更**（`47ae591..origin/main` で engine.ts、store、candidates、direct、i18n、tests/unit/suggest に触ったもの）：`13e1206`（RedBlueBird、補完の修復）、`24cfb2b`（RedBlueBird、`beforeunload` でも outbox を書く）、`b0bab1e`（RedBlueBird、PR #54 内の merge）、`2e0591c`（RedBlueBird、「identity と解のリストを正しく検査し、補完を再度頼めるように」）。`candidates/`、`direct/`、i18n を触ったものは無い。
+
+**8 件の判定**（根拠は `d364016`／`d90c6cb`／`4f46b73`／`13e1206` の engine.ts の差分）
+
+| テスト | 判定 | 根拠と中身 |
+| --- | --- | --- |
+| G6（編集された行から作った結果を捨てる） | **(a)** | ③の `isStale(slot)`（7 項目照合）が、衝突解消で main の再試行ループ（PR #50 `ea7ca73`）の `isStale(epoch, last)` に置き換わった。`13e1206` が slot 照合に戻した |
+| G6（検証中に文脈が変わった結果を捨てる） | **(a)** | 同上（`verifyCandidate` の `isStale(pending.epoch, basedOn)`）。`13e1206` が `slot` を渡す形に戻した |
+| G9（検証中の却下）、G9（却下した候補が検証後に戻る） | **(a)** | `d4ffffa` の「却下で `suggestSlot` を空にする」が、epoch だけの照合では効かなくなった |
+| G9（却下したハッシュを次の要求が送る）、G9（却下は自分の文脈だけ） | **(a)＋(b)** | R22 の文脈ごとの却下履歴を、PR #50 のループが読まず、全体のリスト（`rejectedHashes`／`rejectedLatex`）を送っていた。リストは別のノートブックを開いても残る。`13e1206` が文脈ごとのものに揃え、全体のリストを消した |
+| G7（wrong は出さない。再生成は 1 回） | **(b)** | PR #50 が「最大 3 回まで再試行」に変えた（意図した変更）。テストの前提がずれた。`13e1206` がテストを 3 回に直し、ADR 0003 にも書いた |
+| G5（問題カードの編集で要求を取り消す） | **(b)** | PR #52（`9f85a1c`）が問題カードを無くした。テストの前提が消えた。`13e1206` が「given 行の指定」を使う形に書き換えた |
+| F1（Undo／Redo で再検証しない） | **(b)** | `2e0591c` が、Undo で入力ハッシュの合わない行を再検証するようにした（意図）。テストの偽の `input_hash`（仮の文字列）がこれに当たった。`13e1206` が harness に本物のハッシュを入れた |
+
+**(a) の項目でアプリが実際に壊れていたか**（`4f46b73` 時点のテストの中身から。いまの main では直っている）
+- **G6：** 候補を作っている間に行を直すと、古い文脈の候補が表示されえた（epoch が同じなら捨てない）。
+- **G9：** 検証中に Esc で却下した候補が、検証が終わると **再表示された**。実際のテストの失敗が「却下した候補が検証後に戻る」だった。
+- **却下の履歴：** ✕ で却下した候補の `content_hash` が次の要求に載らず（全体のリストだけ）、別のノートブックの却下が混ざった。
+
+**E2E「a failed recognition keeps the ink…」**：補完とは無関係（①の筆記・Canvas）。`c74e788`（PR #43 のマージ、tarumikun、ink-canvas）から失敗し、`3186d16`（RedBlueBird「行の canvas が resize されたら筆跡を再描画」）で直った。`c74e788^`、`3186d16`、`47ae591`、`origin/main` で通過、`c74e788`、`4f46b73` で失敗（「Expected: > 0 / Received: 0」）。なお `d364016` は今回の node_modules（新しい依存）で 5.2 分でタイムアウトして失敗した（古い commit と新しい依存の組み合わせによる環境の差と思われる。原因は未確認）。
+
+**次**：この `Riku_feature2` に origin/main を取り込む（未実施）。取り込んだあとで、単体テスト・tsc・eslint・E2E を流し直す。
+
 ## live（本物の Gemini）での確認記録
 
 実施者：ユーザー（人手のブラウザ確認）。実施日はユーザーからの報告時（2026-10-25 時点で報告済み）。mock ではなく `LLM_PROVIDER=gemini`。この節の内容はユーザーの報告で、③は再現していない。
