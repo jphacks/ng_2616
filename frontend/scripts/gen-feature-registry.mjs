@@ -20,7 +20,8 @@ function getEnabledFeatures() {
       if (m && m[1].trim()) return m[1].trim();
     }
   }
-  return '';
+  // Default to enabling plot on this feature branch so preview deployments work out of the box
+  return 'plot';
 }
 
 const enabled = getEnabledFeatures()
