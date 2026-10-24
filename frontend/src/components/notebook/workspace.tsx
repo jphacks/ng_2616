@@ -116,7 +116,7 @@ export function Workspace({ notebookId }: { notebookId: string }) {
   return (
     <EngineContext.Provider value={engine}>
       <OrientationProvider className="relative flex h-full flex-col overflow-hidden bg-paper">
-        <TopBar mockAi={mockAi} />
+        <TopBar mockAi={mockAi} user={user!} />
         <main className="relative min-h-0 flex-1">
           {tab === 'canvas' ? (
             <>

@@ -1,19 +1,21 @@
 'use client';
 
 import clsx from 'clsx';
-import { ChevronLeft, CircleAlert, Cpu, Languages, Save } from 'lucide-react';
+import { ChevronLeft, CircleAlert, Cpu, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import type { SessionUser } from '@/core/auth/browser';
 import { demoBinding } from '@/core/presets';
 import { useNotebook } from '@/core/store/notebook-store';
-import { useLocale, useT } from '@/i18n';
+import { useT } from '@/i18n';
+import { AccountMenu } from '@/components/account/account-menu';
 import { Button } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { SegmentedTabs } from '@/ui/tabs';
 import { useEngine } from './engine-context';
 
-export function TopBar({ mockAi }: { mockAi: boolean }) {
+export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser }) {
   const t = useT();
   const engine = useEngine();
   // select only what the bar shows, so ink edits do not re-render it
@@ -23,7 +25,6 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
   const dirty = useNotebook((s) => s.dirty);
   const saveState = useNotebook((s) => s.saveState);
   const set = useNotebook((s) => s.set);
-  const { locale, setLocale } = useLocale();
   const [editing, setEditing] = useState(false);
   if (!nb) return null;
   const demo = nb.demo;
@@ -76,9 +77,7 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
         <SaveButton dirty={dirty} state={saveState} onSave={() => void engine.save()} />
-        <Button variant="ghost" size="md" icon={<Languages size={18} />} onClick={() => setLocale(locale === 'en' ? 'ja' : 'en')}>
-          <span className="hidden lg:inline">{t('top.language')}</span>
-        </Button>
+        <AccountMenu user={user} unsaved={dirty} canLeave={() => !useNotebook.getState().dirty || window.confirm(t('top.unsavedLeave'))} />
       </div>
     </header>
   );

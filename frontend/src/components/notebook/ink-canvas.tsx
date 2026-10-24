@@ -4,13 +4,14 @@ import type { Stroke, StrokePoint } from '@mn/contracts';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { shortId } from '@/core/ids';
 import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
+import { useDevicePrefs } from '@/core/prefs/device';
 import type { Tool } from '@/core/store/notebook-store';
 
 export const LINE_HEIGHT = 140;
 const MAX_HEIGHT = 560;
 const GROW_MARGIN = 36;
 
-// once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
+// in auto mode, once a stylus is seen, touch becomes scrolling (palm rejection); shared by every line
 let penSeen = false;
 const markPenSeen = () => {
   penSeen = true;
@@ -108,7 +109,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType === 'pen') markPenSeen();
-    const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
+    const mode = useDevicePrefs.getState().inputMode;
+    const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && (mode === 'pen' || (mode === 'auto' && penSeen)));
     if (fingerScroll || !editable) {
       if (!editable && tool !== 'view') onActivate?.();
       scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
