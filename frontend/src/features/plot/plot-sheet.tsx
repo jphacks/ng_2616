@@ -3,7 +3,7 @@
 import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Download, Info, RefreshCw, SlidersHorizontal } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button } from '@/ui/button';
@@ -31,6 +31,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
   const t = useT();
   const patchLine = useNotebook((s) => s.patchLine);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const analysis = useMemo(() => analyzeLineForPlot(line), [line]);
 
@@ -45,34 +46,56 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
   }));
 
   const persistSettings = useCallback(
-    (newRange: [number, number], newParams: Record<string, number>) => {
-      const settings: PlotSettings = {
-        x_var: analysis.xVar,
-        params: newParams,
-        range: newRange,
-        points: 400,
-        view: 're',
+    (newRange: [number, number], newParams: Record<string, number>, debounceMs = 0) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
+      const save = () => {
+        const settings: PlotSettings = {
+          x_var: analysis.xVar,
+          params: newParams,
+          range: newRange,
+          points: 400,
+          view: 're',
+        };
+        patchLine(line.id, (l) => ({
+          ...l,
+          extensions: {
+            ...l.extensions,
+            plot: settings,
+          },
+        }));
       };
-      patchLine(line.id, (l) => ({
-        ...l,
-        extensions: {
-          ...l.extensions,
-          plot: settings,
-        },
-      }));
+
+      if (debounceMs <= 0) {
+        save();
+      } else {
+        debounceTimerRef.current = setTimeout(save, debounceMs);
+      }
     },
     [analysis.xVar, line.id, patchLine],
   );
 
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleRangeChange = (newRange: [number, number]) => {
     setRange(newRange);
-    persistSettings(newRange, params);
+    persistSettings(newRange, params, 0);
   };
 
   const handleParamChange = (name: string, value: number) => {
     const updated = { ...params, [name]: value };
     setParams(updated);
-    persistSettings(range, updated);
+    // Debounce persistence by 300ms during slider dragging to avoid flooding autosaves
+    persistSettings(range, updated, 300);
   };
 
   const handleReset = () => {
@@ -80,7 +103,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
     const defaultParams = { ...analysis.initialParams };
     setRange(defaultRange);
     setParams(defaultParams);
-    persistSettings(defaultRange, defaultParams);
+    persistSettings(defaultRange, defaultParams, 0);
   };
 
   const handleSavePng = () => {
@@ -102,7 +125,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
       onClose={onClose}
       title={
         <span className="flex items-center gap-2">
-          <span>{t('plot.title') || 'グラフ描画'}</span>
+          <span>{t('plot.title')}</span>
         </span>
       }
     >
@@ -112,7 +135,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
           {analysis.latex ? (
             <Tex latex={analysis.latex} display className="text-lg font-medium" />
           ) : (
-            <span className="text-muted">{t('plot.noLatex') || '数式がありません'}</span>
+            <span className="text-muted">{t('plot.noLatex')}</span>
           )}
         </div>
 
@@ -120,8 +143,8 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
           <div className="flex items-start gap-3 rounded-2xl bg-warn-soft/60 p-4 text-ink-soft">
             <Info size={20} className="mt-0.5 shrink-0 text-warn" />
             <div>
-              <p className="font-semibold text-ink">{t('plot.unsupported') || '描画できません'}</p>
-              <p className="mt-1 text-sm">{analysis.reason}</p>
+              <p className="font-semibold text-ink">{t('plot.unsupported')}</p>
+              <p className="mt-1 text-sm">{analysis.reasonKey ? t(analysis.reasonKey) : analysis.reason}</p>
             </div>
           </div>
         ) : (
@@ -142,7 +165,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
             <div className="space-y-2 rounded-2xl bg-paper p-3 shadow-card">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-                  {t('plot.domain') || '表示範囲 (x)'}
+                  {t('plot.domain')}
                 </span>
                 <span className="text-xs tabular-nums text-muted">
                   [{range[0].toFixed(1)}, {range[1].toFixed(1)}]
@@ -175,7 +198,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
               <div className="space-y-3 rounded-2xl bg-paper p-3.5 shadow-card">
                 <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
                   <SlidersHorizontal size={14} />
-                  <span>{t('plot.params') || 'パラメータ'}</span>
+                  <span>{t('plot.params')}</span>
                 </div>
 
                 <div className="space-y-2.5">
@@ -213,7 +236,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
                 icon={<RefreshCw size={14} />}
                 onClick={handleReset}
               >
-                {t('plot.reset') || '初期化'}
+                {t('plot.reset')}
               </Button>
 
               <Button
@@ -222,7 +245,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
                 icon={<Download size={14} />}
                 onClick={handleSavePng}
               >
-                {t('plot.savePng') || 'PNG保存'}
+                {t('plot.savePng')}
               </Button>
             </div>
           </>

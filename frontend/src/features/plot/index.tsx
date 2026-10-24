@@ -6,7 +6,6 @@ import { useState } from 'react';
 import type { FeaturePlugin } from '@/features/types';
 import { useT } from '@/i18n';
 import { Button } from '@/ui/button';
-import { analyzeLineForPlot } from './evaluator';
 import { PlotSheet } from './plot-sheet';
 
 export function PlotLineAction({ line }: { line: Line }) {
@@ -16,8 +15,8 @@ export function PlotLineAction({ line }: { line: Line }) {
   // Only show for settled lines with math
   if (line.state !== 'SETTLED') return null;
 
-  const analysis = analyzeLineForPlot(line);
-  if (!analysis.targetExpr && !analysis.drawable) return null;
+  const hasMath = line.segments.some((s) => s.type === 'math');
+  if (!hasMath) return null;
 
   return (
     <>
@@ -28,7 +27,7 @@ export function PlotLineAction({ line }: { line: Line }) {
         onClick={() => setOpen(true)}
         className="text-xs text-accent hover:bg-accent-soft/40"
       >
-        {t('plot.action') || 'グラフ'}
+        {t('plot.action')}
       </Button>
 
       {open && <PlotSheet line={line} open={open} onClose={() => setOpen(false)} />}

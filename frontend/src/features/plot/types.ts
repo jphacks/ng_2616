@@ -20,6 +20,7 @@ export interface ParamMeta {
 export interface PlotAnalysis {
   drawable: boolean;
   reason?: string;
+  reasonKey?: string;
   xVar: string;
   latex: string;
   targetExpr: MathJSON | null;

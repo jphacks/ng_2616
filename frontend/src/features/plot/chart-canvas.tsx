@@ -1,8 +1,8 @@
 'use client';
 
 import clsx from 'clsx';
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { drawChart } from './chart-renderer';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { drawChart, drawHoverOverlay } from './chart-renderer';
 
 interface ChartCanvasProps {
   xData: number[];
@@ -25,96 +25,153 @@ export function ChartCanvas({
 }: ChartCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement | null>(null);
   const canvasRef = externalRef || internalRef;
+  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const sizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; px: number; py: number } | null>(null);
 
-  const validY = yData.filter((v): v is number => v !== null && !isNaN(v) && isFinite(v));
-  let yMin = -10;
-  let yMax = 10;
-  if (validY.length > 0) {
-    const sorted = [...validY].sort((a, b) => a - b);
-    const q10 = sorted[Math.floor(sorted.length * 0.05)]!;
-    const q90 = sorted[Math.floor(sorted.length * 0.95)]!;
-    const pad = Math.max((q90 - q10) * 0.2, 1);
-    yMin = Math.max(q10 - pad, -50);
-    yMax = Math.min(q90 + pad, 50);
-
-    if (yMin > 0 && yMin < 5) yMin = 0;
-    if (yMax < 0 && yMax > -5) yMax = 0;
-    if (yMax - yMin < 2) {
-      yMin -= 1;
-      yMax += 1;
-    }
-  }
-
   const [xMin, xMax] = xRange;
 
+  const { yMin, yMax } = useMemo(() => {
+    const validY = yData.filter((v): v is number => v !== null && !isNaN(v) && isFinite(v));
+    if (validY.length === 0) {
+      return { yMin: -10, yMax: 10 };
+    }
+
+    const sorted = [...validY].sort((a, b) => a - b);
+    const min = sorted[0]!;
+    const max = sorted[sorted.length - 1]!;
+    const q05 = sorted[Math.floor(sorted.length * 0.05)]!;
+    const q95 = sorted[Math.floor(sorted.length * 0.95)]!;
+    const iqrSpan = q95 - q05;
+    const totalSpan = max - min;
+
+    let rawMin = min;
+    let rawMax = max;
+    // For asymptotic functions (like tan(x) or 1/x) where outlier points spike dramatically,
+    // clip to the 5th-95th percentile with padding so the curve doesn't collapse to a flat line.
+    // For smooth functions (like y = 100x), totalSpan and iqrSpan are comparable, so min/max are preserved.
+    if (iqrSpan > 0 && totalSpan > iqrSpan * 4) {
+      rawMin = q05;
+      rawMax = q95;
+    }
+
+    const pad = Math.max((rawMax - rawMin) * 0.12, 1);
+    let computedMin = rawMin - pad;
+    let computedMax = rawMax + pad;
+
+    // Anchor near 0 if zero-crossing is very close
+    if (computedMin > 0 && computedMin < pad * 2) computedMin = 0;
+    if (computedMax < 0 && computedMax > -pad * 2) computedMax = 0;
+    if (computedMax - computedMin < 2) {
+      computedMin -= 1;
+      computedMax += 1;
+    }
+
+    return { yMin: computedMin, yMax: computedMax };
+  }, [yData]);
+
+  // 1. ResizeObserver: manages canvas dimensions when container size changes
   useEffect(() => {
-    const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!canvas || !container) return;
+    const baseCanvas = canvasRef.current;
+    const overlayCanvas = overlayCanvasRef.current;
+    if (!container || !baseCanvas) return;
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawChart(ctx, {
-        width,
-        height,
-        xData,
-        yData,
-        xMin,
-        xMax,
-        yMin,
-        yMax,
-        hoveredPoint: hoveredPoint ? { px: hoveredPoint.px, py: hoveredPoint.py } : null,
-      });
+      sizeRef.current = { width, height };
+      const dpr = window.devicePixelRatio || 1;
+
+      baseCanvas.width = Math.round(width * dpr);
+      baseCanvas.height = Math.round(height * dpr);
+      baseCanvas.style.width = `${width}px`;
+      baseCanvas.style.height = `${height}px`;
+
+      if (overlayCanvas) {
+        overlayCanvas.width = Math.round(width * dpr);
+        overlayCanvas.height = Math.round(height * dpr);
+        overlayCanvas.style.width = `${width}px`;
+        overlayCanvas.style.height = `${height}px`;
+      }
+
+      const ctx = baseCanvas.getContext('2d');
+      if (ctx) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawChart(ctx, {
+          width,
+          height,
+          xData,
+          yData,
+          xMin,
+          xMax,
+          yMin,
+          yMax,
+          hoveredPoint: null,
+        });
+      }
+
+      if (overlayCanvas) {
+        const overlayCtx = overlayCanvas.getContext('2d');
+        if (overlayCtx) {
+          overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          drawHoverOverlay(overlayCtx, width, height, null);
+        }
+      }
     });
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [canvasRef, xData, yData, xMin, xMax, yMin, yMax, hoveredPoint]);
+  }, [canvasRef, xData, yData, xMin, xMax, yMin, yMax]);
 
+  // 2. Redraw base chart when data or range changes (without re-creating ResizeObserver)
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const baseCanvas = canvasRef.current;
+    if (!baseCanvas) return;
+    const { width, height } = sizeRef.current;
+    if (width === 0 || height === 0) return;
+
+    const ctx = baseCanvas.getContext('2d');
     if (!ctx) return;
-
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawChart(ctx, {
-      width: rect.width,
-      height: rect.height,
+      width,
+      height,
       xData,
       yData,
       xMin,
       xMax,
       yMin,
       yMax,
-      hoveredPoint: hoveredPoint ? { px: hoveredPoint.px, py: hoveredPoint.py } : null,
+      hoveredPoint: null,
     });
-  }, [canvasRef, xData, yData, xMin, xMax, yMin, yMax, hoveredPoint]);
+  }, [canvasRef, xData, yData, xMin, xMax, yMin, yMax]);
 
-  const handlePointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // 3. Redraw hover crosshairs on the lightweight overlay canvas
+  useEffect(() => {
+    const overlayCanvas = overlayCanvasRef.current;
+    if (!overlayCanvas) return;
+    const { width, height } = sizeRef.current;
+    if (width === 0 || height === 0) return;
 
-    const rect = canvas.getBoundingClientRect();
+    const ctx = overlayCanvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawHoverOverlay(ctx, width, height, hoveredPoint);
+  }, [hoveredPoint]);
+
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
 
     const padLeft = 45;
@@ -164,12 +221,19 @@ export function ChartCanvas({
   };
 
   return (
-    <div ref={containerRef} className={clsx('relative w-full select-none overflow-hidden rounded-2xl bg-paper', className)}>
+    <div
+      ref={containerRef}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      className={clsx('relative w-full select-none overflow-hidden rounded-2xl bg-paper touch-none', className)}
+    >
       <canvas
         ref={canvasRef}
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-        className="h-full w-full touch-none"
+        className="block h-full w-full"
+      />
+      <canvas
+        ref={overlayCanvasRef}
+        className="pointer-events-none absolute inset-0 block h-full w-full"
       />
 
       {hoveredPoint && (

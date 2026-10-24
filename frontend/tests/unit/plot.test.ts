@@ -77,12 +77,63 @@ test('analyzeLineForPlot: function notation f(x) = sin(x)', () => {
   assert.ok(Math.abs(valPi2 - 1) < 1e-9);
 });
 
+test('analyzeLineForPlot: vertical line x = 3 is rejected', () => {
+  const expr: MathJSON = ['Equal', 'x', 3];
+  const line = makeMathLine('x = 3', expr);
+  const analysis = analyzeLineForPlot(line);
+
+  assert.equal(analysis.drawable, false);
+  assert.equal(analysis.reasonKey, 'plot.reason.verticalLine');
+});
+
+test('analyzeLineForPlot: implicit equation x^2 + y^2 = 1 is rejected', () => {
+  const expr: MathJSON = [
+    'Equal',
+    ['Add', ['Power', 'x', 2], ['Power', 'y', 2]],
+    1,
+  ];
+  const line = makeMathLine('x^2 + y^2 = 1', expr);
+  const analysis = analyzeLineForPlot(line);
+
+  assert.equal(analysis.drawable, false);
+  assert.equal(analysis.reasonKey, 'plot.reason.implicit');
+});
+
+test('analyzeLineForPlot: inequality x < 2 is rejected', () => {
+  const expr: MathJSON = ['Less', 'x', 2];
+  const line = makeMathLine('x < 2', expr);
+  const analysis = analyzeLineForPlot(line);
+
+  assert.equal(analysis.drawable, false);
+  assert.equal(analysis.reasonKey, 'plot.reason.inequation');
+});
+
+test('analyzeLineForPlot: large scale linear equation y = 100x', () => {
+  const expr: MathJSON = ['Equal', 'y', ['Multiply', 100, 'x']];
+  const line = makeMathLine('y = 100x', expr);
+  const analysis = analyzeLineForPlot(line);
+
+  assert.equal(analysis.drawable, true);
+  assert.equal(analysis.xVar, 'x');
+  assert.equal(evaluateExpr(analysis.targetExpr!, { x: 5 }), 500);
+});
+
+test('analyzeLineForPlot: multivariable expression x^2 + y^2 without equal is rejected', () => {
+  const expr: MathJSON = ['Add', ['Power', 'x', 2], ['Power', 'y', 2]];
+  const line = makeMathLine('x^2 + y^2', expr);
+  const analysis = analyzeLineForPlot(line);
+
+  assert.equal(analysis.drawable, false);
+  assert.equal(analysis.reasonKey, 'plot.reason.multiVar');
+});
+
 test('analyzeLineForPlot: forbidden operations (Integrate, D) are marked undrawable', () => {
   const intExpr: MathJSON = ['Integrate', ['Multiply', 2, 'x'], 'x'];
   const lineInt = makeMathLine('\\int 2x dx', intExpr);
   const analysisInt = analyzeLineForPlot(lineInt);
 
   assert.equal(analysisInt.drawable, false);
+  assert.equal(analysisInt.reasonKey, 'plot.reason.forbidden');
   assert.ok(analysisInt.reason?.includes('積分'));
 
   const diffExpr: MathJSON = ['D', ['Power', 'x', 2], 'x'];
@@ -90,6 +141,7 @@ test('analyzeLineForPlot: forbidden operations (Integrate, D) are marked undrawa
   const analysisDiff = analyzeLineForPlot(lineDiff);
 
   assert.equal(analysisDiff.drawable, false);
+  assert.equal(analysisDiff.reasonKey, 'plot.reason.forbidden');
 });
 
 test('generatePlotData: handles division by zero and asymptotes with null cuts', () => {

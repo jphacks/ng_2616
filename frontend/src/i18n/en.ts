@@ -168,6 +168,12 @@ export const en = {
   'plot.savePng': 'Save PNG',
   'plot.noLatex': 'No formula found',
   'plot.unsupported': 'Cannot plot this expression',
+  'plot.reason.noExpr': 'No formula found',
+  'plot.reason.forbidden': 'Expressions with calculus or summation are not supported for plotting',
+  'plot.reason.inequation': 'Inequalities are not supported for plotting',
+  'plot.reason.implicit': 'Implicit curves are not supported for plotting',
+  'plot.reason.verticalLine': 'Vertical lines (x = c) are not supported for plotting',
+  'plot.reason.multiVar': 'Expressions with multiple unknown variables are not supported for plotting',
 
   'status.verified': 'Verified',
   'status.local': 'Local step · unverified line {n}',

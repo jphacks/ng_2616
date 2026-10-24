@@ -154,6 +154,52 @@ export function drawChart(ctx: CanvasRenderingContext2D, opts: RenderOptions): v
   ctx.restore();
 }
 
+export function drawHoverOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  hoveredPoint: { px: number; py: number } | null,
+): void {
+  ctx.clearRect(0, 0, width, height);
+  if (!hoveredPoint) return;
+
+  const padLeft = 45;
+  const padRight = 20;
+  const padTop = 20;
+  const padBottom = 35;
+  const plotWidth = width - padLeft - padRight;
+  const plotHeight = height - padTop - padBottom;
+
+  const { px, py } = hoveredPoint;
+  if (px >= padLeft && px <= padLeft + plotWidth && py >= padTop && py <= padTop + plotHeight) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(37, 99, 235, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+
+    ctx.beginPath();
+    ctx.moveTo(px, padTop);
+    ctx.lineTo(px, padTop + plotHeight);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(padLeft, py);
+    ctx.lineTo(padLeft + plotWidth, py);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#2563eb';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 export function exportPlotPng(canvas: HTMLCanvasElement, filename: string): void {
   const exportCanvas = document.createElement('canvas');
   exportCanvas.width = canvas.width;

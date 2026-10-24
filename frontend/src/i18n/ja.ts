@@ -170,6 +170,12 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'plot.savePng': 'PNG保存',
   'plot.noLatex': '数式がありません',
   'plot.unsupported': '描画できません',
+  'plot.reason.noExpr': '数式がありません',
+  'plot.reason.forbidden': '積分・微分・和を含む式は現在グラフ描画できません',
+  'plot.reason.inequation': '不等式は現在グラフ描画できません',
+  'plot.reason.implicit': '陰関数（円や楕円など）は現在グラフ描画できません',
+  'plot.reason.verticalLine': 'x = 定数 の縦線は現在グラフ描画できません',
+  'plot.reason.multiVar': '未知数が複数ある式は現在グラフ描画できません',
 
   'status.verified': '検証済み',
   'status.local': '局所的に整合・{n}行目は未検証',
