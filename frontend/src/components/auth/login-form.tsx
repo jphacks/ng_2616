@@ -4,6 +4,7 @@ import { Languages, Mail, Sigma } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AUTH_PROVIDERS, DEV_BYPASS, supabaseBrowser } from '@/core/auth/browser';
+import { APP_BUILD_VERSION } from '@/core/version';
 import { useLocale, useT } from '@/i18n';
 import { Button } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
@@ -76,7 +77,12 @@ export function LoginForm() {
           </Button>
         </div>
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">{t('app.name')}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-semibold tracking-tight">{t('app.name')}</h1>
+            <span className="rounded bg-accent/15 px-2 py-0.5 font-mono text-[12px] font-bold text-accent">
+              {APP_BUILD_VERSION}
+            </span>
+          </div>
           <p className="text-[15px] text-muted">{t('app.tagline')}</p>
         </div>
         <div className="space-y-5 rounded-3xl bg-sheet p-7 shadow-card">

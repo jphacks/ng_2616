@@ -12,6 +12,7 @@ import { getRepository, importDeviceNotebooks, isCloudUnavailable, RepoError, ty
 import { arrange, useLibraryPrefs, type LibrarySort } from '@/core/prefs/library';
 import { buildNotebook, presetText, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
 import { addBuiltinResource } from '@/core/resources/service';
+import { APP_BUILD_VERSION } from '@/core/version';
 import { useLocale, useT } from '@/i18n';
 import { AccountMenu } from '@/components/account/account-menu';
 import { Button } from '@/ui/button';
@@ -191,7 +192,12 @@ export function NotebookHome() {
           <span className="flex size-9 items-center justify-center rounded-xl bg-ink text-white">
             <Sigma size={19} aria-hidden />
           </span>
-          <h1 className="flex-1 text-[16px] font-semibold">{t('app.name')}</h1>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <h1 className="text-[16px] font-semibold">{t('app.name')}</h1>
+            <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+              {APP_BUILD_VERSION}
+            </span>
+          </div>
           <AccountMenu user={user} />
         </header>
 
