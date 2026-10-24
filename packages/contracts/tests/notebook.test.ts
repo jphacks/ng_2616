@@ -111,4 +111,10 @@ describe('pre-v2.2 snapshots', () => {
     };
     assert.deepEqual(NotebookSchema.parse(earlier), earlier);
   });
+
+  it('preserves PDF provenance from an imported legacy problem card', () => {
+    const nb = NotebookSchema.parse({ ...legacy, problem: { ...legacy.problem, origin: { kind: 'pdf', name: 'worksheet.pdf', page: 2, question_label: '4', transcription: 'ai', corrected: true } } });
+    assert.ok(nb.lines.slice(0, -1).every((line) => line.source === 'pdf' && line.document_origin?.name === 'worksheet.pdf' && line.document_origin.page === 2));
+    assert.equal((nb.lines[0]!.extensions!.pdf_question as { label: string }).label, '4');
+  });
 });
