@@ -61,3 +61,23 @@ test.describe('ink', () => {
     await expect.poll(() => inkPixels(rows(page).first())).toBeGreaterThan(before);
   });
 });
+
+test('a two-finger tap undoes the last stroke and a three-finger tap redoes it', async ({ page }) => {
+  await openPreset(page, /Untitled notebook/);
+  const row = rows(page).first();
+  await scribble(page, row);
+  const drawn = await inkPixels(row);
+  expect(drawn).toBeGreaterThan(0);
+  const cdp = await page.context().newCDPSession(page);
+  const box = (await row.boundingBox())!;
+  const tap = async (fingers: number) => {
+    const touchPoints = Array.from({ length: fingers }, (_, i) => ({ x: box.x + 300 + i * 60, y: box.y + 60, id: i }));
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await tap(2);
+  await expect.poll(() => inkPixels(row)).toBe(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Undone' })).toBeVisible();
+  await tap(3);
+  await expect.poll(() => inkPixels(row)).toBe(drawn);
+});

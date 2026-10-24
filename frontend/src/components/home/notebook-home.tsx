@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { ArrowDownUp, Atom, Info, Plus, Search, Sigma, Sparkles, SquareFunction, Variable, X } from 'lucide-react';
+import { ArrowDownUp, Atom, Copy, Info, Plus, RefreshCw, Search, Sigma, Sparkles, SquareFunction, Trash2, Variable, X } from 'lucide-react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +19,7 @@ import { Menu, MenuPopup, MenuRadioItem } from '@/ui/menu';
 import { Spinner } from '@/ui/spinner';
 import { NotebookCardSkeleton } from './notebook-card';
 import { NotebookGrid, type GridActions } from './notebook-grid';
+import { PULL_THRESHOLD, usePullToRefresh } from './use-pull-refresh';
 
 const PRESET_ICON: Record<PresetId, typeof Atom> = { blank: Plus, schrodinger: Atom, integral: Sigma, expansion: Variable, solutions: SquareFunction };
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
@@ -36,10 +37,13 @@ export function NotebookHome() {
   const [creating, setCreating] = useState<PresetId | null>(null);
   const [local, setLocal] = useState(false);
   const [query, setQuery] = useState('');
-  const [deleted, setDeleted] = useState<NotebookSummary | null>(null);
+  const [deleted, setDeleted] = useState<NotebookSummary[]>([]);
+  // selection mode: which cards are picked, or null when not selecting
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   // card actions report failures at the bottom, where their feedback appears
   const [actionError, setActionError] = useState<string | null>(null);
-  const pendingDelete = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const pendingDelete = useRef<{ ids: string[]; timer: ReturnType<typeof setTimeout> } | null>(null);
   // cards stagger in on the first load only
   const [firstLoad, setFirstLoad] = useState(true);
   const prefs = useLibraryPrefs();
@@ -94,10 +98,12 @@ export function NotebookHome() {
     if (!p || !user) return;
     clearTimeout(p.timer);
     pendingDelete.current = null;
-    setDeleted(null);
-    void getRepository(user.id)
-      .remove(p.id)
-      .then(refresh, (e: Error) => setActionError(t('home.actionFailed', { msg: e.message })));
+    setDeleted([]);
+    const repo = getRepository(user.id);
+    void Promise.all(p.ids.map((id) => repo.remove(id))).then(refresh, (e: Error) => {
+      setActionError(t('home.actionFailed', { msg: e.message }));
+      void refresh();
+    });
   }, [user, refresh, t]);
 
   // leaving the page finishes a delete that is still waiting for Undo
@@ -112,7 +118,8 @@ export function NotebookHome() {
   const visible = useMemo(() => {
     if (!items) return null;
     const q = query.trim().toLocaleLowerCase(locale);
-    const shown = items.filter((n) => n.id !== deleted?.id && (!q || n.title.toLocaleLowerCase(locale).includes(q)));
+    const hidden = new Set(deleted.map((n) => n.id));
+    const shown = items.filter((n) => !hidden.has(n.id) && (!q || n.title.toLocaleLowerCase(locale).includes(q)));
     return arrange(shown, prefs, locale);
   }, [items, deleted, query, prefs, locale]);
 
@@ -144,36 +151,58 @@ export function NotebookHome() {
         return t('home.actionFailed', { msg: e instanceof Error ? e.message : String(e) });
       }
     },
-    duplicate: async (id) => {
-      try {
-        const copy = await duplicateNotebook(user!.id, id, (title) => t('home.copyTitle', { title }));
-        if (prefs.sort === 'custom' && visible) {
-          // the copy sits right after its original
-          const order = visible.map((n) => n.id);
-          order.splice(order.indexOf(id) + 1, 0, copy);
-          prefs.setOrder(order);
-        }
-        await refresh();
-      } catch (e) {
-        setActionError(t('home.actionFailed', { msg: e instanceof Error ? e.message : String(e) }));
-      }
-    },
-    remove: (nb) => {
-      commitDelete();
-      setActionError(null);
-      setDeleted(nb);
-      pendingDelete.current = { id: nb.id, timer: setTimeout(commitDelete, UNDO_MS) };
-    },
+    duplicate: (id) => void duplicateMany([id]),
+    remove: (nb) => removeMany([nb]),
     reorder: (ids) => {
       prefs.setOrder(ids);
       if (prefs.sort !== 'custom') prefs.setSort('custom');
     },
+    select: (id) => setSelected(new Set([id])),
+    toggle: (id) =>
+      setSelected((s) => {
+        const next = new Set(s);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
   };
+
+  // each copy sits right after its original
+  async function duplicateMany(ids: string[]) {
+    try {
+      const order = visible?.map((n) => n.id) ?? [];
+      for (const id of ids) {
+        const copy = await duplicateNotebook(user!.id, id, (title) => t('home.copyTitle', { title }));
+        order.splice(order.indexOf(id) + 1, 0, copy);
+      }
+      if (prefs.sort === 'custom') prefs.setOrder(order);
+    } catch (e) {
+      setActionError(t('home.actionFailed', { msg: e instanceof Error ? e.message : String(e) }));
+    }
+    await refresh();
+  }
+
+  function removeMany(nbs: NotebookSummary[]) {
+    commitDelete();
+    setActionError(null);
+    setDeleted(nbs);
+    pendingDelete.current = { ids: nbs.map((n) => n.id), timer: setTimeout(commitDelete, UNDO_MS) };
+  }
+
+  const picked = visible?.filter((n) => selected?.has(n.id)) ?? [];
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelected(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
+  const { pull, refreshing } = usePullToRefresh(scroller, refresh);
 
   const undoDelete = () => {
     if (pendingDelete.current) clearTimeout(pendingDelete.current.timer);
     pendingDelete.current = null;
-    setDeleted(null);
+    setDeleted([]);
   };
 
   if (loading || !user) {
@@ -186,16 +215,26 @@ export function NotebookHome() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="scrollbar-thin h-full overflow-y-auto">
+      <div ref={scroller} className="scrollbar-thin relative h-full overflow-y-auto overscroll-y-contain">
+        {(pull > 0 || refreshing) && (
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-16 z-20 flex justify-center">
+            <span
+              className="mt-2 flex size-9 items-center justify-center rounded-full bg-sheet text-accent shadow-float"
+              style={{ transform: `translateY(${refreshing ? PULL_THRESHOLD / 2 : pull / 2}px)`, opacity: refreshing ? 1 : Math.min(1, pull / PULL_THRESHOLD) }}
+            >
+              {refreshing ? <Spinner size={16} /> : <RefreshCw size={16} style={{ transform: `rotate(${pull * 3}deg)` }} />}
+            </span>
+          </div>
+        )}
         <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-6 pt-[env(safe-area-inset-top)] backdrop-blur">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-ink text-white">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Sigma size={19} aria-hidden />
           </span>
           <h1 className="flex-1 text-[16px] font-semibold">{t('app.name')}</h1>
           <AccountMenu user={user} />
         </header>
 
-        <main className="mx-auto max-w-5xl space-y-10 px-6 py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+        <main className={clsx('mx-auto max-w-5xl space-y-10 px-6 py-8', selected ? 'pb-28' : 'pb-[max(2rem,env(safe-area-inset-bottom))]')}>
           {(local || DEV_BYPASS) && (
             <p className="flex items-start gap-2 rounded-2xl bg-unknown-soft p-4 text-[14px] text-unknown">
               <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
@@ -255,13 +294,56 @@ export function NotebookHome() {
                 )}
               </div>
             ) : (
-              <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} actions={actions} />
+              <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} selected={selected} actions={actions} />
             )}
           </section>
         </main>
 
         <AnimatePresence>
-          {actionError && !deleted && (
+          {selected && (
+            <motion.div
+              key="selection"
+              role="toolbar"
+              aria-label={t('home.selected', { n: picked.length })}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-2xl bg-sheet p-1.5 shadow-float"
+            >
+              <button type="button" aria-label={t('home.doneSelecting')} onClick={() => setSelected(null)} className="inline-flex size-10 items-center justify-center rounded-xl text-ink-soft hover:bg-black/5">
+                <X size={18} aria-hidden />
+              </button>
+              <span className="min-w-24 px-1 text-[15px] font-medium tabular-nums">{t('home.selected', { n: picked.length })}</span>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(visible?.map((n) => n.id)))}>
+                {t('home.selectAll')}
+              </Button>
+              <Button
+                size="sm"
+                icon={<Copy size={15} aria-hidden />}
+                disabled={!picked.length}
+                onClick={() => {
+                  setSelected(null);
+                  void duplicateMany(picked.map((n) => n.id));
+                }}
+              >
+                {t('home.duplicate')}
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                icon={<Trash2 size={15} aria-hidden />}
+                disabled={!picked.length}
+                onClick={() => {
+                  setSelected(null);
+                  removeMany(picked);
+                }}
+              >
+                {t('common.delete')}
+              </Button>
+            </motion.div>
+          )}
+          {actionError && !deleted.length && !selected && (
             <motion.div
               key="error"
               role="alert"
@@ -277,9 +359,9 @@ export function NotebookHome() {
               </button>
             </motion.div>
           )}
-          {deleted && (
+          {deleted.length > 0 && !selected && (
             <motion.div
-              key={deleted.id}
+              key={deleted.map((n) => n.id).join()}
               role="status"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -287,7 +369,7 @@ export function NotebookHome() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-ink py-2 pr-2 pl-4 text-[15px] text-white shadow-float"
             >
-              <span className="truncate">{t('home.deleted', { title: deleted.title })}</span>
+              <span className="truncate">{deleted.length === 1 ? t('home.deleted', { title: deleted[0]!.title }) : t('home.deletedMany', { n: deleted.length })}</span>
               <button type="button" onClick={undoDelete} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold text-accent-soft hover:bg-white/10">
                 {t('home.undo')}
               </button>
@@ -311,10 +393,10 @@ function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: bool
       onClick={onCreate}
       className={clsx(
         'flex min-h-32 flex-col items-start gap-3 rounded-3xl p-4 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-not-allowed',
-        primary ? 'bg-ink text-white shadow-float' : 'bg-sheet shadow-card hover:-translate-y-0.5',
+        primary ? 'border border-dashed border-accent/40 bg-accent-soft/40 hover:bg-accent-soft/70' : 'bg-sheet shadow-card hover:-translate-y-0.5',
       )}
     >
-      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-white/15' : 'bg-accent-soft text-accent')}>
+      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-accent text-white' : 'bg-accent-soft text-accent')}>
         {busy ? <Spinner size={18} /> : <Icon size={19} aria-hidden />}
       </span>
       <span className="space-y-1">
@@ -326,7 +408,7 @@ function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: bool
             </span>
           )}
         </span>
-        <span className={clsx('line-clamp-3 block text-[13px] leading-snug text-pretty', primary ? 'text-white/75' : 'text-muted')}>{t(`preset.${id}.desc`)}</span>
+        <span className="line-clamp-2 block text-[13px] leading-snug text-pretty text-muted">{t(`preset.${id}.desc`)}</span>
       </span>
     </button>
   );

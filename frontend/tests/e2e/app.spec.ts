@@ -53,8 +53,9 @@ test('a notebook can be deleted from the list, and the delete undone first', asy
 
   await item.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
-  await expect(page.getByRole('status')).toContainText('Deleted');
-  await expect(page.getByRole('status')).toHaveCount(0, { timeout: 10_000 });
+  const notice = page.getByRole('status').filter({ hasText: 'Deleted' });
+  await expect(notice).toBeVisible();
+  await expect(notice).toHaveCount(0, { timeout: 10_000 });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
   await expect(item).toHaveCount(0);
@@ -145,7 +146,7 @@ test('iPad frame for demos rotates between landscape and portrait', async ({ pag
   }).toBe(true);
 });
 
-test('touch: holding a card opens its menu; holding and moving reorders the cards', async ({ page }) => {
+test('holding a card (touch or mouse) opens its menu; holding and moving reorders the cards', async ({ page }) => {
   await openPreset(page, /Expansion/);
   await openPreset(page, /Solving an equation/);
   await openHome(page);
@@ -164,6 +165,16 @@ test('touch: holding a card opens its menu; holding and moving reorders the card
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
 
+  // a mouse hold behaves the same, and releasing it does not open the notebook
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
+  await expect(page).toHaveURL(/\/notebooks$/);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
+
   const b = (await cards.nth(1).boundingBox())!;
   await touch('touchStart', a.x + a.width / 2, a.y + a.height / 2);
   await page.waitForTimeout(700);
@@ -177,4 +188,21 @@ test('touch: holding a card opens its menu; holding and moving reorders the card
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
   await expect.poll(async () => (await titles()).slice(0, 2)).toEqual([second, first]);
+});
+
+test('selection mode deletes several notebooks with one Undo', async ({ page }) => {
+  await openPreset(page, /Expansion/);
+  await openPreset(page, /Solving an equation/);
+  await openHome(page);
+  const cards = page.getByRole('listitem');
+  const before = await cards.count();
+  await cards.nth(0).getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Select' }).click();
+  await cards.nth(1).getByRole('button').first().click();
+  const bar = page.getByRole('toolbar');
+  await expect(bar).toContainText('2 selected');
+  await bar.getByRole('button', { name: 'Delete' }).click();
+  await expect(cards).toHaveCount(before - 2);
+  await page.getByRole('status').filter({ hasText: 'Deleted 2 notebooks' }).getByRole('button', { name: 'Undo' }).click();
+  await expect(cards).toHaveCount(before);
 });
