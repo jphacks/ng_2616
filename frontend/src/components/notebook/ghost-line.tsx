@@ -2,6 +2,8 @@
 
 import clsx from 'clsx';
 import { Check, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { candidateAncestorId } from '@/core/candidates/label';
+import { lineNumber } from '@/core/notebook/model';
 import { useNotebook, type Candidate } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Spinner } from '@/ui/spinner';
@@ -17,6 +19,7 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
   const t = useT();
   const engine = useEngine();
   const confirming = useNotebook((s) => s.ghostConfirm);
+  const nb = useNotebook((s) => s.notebook);
   const setConfirm = (v: boolean) => useNotebook.getState().set('ghostConfirm', v);
 
   if (candidate.state === 'GENERATING' || candidate.state === 'VERIFYING') {
@@ -31,8 +34,12 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
 
   const unverified = candidate.policy === 'unverified';
   const reason = candidate.lines.find((l) => l.verified?.proof.status === 'unknown')?.verified?.proof.reason;
+  // ok but resting on an unverified line: say so the same way a settled line does (P-05)
+  const ancestor = candidateAncestorId(candidate.lines);
+  const ancestorNo = ancestor && nb ? lineNumber(nb, ancestor) : null;
+  const verifiedLabel = ancestor ? t('status.local', { n: ancestorNo ?? '?' }) : t('ghost.verified');
   const label =
-    candidate.policy === 'verified' ? t('ghost.verified') : candidate.policy === 'assumption' ? t('ghost.assumption') : t('ghost.unverified', { reason: t(`reason.${reason ?? 'NO_EVIDENCE'}`) });
+    candidate.policy === 'verified' ? verifiedLabel : candidate.policy === 'assumption' ? t('ghost.assumption') : t('ghost.unverified', { reason: t(`reason.${reason ?? 'NO_EVIDENCE'}`) });
 
   const accept = () => {
     const r = engine.adopt(confirming);

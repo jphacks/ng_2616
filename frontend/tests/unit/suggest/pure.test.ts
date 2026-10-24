@@ -3,11 +3,12 @@ import { describe, it } from 'node:test';
 import type { Meta } from '@mn/contracts';
 import { blockerToastKey, suggestBlockerOf, suggestModeOf, type BlockerInput, type SuggestBlocker } from '../../../src/core/candidates/blocker';
 import { candidateHash, lineHash, mathKey } from '../../../src/core/candidates/hash';
+import { candidateAncestorId } from '../../../src/core/candidates/label';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '../../../src/core/candidates/rejection';
 import { matchesSlot, mismatchedFields, suggestFingerprint, type SlotMeta } from '../../../src/core/candidates/slot';
 import { en } from '../../../src/i18n/en';
 import { ja } from '../../../src/i18n/ja';
-import { line, notebook, problem, segs, settled, stroke, ZERO } from './fixtures';
+import { line, notebook, problem, proof, segs, settled, stroke, ZERO } from './fixtures';
 
 describe('core/candidates/hash', () => {
   it('mathKey keeps formulas in order with expr and notation only', () => {
@@ -238,5 +239,28 @@ describe('manual press of the suggest button gets an answer (R27)', () => {
       assert.ok(k in en, `en is missing ${k}`);
       assert.ok(k in ja, `ja is missing ${k}`);
     }
+  });
+});
+
+describe('core/candidates/label: candidates resting on unverified lines (R12)', () => {
+  const withProof = (status: 'ok' | 'unknown' | 'none', ancestors: string[]) => ({ verified: { verification_id: 'v', input_hash: ZERO, proof: proof(status, undefined, { unverified_ancestors: ancestors, depends_on_unverified: ancestors.length > 0 }) } });
+
+  it('I2 an ok candidate with unverified ancestors names the first one', () => {
+    assert.equal(candidateAncestorId([withProof('ok', ['L14', 'L3'])]), 'L14');
+  });
+
+  it('I2 a fully verified candidate has no ancestor', () => {
+    assert.equal(candidateAncestorId([withProof('ok', [])]), null);
+    assert.equal(candidateAncestorId([]), null);
+    assert.equal(candidateAncestorId([{}]), null);
+  });
+
+  it('I2 only an ok result is described as a consistent local step', () => {
+    assert.equal(candidateAncestorId([withProof('unknown', ['L14'])]), null);
+    assert.equal(candidateAncestorId([withProof('none', ['L14'])]), null);
+  });
+
+  it('I2 for several lines, the first ok line that has an ancestor decides', () => {
+    assert.equal(candidateAncestorId([withProof('ok', []), withProof('ok', ['L9'])]), 'L9');
   });
 });

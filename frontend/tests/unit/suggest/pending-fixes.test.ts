@@ -27,7 +27,9 @@ describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', 
   it.skip('G3 a HELD candidate returns to READY once writing has stopped in an unchanged context (R14)', () => {});
 });
 
-describe('waiting for the UI owner (ghost-line.tsx, i18n)', () => {
-  // R12: GhostLine ignores depends_on_unverified / unverified_ancestors. Needs a component test setup (none exists).
-  it.skip('I2 an ok candidate with unverified ancestors is labelled "local step consistent (unverified: line N)" (R12)', () => {});
+describe('no component test setup yet', () => {
+  // R12: the data rule is tested in pure.test.ts (I2, candidateAncestorId). GhostLine now prints "status.local" with the
+  // line number; rendering it needs jsdom + React Testing Library, which the repository does not have. E2E covers
+  // the unverified chain in demo.spec.ts ("Local step · unverified line 14" in the line statuses).
+  it.skip('I2 GhostLine renders the "local step · unverified line N" label for such a candidate (R12, component render)', () => {});
 });
