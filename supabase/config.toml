@@ -1,0 +1,36 @@
+# Optional local stack: `npx supabase start` (needs Docker). Magic-link emails are caught by the
+# bundled Mailpit at http://127.0.0.1:54324.
+project_id = "math-notebook"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.email.template.magic_link]
+subject = "Sign in to Math Notebook"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
