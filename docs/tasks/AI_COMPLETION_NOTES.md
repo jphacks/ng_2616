@@ -1,6 +1,6 @@
 # AI数式補完 実装メモ
 
-最終更新：2026-10-24（段階3 完了時点。①の関数の変更を含む。main は取り込み済みで、取り込むものは無かった）。担当：AI数式補完（M-06）。
+最終更新：2026-10-24（段階3 完了時点。①の関数の変更を含む。main の PR #39 を取り込み済み、衝突なし）。担当：AI数式補完（M-06）。
 
 **方針（人間の決定）**：案A＝Python の suggest は作らない。既存の TypeScript 実装を仕上げる。基準設計書は `docs/design/v2.0-en.md` + `v2.1-deltas.md` + ADR。`docs/tasks/AI_COMPLETION_TASK.md`（v1.9 前提）は担当範囲の考え方と「他担当の領域に触らない」ルールだけを参照する。v1.9 前提の部分は失効しており、末尾の「履歴」にある。
 
@@ -34,10 +34,10 @@
 
 | 対象 | 結果 | 日時 | 環境（コミット） |
 | --- | --- | --- | --- |
-| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 150 件：149 通過／0 失敗／1 skip | 2026-10-24 | ローカル、`b671464`（main は最新で、取り込むものは無かった） |
+| `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 150 件：149 通過／0 失敗／1 skip | 2026-10-24 | ローカル、`22ee644`（main の PR #39 `7257c04` を取り込み済み、衝突なし） |
 | `tsc --noEmit`（frontend） | エラー 0 | 2026-10-24 | 同上 |
 | `eslint`（src、tests） | エラー 0（警告 7 件は今回触っていない既存ファイル） | 2026-10-24 | 同上 |
-| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分）。1 回目は 9 通過／1 失敗（下の S-04 の注意を参照） | 2026-10-24 | mock＋実 CAS、ローカル、`b671464` ＋ `checking.spec.ts` の 1 箇所の修正 |
+| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分）。1 回目は 9 通過／1 失敗（下の S-04 の注意を参照） | 2026-10-24 | mock＋実 CAS、ローカル、`22ee644`（`checking.spec.ts` の 1 箇所の修正を含む） |
 
 `tests/unit/suggest/` の内訳（件数／通過／skip）：candidate 11／11／0、pure 37／37／0、model 10／10／0、service 16／16／0、client 9／9／0、epoch 5／5／0、engine-suggest 36／36／0、engine-held 8／8／0、engine-adopt 14／14／0、pending-fixes 1／0／1（`GhostLine` の描画テスト I2。jsdom と React Testing Library が無い）。`history.test.ts` は 3／3／0。
 過去の試験記録（段階1、コミット `0548c91`）は末尾の「履歴」にある。
