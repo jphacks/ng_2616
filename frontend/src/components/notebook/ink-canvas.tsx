@@ -112,24 +112,46 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale, t: Math.round(e.timeStamp - t0), p: Number(pressure.toFixed(3)) };
   };
 
+  const commitLive = () => {
+    const l = live.current;
+    if (!l) return;
+    live.current = null;
+    if (l.points.length > 0) {
+      const stroke = { id: shortId('s'), points: l.points };
+      pendingStrokesRef.current.push(stroke);
+      strokesRef.current = [...strokesRef.current, stroke];
+      draw();
+      onStroke?.(stroke);
+    }
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // If a previous stroke was not finished before this new pointerdown (e.g. rapid pen gestures on iPad),
+    // salvage and commit it so the 1st stroke is never lost!
+    if (live.current && live.current.points.length > 0) {
+      commitLive();
+    }
     if (e.pointerType === 'pen') markPenSeen();
     const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && penSeen);
     if (fingerScroll || !editable) {
       if (!editable && tool !== 'view') onActivate?.();
       scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
+      if (e.pointerType === 'mouse') {
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+    e.preventDefault();
+    if (e.pointerType === 'mouse') {
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
         // ignore
       }
-      return;
-    }
-    e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // iOS WebKit can throw or ignore pointer capture
     }
     onPenDown?.();
     if (tool === 'eraser') {
@@ -160,7 +182,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       return;
     }
     const l = live.current;
-    if (!l || l.id !== e.pointerId) return;
+    if (!l) return;
+    // On iPad, pointerId can occasionally shift or be 0 for pens; track if it's the active pen
+    if (l.id !== e.pointerId && e.pointerType !== 'pen') return;
     const events = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
     for (const ev of events.length ? events : [e.nativeEvent]) {
       const p = local(ev, l.t0);
@@ -172,10 +196,12 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   };
 
   const finish = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // ignore in case capture was lost or not set
+    if (e.pointerType === 'mouse') {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
     }
     if (scrolling.current?.id === e.pointerId) {
       scrolling.current = null;
@@ -195,15 +221,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       return;
     }
     const l = live.current;
-    if (!l || l.id !== e.pointerId) return;
-    live.current = null;
-    if (l.points.length > 0) {
-      const stroke = { id: shortId('s'), points: l.points };
-      // optimistically append to both pendingStrokes and strokesRef so the stroke is permanently visible at 0ms
-      pendingStrokesRef.current.push(stroke);
-      strokesRef.current = [...strokesRef.current, stroke];
-      draw();
-      onStroke?.(stroke);
+    if (!l) return;
+    if (l.id === e.pointerId || e.pointerType === 'pen') {
+      commitLive();
     }
     schedule();
   };
@@ -218,6 +238,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         onPointerMove={onPointerMove}
         onPointerUp={finish}
         onPointerCancel={finish}
+        onPointerLeave={finish}
       />
     </div>
   );
