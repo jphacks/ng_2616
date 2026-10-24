@@ -72,7 +72,8 @@ export const inkPixels = (row: Locator) =>
     return n;
   });
 
-export const statusOf = (page: Page, index: number) => rows(page).nth(index).locator('button[title]').last();
+/** The line's status badge, shown once the line has been checked (other buttons in the row have titles too). */
+export const statusOf = (page: Page, index: number) => rows(page).nth(index).locator('[data-status]');
 
 function job(meta: unknown, kind: string, extra: Record<string, unknown>) {
   const now = new Date().toISOString();

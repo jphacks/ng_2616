@@ -1,7 +1,7 @@
 import type { CandidateDraftResult, Line, Notebook, Stroke, SuggestInput } from '@mn/contracts';
 import { toInputSegments } from '@mn/contracts';
 import type { CasOutcome } from '../../../src/core/cas/controller';
-import type { CasPayload, CasRawProof } from '../../../src/core/cas/payload';
+import { inputHash, payloadForLine, type CasPayload, type CasRawProof } from '../../../src/core/cas/payload';
 import { NotebookEngine, type ApiPort, type CasPort } from '../../../src/core/engine';
 import { useNotebook } from '../../../src/core/store/notebook-store';
 import { line, notebook, segs, settled, stroke } from './fixtures';
@@ -140,15 +140,29 @@ export interface Rig {
 }
 
 /**
+ * Settled lines carry the input hash their check would have now, as in a notebook that was really
+ * checked: the engine re-checks a line whose stored hash no longer matches (after Undo, Redo or
+ * opening), and a placeholder hash would make every such step call the checker.
+ */
+function checkedWith(nb: Notebook, casVersion: string): Notebook {
+  const lines = nb.lines.map((l) => {
+    if (l.state !== 'SETTLED' || !l.verified) return l;
+    const hash = inputHash(nb, payloadForLine(nb, l.id), casVersion);
+    return { ...l, verified: { ...l.verified, input_hash: hash, proof: { ...l.verified.proof, input_hash: hash } } };
+  });
+  return { ...nb, lines };
+}
+
+/**
  * A NotebookEngine on the real store with a fake CAS and api. The notebook is `lines` (default: one ok line "x = 1" and an
  * empty draft). Toasts are the translation keys the engine asked for.
  */
 export function rig(opts: { lines?: Line[]; cas?: FakeCas; api?: FakeApi; answer?: SuggestAnswer } = {}): Rig {
   const lines = opts.lines ?? [settled('L1', '$x = 1$', 'ok'), line('D1', 'DRAFT')];
-  const nb: Notebook = notebook(lines);
+  const cas = opts.cas ?? fakeCas();
+  const nb: Notebook = checkedWith(notebook(lines), cas.versionString);
   const st = useNotebook.getState();
   st.load(nb, null);
-  const cas = opts.cas ?? fakeCas();
   const api = opts.api ?? fakeApi(opts.answer ?? ((input) => draftFor(input, 'x = 2')));
   const toasts: string[] = [];
   const engine = new NotebookEngine({ ownerId: 'owner', lang: () => 'en', t: (k) => k }, { cas, api });

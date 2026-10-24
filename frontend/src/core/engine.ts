@@ -529,7 +529,6 @@ export class NotebookEngine {
     const ctxLines = [...contextLinesFor(nb, last.id), last];
     // rejections are remembered per context: the same notebook content, mode and kind of target (spec §7.3)
     const rejectKey = rejectionKey(semanticHash(nb, payloadForCandidate(nb, ctxLines, { id: targetId, role: 'step', segments: [] })), mode);
-    const rejected = rejectionsFor(s.rejections, rejectKey);
     const pending: Candidate = {
       id: uuid(),
       mode,
@@ -580,20 +579,23 @@ export class NotebookEngine {
       };
       const result = await runAttempts<Candidate>(SUGGEST_ATTEMPTS, async (feedback, tried) => {
         const cur = store.getState();
+        // what was rejected in this context (by the student or the checker), read again on every attempt
+        const rejected = rejectionsFor(cur.rejections, rejectKey);
         // checker rejections travel as feedback (with the reason), so list them only once
         const fed = new Set(feedback.map((f) => f.latex));
         const input: SuggestInput = {
           ...base,
-          rejected_hashes: [...new Set([...cur.rejectedHashes, ...tried])].slice(-64),
-          rejected_latex: cur.rejectedLatex.filter((l: string) => !fed.has(l)).slice(-16),
+          rejected_hashes: [...new Set([...rejected.hashes, ...tried])].slice(-64),
+          rejected_latex: rejected.latex.filter((l) => !fed.has(l)).slice(-16),
           ...(feedback.length ? { checker_feedback: feedback } : {}),
         };
         if (feedback.length) cur.set('candidate', pending);
         const res = await this.api.suggest(this.meta(last.id, last.version), input, ctl.signal);
-        if (this.isStale(epoch, last)) return { kind: 'stale' };
+        // stale unless the whole context still matches: epoch, the line's version and the lines it was made from
+        if (this.isStale(slot)) return { kind: 'stale' };
         if (res.state === 'NONE' || !res.candidate) return res.reason === 'REJECTED_BEFORE' || res.reason === 'DUPLICATE' ? { kind: 'repeat' } : { kind: 'none' };
         store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
-        return this.verifyCandidate(res.candidate, pending, ctxLines);
+        return this.verifyCandidate(res.candidate, pending, ctxLines, slot);
       });
       if (result.kind === 'stale') {
         release();
@@ -641,11 +643,7 @@ export class NotebookEngine {
   }
 
   /** A result is stale unless it carries all seven fields of what the active request would carry now. */
-  private isStale(slotOrEpoch: SlotMeta | number, basedOn?: Line): boolean {
-    if (typeof slotOrEpoch === 'number') {
-      return this.disposed || !basedOn || !findLine(this.nb, basedOn.id) || store.getState().epoch !== slotOrEpoch;
-    }
-    const slot = slotOrEpoch;
+  private isStale(slot: SlotMeta): boolean {
     const nb = store.getState().notebook;
     const cur = nb ? findLine(nb, slot.line_id!) : undefined;
     if (this.disposed || !nb || !cur || this.suggestSlot?.request_id !== slot.request_id) return true;
@@ -662,6 +660,7 @@ export class NotebookEngine {
     draft: NonNullable<Awaited<ReturnType<typeof api.suggest>>['candidate']>,
     pending: Candidate,
     ctxLines: Line[],
+    slot: SlotMeta,
   ): Promise<Attempt<Candidate>> {
     const nb = this.nb;
     const basedOn = findLine(nb, pending.basedOnLineId)!;
@@ -674,7 +673,7 @@ export class NotebookEngine {
       const casVersion = this.cas.versionString;
       const hash = inputHash(nb, payload, casVersion);
       const out = await this.cas.verify(payload);
-      if (this.isStale(pending.epoch, basedOn)) return { kind: 'stale' };
+      if (this.isStale(slot)) return { kind: 'stale' };
       if (out.kind === 'unavailable') {
         store.getState().set('candidate', null);
         return { kind: 'stale' };
@@ -703,8 +702,6 @@ export class NotebookEngine {
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
     const s = store.getState();
     const latex = segmentsLatex(segments);
-    s.set('rejectedHashes', [...s.rejectedHashes, draft.content_hash]);
-    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
     if (pending.rejectKey) s.set('rejections', addRejection(s.rejections, pending.rejectKey, draft.content_hash, latex));
     s.set('rejection', { id: draft.id, segments, proof, basedOnLineId: pending.basedOnLineId });
   }
@@ -770,8 +767,6 @@ export class NotebookEngine {
     );
     s.set('candidate', null);
     s.set('rejection', null);
-    s.set('rejectedHashes', []);
-    s.set('rejectedLatex', []);
     if (this.syncDeclarations()) void this.recheckStale();
     this.scheduleSuggestion(500);
     return 'adopted';
@@ -944,13 +939,18 @@ function watchPage(saver: Autosaver): () => void {
     void saver.flush();
   };
   const onOnline = () => saver.retry();
-  const onPageHide = () => saver.flushLocal();
+  // beforeunload comes while the page is still alive (a reload waits for the new page), so a write
+  // started here has time to finish; pagehide comes just before teardown and may be cut short, but
+  // is the only one iOS Safari fires reliably
+  const onLeave = () => saver.flushLocal();
   document.addEventListener('visibilitychange', onHide);
   window.addEventListener('online', onOnline);
-  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('beforeunload', onLeave);
+  window.addEventListener('pagehide', onLeave);
   return () => {
     document.removeEventListener('visibilitychange', onHide);
     window.removeEventListener('online', onOnline);
-    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('beforeunload', onLeave);
+    window.removeEventListener('pagehide', onLeave);
   };
 }
