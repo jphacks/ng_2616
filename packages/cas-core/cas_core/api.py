@@ -49,8 +49,12 @@ def verify(payload: dict) -> dict:
             if seg.get("type") != "math":
                 continue
             results.append((i, verify_segment(seg["expr"], seg.get("notation", "plain"), target.get("role", "step"), ctx)))
+        declares = {r.reason for _, r in results}
         if not results:
             primary = SegResult("none", reason="TEXT_ONLY")
+        elif declares == {"ASSUMPTION", "FUNCTION"}:
+            # "Given I(a), where a > 0": functions and assumptions on one line
+            primary = SegResult("none", goal="DECLARATION", reason="DECLARATION")
         else:
             agg = next(s for s in ORDER if any(r.status == s for _, r in results))
             primary = next(r for _, r in results if r.status == agg)

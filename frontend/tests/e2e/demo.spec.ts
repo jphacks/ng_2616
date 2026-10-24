@@ -15,8 +15,8 @@ async function scribble(page: Page, row: Locator) {
 
 const rows = (page: Page) => page.locator('[data-line-id]');
 
-/** The Schrödinger template's given lines: statement, TDSE, five assumptions, four functions. */
-const GIVEN = 11;
+/** The Schrödinger template's given lines: statement, TDSE, functions, conditions. */
+const GIVEN = 4;
 
 test('Schrödinger demo: student lines, CAS-gated AI steps, rejected wrong step, unverified steps', async ({ page }) => {
   await openPreset(page, /Schrödinger/);

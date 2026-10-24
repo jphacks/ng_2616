@@ -3914,6 +3914,536 @@
     }
   },
   {
+    "id": "DC-10",
+    "note": "the compact Schrödinger template: functions on one line, conditions on the next",
+    "expect": {
+      "status": "wrong",
+      "category": "SIGN"
+    },
+    "payload": {
+      "lines": [
+        {
+          "id": "S1",
+          "role": "premise",
+          "segments": [
+            {
+              "type": "math",
+              "expr": [
+                "Equal",
+                [
+                  "Multiply",
+                  "ImaginaryUnit",
+                  "Hbar",
+                  [
+                    "PartialD",
+                    [
+                      "Apply",
+                      "Psi"
+                    ],
+                    "t"
+                  ]
+                ],
+                [
+                  "Add",
+                  [
+                    "Negate",
+                    [
+                      "Multiply",
+                      [
+                        "Divide",
+                        [
+                          "Power",
+                          "Hbar",
+                          2
+                        ],
+                        [
+                          "Multiply",
+                          2,
+                          "m"
+                        ]
+                      ],
+                      [
+                        "PartialD",
+                        [
+                          "PartialD",
+                          [
+                            "Apply",
+                            "Psi"
+                          ],
+                          "x"
+                        ],
+                        "x"
+                      ]
+                    ]
+                  ],
+                  [
+                    "Multiply",
+                    [
+                      "Apply",
+                      "V",
+                      "x"
+                    ],
+                    [
+                      "Apply",
+                      "Psi"
+                    ]
+                  ]
+                ]
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 0,
+              "status": "none",
+              "reason": "PREMISE"
+            }
+          ]
+        },
+        {
+          "id": "S2",
+          "role": "premise",
+          "segments": [
+            {
+              "type": "text",
+              "text": "Given"
+            },
+            {
+              "type": "math",
+              "expr": [
+                "Apply",
+                "Psi",
+                "x",
+                "t"
+              ],
+              "notation": "plain"
+            },
+            {
+              "type": "math",
+              "expr": [
+                "Apply",
+                "psi",
+                "x"
+              ],
+              "notation": "plain"
+            },
+            {
+              "type": "math",
+              "expr": [
+                "Apply",
+                "phi",
+                "t"
+              ],
+              "notation": "plain"
+            },
+            {
+              "type": "math",
+              "expr": [
+                "Apply",
+                "V",
+                "x"
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 1,
+              "status": "none",
+              "reason": "FUNCTION"
+            },
+            {
+              "segment_index": 2,
+              "status": "none",
+              "reason": "FUNCTION"
+            },
+            {
+              "segment_index": 3,
+              "status": "none",
+              "reason": "FUNCTION"
+            },
+            {
+              "segment_index": 4,
+              "status": "none",
+              "reason": "FUNCTION"
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "role": "premise",
+          "segments": [
+            {
+              "type": "text",
+              "text": "where"
+            },
+            {
+              "type": "math",
+              "expr": [
+                "And",
+                [
+                  "Greater",
+                  "m",
+                  0
+                ],
+                [
+                  "Greater",
+                  "L",
+                  0
+                ],
+                [
+                  "Element",
+                  "n",
+                  "PositiveIntegers"
+                ],
+                [
+                  "NotEqual",
+                  [
+                    "Apply",
+                    "psi",
+                    "x"
+                  ],
+                  0
+                ],
+                [
+                  "NotEqual",
+                  [
+                    "Apply",
+                    "phi",
+                    "t"
+                  ],
+                  0
+                ]
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 1,
+              "status": "none",
+              "reason": "ASSUMPTION"
+            }
+          ]
+        },
+        {
+          "id": "u1",
+          "role": "step",
+          "segments": [
+            {
+              "type": "math",
+              "expr": [
+                "Equal",
+                [
+                  "Apply",
+                  "V",
+                  "x"
+                ],
+                0
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 0,
+              "status": "none",
+              "reason": "DEFINITION"
+            }
+          ]
+        }
+      ],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": [
+              "Equal",
+              [
+                "Multiply",
+                "ImaginaryUnit",
+                "Hbar",
+                [
+                  "PartialD",
+                  [
+                    "Apply",
+                    "Psi"
+                  ],
+                  "t"
+                ]
+              ],
+              [
+                "Multiply",
+                [
+                  "Divide",
+                  [
+                    "Power",
+                    "Hbar",
+                    2
+                  ],
+                  [
+                    "Multiply",
+                    2,
+                    "m"
+                  ]
+                ],
+                [
+                  "PartialD",
+                  [
+                    "PartialD",
+                    [
+                      "Apply",
+                      "Psi"
+                    ],
+                    "x"
+                  ],
+                  "x"
+                ]
+              ]
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": "u1"
+    }
+  },
+  {
+    "id": "DC-11",
+    "note": "a line of function declarations",
+    "expect": {
+      "status": "none",
+      "reason": "FUNCTION"
+    },
+    "payload": {
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "text",
+            "text": "Given"
+          },
+          {
+            "type": "math",
+            "expr": [
+              "Apply",
+              "Psi",
+              "x",
+              "t"
+            ],
+            "notation": "plain"
+          },
+          {
+            "type": "math",
+            "expr": [
+              "Apply",
+              "psi",
+              "x"
+            ],
+            "notation": "plain"
+          },
+          {
+            "type": "math",
+            "expr": [
+              "Apply",
+              "phi",
+              "t"
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
+    "id": "DC-12",
+    "note": "a line of assumptions",
+    "expect": {
+      "status": "none",
+      "reason": "ASSUMPTION"
+    },
+    "payload": {
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "text",
+            "text": "where"
+          },
+          {
+            "type": "math",
+            "expr": [
+              "And",
+              [
+                "Greater",
+                "m",
+                0
+              ],
+              [
+                "Greater",
+                "L",
+                0
+              ],
+              [
+                "Element",
+                "n",
+                "PositiveIntegers"
+              ]
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
+    "id": "DC-13",
+    "note": "functions and assumptions on one line",
+    "expect": {
+      "status": "none",
+      "reason": "DECLARATION"
+    },
+    "payload": {
+      "lines": [],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "text",
+            "text": "Given"
+          },
+          {
+            "type": "math",
+            "expr": [
+              "Apply",
+              "I",
+              "a"
+            ],
+            "notation": "plain"
+          },
+          {
+            "type": "text",
+            "text": ", where"
+          },
+          {
+            "type": "math",
+            "expr": [
+              "Greater",
+              "a",
+              0
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": null
+    }
+  },
+  {
+    "id": "DC-14",
+    "note": "an assumption from a compact line applies",
+    "expect": {
+      "status": "ok"
+    },
+    "payload": {
+      "lines": [
+        {
+          "id": "A",
+          "role": "step",
+          "segments": [
+            {
+              "type": "text",
+              "text": "where"
+            },
+            {
+              "type": "math",
+              "expr": [
+                "And",
+                [
+                  "GreaterEqual",
+                  "x",
+                  0
+                ],
+                [
+                  "Greater",
+                  "y",
+                  0
+                ]
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 1,
+              "status": "none",
+              "reason": "ASSUMPTION"
+            }
+          ]
+        },
+        {
+          "id": "L1",
+          "role": "step",
+          "segments": [
+            {
+              "type": "math",
+              "expr": [
+                "Sqrt",
+                [
+                  "Power",
+                  "x",
+                  2
+                ]
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 0,
+              "status": "none",
+              "reason": "NO_PARENT"
+            }
+          ]
+        }
+      ],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": "x",
+            "notation": "continuation"
+          }
+        ]
+      },
+      "parent_id": "L1"
+    }
+  },
+  {
     "id": "DC-09",
     "note": "the same with a sign error",
     "expect": {

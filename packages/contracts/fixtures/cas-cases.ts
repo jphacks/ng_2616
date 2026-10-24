@@ -3,7 +3,7 @@
  * hand from the mathematics, not copied from implementation output.
  */
 import type { Role, Status } from '../src/schemas';
-import { SCHRODINGER_GIVEN, SCHRODINGER_SCRIPT } from './demo';
+import { SCHRODINGER_GIVEN, SCHRODINGER_SCRIPT, TDSE_LATEX } from './demo';
 
 export interface FixtureLine {
   id: string;
@@ -202,6 +202,25 @@ export const CAS_CASES: CasCase[] = [
     ],
     target: T('$i\\hbar \\frac{\\partial \\Psi}{\\partial t} = -\\frac{\\hbar^2}{2m}\\frac{\\partial^2 \\Psi}{\\partial x^2}$'),
     expect: { status: 'ok' },
+  },
+  {
+    id: 'DC-10', note: 'the compact Schrödinger template: functions on one line, conditions on the next',
+    lines: [
+      { id: 'S1', src: `$${TDSE_LATEX}$`, role: 'premise', status: 'none', reason: 'PREMISE' },
+      { id: 'S2', src: 'Given $\\Psi(x,t)$ $\\psi(x)$ $\\phi(t)$ $V(x)$', role: 'premise', status: 'none', reason: 'FUNCTION' },
+      { id: 'S3', src: 'where $m > 0, L > 0, n \\in \\mathbb{Z}^{+}, \\psi(x) \\neq 0, \\phi(t) \\neq 0$', role: 'premise', status: 'none', reason: 'ASSUMPTION' },
+      { id: 'u1', src: '$V(x) = 0$', status: 'none', reason: 'DEFINITION' },
+    ],
+    target: T('$i\\hbar \\frac{\\partial \\Psi}{\\partial t} = \\frac{\\hbar^2}{2m}\\frac{\\partial^2 \\Psi}{\\partial x^2}$'),
+    expect: { status: 'wrong', category: 'SIGN' },
+  },
+  { id: 'DC-11', note: 'a line of function declarations', lines: [], target: T('Given $\\Psi(x,t)$ $\\psi(x)$ $\\phi(t)$'), expect: { status: 'none', reason: 'FUNCTION' } },
+  { id: 'DC-12', note: 'a line of assumptions', lines: [], target: T('where $m > 0, L > 0, n \\in \\mathbb{Z}^{+}$'), expect: { status: 'none', reason: 'ASSUMPTION' } },
+  { id: 'DC-13', note: 'functions and assumptions on one line', lines: [], target: T('Given $I(a)$, where $a > 0$'), expect: { status: 'none', reason: 'DECLARATION' } },
+  {
+    id: 'DC-14', note: 'an assumption from a compact line applies',
+    lines: [{ id: 'A', src: 'where $x \\ge 0, y > 0$', status: 'none', reason: 'ASSUMPTION' }, { id: 'L1', src: '$\\sqrt{x^2}$', status: 'none', reason: 'NO_PARENT' }],
+    target: T('$= x$'), expect: { status: 'ok' },
   },
   {
     id: 'DC-09', note: 'the same with a sign error',
