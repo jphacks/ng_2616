@@ -11,7 +11,7 @@
     "start": "next start",
     "typecheck": "pnpm prepare-assets && tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test tests/unit/history.test.ts tests/unit/autosave.test.ts tests/unit/outbox.test.ts tests/unit/scratch.test.ts tests/unit/suggest-attempts.test.ts tests/unit/presets.test.ts",
+    "test": "tsx --test tests/unit/history.test.ts tests/unit/autosave.test.ts tests/unit/outbox.test.ts tests/unit/scratch.test.ts tests/unit/suggest-attempts.test.ts tests/unit/presets.test.ts tests/unit/canvas-height.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

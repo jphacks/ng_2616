@@ -4,16 +4,15 @@ import type { Stroke, StrokePoint } from '@mn/contracts';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { shortId } from '@/core/ids';
 import { scratchTargets } from '@/core/ink/scratch';
-import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
+import { drawStroke, strokesHit } from '@/core/ink/stroke';
 import { INK_WEIGHTS, useDevicePrefs } from '@/core/prefs/device';
 import { tokenColor } from '@/ui/tokens';
 import type { Tool } from '@/core/store/notebook-store';
 import { fingersDown, useSecondFinger } from './gestures';
 import { usePageZoom } from './zoom';
 
-export const LINE_HEIGHT = 140;
-const MAX_HEIGHT = 560;
-const PADDING_BOTTOM = 16;
+import { inkHeight, LINE_HEIGHT, MAX_HEIGHT, PADDING_BOTTOM } from '@/core/ink/height';
+export { inkHeight, LINE_HEIGHT };
 const ERASER_RADIUS = 20;
 const MAX_BACKING_SCALE = 3;
 const INK_ALPHA = { erasing: 0.18, dim: 0.55, hover: 0.32 } as const;
@@ -22,13 +21,6 @@ let penSeen = false;
 const markPenSeen = () => {
   penSeen = true;
 };
-
-export function inkHeight(strokes: readonly Stroke[]): number {
-  const b = strokesBounds(strokes);
-  if (!b) return LINE_HEIGHT;
-  const needed = Math.ceil(b.maxY + PADDING_BOTTOM);
-  return Math.min(MAX_HEIGHT, Math.max(LINE_HEIGHT, needed));
-}
 
 function scrollParent(el: HTMLElement | null): HTMLElement | null {
   let cur = el?.parentElement ?? null;
@@ -194,19 +186,24 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   }, [draw]);
 
   useLayoutEffect(() => {
-    // If strokes count decreased (e.g. Undo or Clear), purge pending strokes to avoid resurrection
-    if (strokes.length < strokesRef.current.length) {
+    if (strokes.length === 0 && !liveStroke.current) {
       pendingStrokesRef.current = [];
-    } else if (pendingStrokesRef.current.length > 0) {
+      strokesRef.current = [];
+    } else {
       const confirmed = new Set(strokes.map((s) => s.id));
-      pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
+      if (pendingStrokesRef.current.length > 0) {
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
+      }
+      if (strokes.length < strokesRef.current.length) {
+        pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => confirmed.has(s.id));
+      }
+      const map = new Map<string, Stroke>();
+      for (const s of strokes) map.set(s.id, s);
+      for (const s of pendingStrokesRef.current) {
+        if (!map.has(s.id)) map.set(s.id, s);
+      }
+      strokesRef.current = Array.from(map.values());
     }
-    const map = new Map<string, Stroke>();
-    for (const s of strokes) map.set(s.id, s);
-    for (const s of pendingStrokesRef.current) {
-      if (!map.has(s.id)) map.set(s.id, s);
-    }
-    strokesRef.current = Array.from(map.values());
     backingDirty.current = true;
     if (!liveStroke.current) {
       setHeight(inkHeight(strokesRef.current));
