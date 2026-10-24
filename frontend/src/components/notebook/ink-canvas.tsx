@@ -102,7 +102,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     return () => ro.disconnect();
   }, []);
 
-  const updateBacking = (w: number, h: number, dpr: number) => {
+  const updateBacking = useCallback((w: number, h: number, dpr: number) => {
     if (!backingCanvas.current) {
       backingCanvas.current = document.createElement('canvas');
     }
@@ -127,7 +127,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       drawStroke(bctx, s.points, inkSize, true);
     }
     backingDirty.current = false;
-  };
+  }, [dim, inkSize]);
 
   const draw = useCallback(() => {
     const c = canvas.current;
@@ -181,10 +181,12 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
       ctx.globalAlpha = 1;
     }
-  }, [width, height, dim, inkSize, editable, tool, zoom]);
+  }, [width, height, dim, inkSize, editable, tool, zoom, updateBacking]);
 
   const drawRef = useRef(draw);
-  drawRef.current = draw;
+  useLayoutEffect(() => {
+    drawRef.current = draw;
+  });
 
   useLayoutEffect(() => {
     const confirmed = new Set(strokes.map((s) => s.id));
@@ -273,7 +275,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   }, [schedule]);
 
   const commitLiveRef = useRef(commitLive);
-  commitLiveRef.current = commitLive;
+  useLayoutEffect(() => {
+    commitLiveRef.current = commitLive;
+  });
 
   const eraseAt = (e: PointerEvent) => {
     const p = local(e, 0);
