@@ -1,9 +1,9 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { inkPixels, mockRecognition, mockSuggestions, openPreset, rows, statusOf, writeAndConfirm } from './helpers';
 
 test('a failed recognition keeps the ink, offers Retry and Back to ink', async ({ page }) => {
   await mockRecognition(page, [{ fail: 'IR_INVALID' }, '$x^2 + 1$']);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await expect(page.getByText('Could not read this line')).toBeVisible();
   expect(await inkPixels(rows(page).first())).toBeGreaterThan(0);
@@ -15,7 +15,7 @@ test('a read outside the parser grammar is kept as written and marked not checka
   const latex = String.raw`\begin{pmatrix} 1 \\ 2 \end{pmatrix}`;
   await mockRecognition(page, [{ unparsed: latex }, '$x + 1$']);
   await mockSuggestions(page, []);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await expect(statusOf(page, 0)).toHaveAttribute('title', 'Not checkable · the checker cannot read this notation yet');
   await expect(page.getByText('Could not read this line')).toBeHidden();
@@ -26,7 +26,7 @@ test('a read outside the parser grammar is kept as written and marked not checka
 
 test('Back to ink turns a failed line into an editable draft', async ({ page }) => {
   await mockRecognition(page, [{ fail: 'IR_INVALID' }]);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await page.getByRole('button', { name: 'Back to ink' }).click();
   await expect(page.getByRole('button', { name: 'Confirm' }).first()).toBeEnabled();
@@ -35,7 +35,7 @@ test('Back to ink turns a failed line into an editable draft', async ({ page }) 
 test('wrong step: category first, then evidence, hints, revision and recovery', async ({ page }) => {
   await mockRecognition(page, ['$(x-2)(x-3)$', '$= x^2 - 5x + 5$', '$= x^2 - 5x + 6$']);
   await mockSuggestions(page, []);
-  await openPreset(page, /Expansion/);
+  await openPreset(page, /Expand a polynomial/);
   await writeAndConfirm(page);
   await expect(statusOf(page, 0)).toHaveAttribute('title', 'Starting line');
   await writeAndConfirm(page);
@@ -71,7 +71,7 @@ test('wrong step: category first, then evidence, hints, revision and recovery', 
 test('completing a right-hand side: "1 + 1 =" → verified "1 + 1 = 2"', async ({ page }) => {
   await mockRecognition(page, ['$1 + 1 =$']);
   const calls = await mockSuggestions(page, ['$1 + 1 = 2$']);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await expect(statusOf(page, 0)).toHaveAttribute('title', /Not verified · incomplete/);
   await expect(page.getByText('Verified suggestion')).toBeVisible();
@@ -85,7 +85,7 @@ test('completing a right-hand side: "1 + 1 =" → verified "1 + 1 = 2"', async (
 test('a wrong suggestion is never offered; the checker rejection is explained', async ({ page }) => {
   await mockRecognition(page, ['$x^2 = 4$']);
   await mockSuggestions(page, ['$x = 2$', '$x = \\pm 2$']);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await expect(page.getByText('Checker rejected a suggestion')).toBeVisible();
   await expect(page.getByText('Verified suggestion')).toBeVisible();
@@ -99,7 +99,7 @@ test('a wrong suggestion is never offered; the checker rejection is explained', 
 test('an unverified suggestion is amber and needs a second confirmation', async ({ page }) => {
   await mockRecognition(page, ['$x$']);
   await mockSuggestions(page, ['$= \\sum_{n=1}^{\\infty} \\frac{x}{n^2}$']);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await expect(page.getByText(/^Unverified ·/)).toBeVisible();
   await page.keyboard.press('Tab');
@@ -108,16 +108,35 @@ test('an unverified suggestion is amber and needs a second confirmation', async 
   await page.keyboard.press('Tab');
   await expect(rows(page)).toHaveCount(3);
   await expect(statusOf(page, 1)).toHaveAttribute('title', /Not verified/);
-  await expect(rows(page).nth(1).getByText('AI')).toBeVisible();
+  await expect(rows(page).nth(1).getByText('AI', { exact: true })).toBeVisible();
 });
 
 test('Escape dismisses a suggestion without changing any line', async ({ page }) => {
   await mockRecognition(page, ['$x^2 = 4$']);
   await mockSuggestions(page, ['$x = \\pm 2$']);
-  await openPreset(page, /Untitled notebook/);
+  await openPreset(page, /New empty notebook/);
   await writeAndConfirm(page);
   await expect(page.getByText('Verified suggestion')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByText('Verified suggestion')).toBeHidden();
   await expect(rows(page)).toHaveCount(2);
+});
+
+test('swiping a settled line left reveals its actions', async ({ page }) => {
+  await mockRecognition(page, ['$(x-2)(x-3)$', '$= x^2 - 5x + 5$']);
+  await mockSuggestions(page, []);
+  await openPreset(page, /Expand a polynomial/);
+  await writeAndConfirm(page);
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 1)).toHaveAttribute('title', 'Constant term');
+  const row = rows(page).nth(1);
+  const box = (await row.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6 - 260, box.y + box.height / 2, { steps: 12 });
+  await page.mouse.up();
+  const strip = row.locator('[aria-hidden="true"]').first();
+  await expect(strip.getByText('Revise')).toBeInViewport();
+  await strip.getByText('Details').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 });

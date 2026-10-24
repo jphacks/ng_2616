@@ -19,8 +19,8 @@ async function worksheet(page: Page): Promise<Buffer> {
 async function openImport(page: Page, buffer?: Buffer) {
   await page.route('https://cdn.jsdelivr.net/**', (r) => r.abort());
   await page.goto('/notebooks');
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
-  await page.getByRole('button', { name: /Untitled notebook/ }).first().click();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
+  await page.getByRole('button', { name: /New empty notebook/ }).first().click();
   await expect(page.getByRole('button', { name: 'Import problem PDF' })).toBeVisible();
   const row = page.locator('[data-line-id]').last();
   await scribble(page, row);
@@ -50,7 +50,6 @@ test('real worksheet → ten questions → card, undo/redo and save/reopen, with
   await expect(card).not.toContainText('test_questioncard.pdf');
   await page.keyboard.press('Control+y');
   await expect(card).toContainText('test_questioncard.pdf');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Saved', exact: true })).toBeVisible();
   await page.reload();
   await expect(card).toContainText('test_questioncard.pdf');
@@ -111,7 +110,9 @@ test('closing a pending transcription discards its late result and retains the e
   });
   const dialog = await openImport(page);
   await expect(dialog.getByRole('combobox', { name: 'Question', exact: true }).locator('option')).toHaveCount(11);
+  const requested = page.waitForRequest('**/api/v1/resources/questions');
   await dialog.getByRole('button', { name: 'Transcribe this page with AI' }).click();
+  await requested;
   await expect(dialog.getByText('Transcribing this page…')).toBeVisible();
   await dialog.getByRole('button', { name: 'close', exact: true }).last().click();
   finish();

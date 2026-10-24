@@ -59,8 +59,8 @@ export function UploadSheet({ open, ownerId, notebookId, onClose, onImported }: 
       <div className="space-y-6">
         <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-paper p-6 text-center hover:border-accent/50">
           <Upload className="text-accent" />
-          <span className="text-[15px] font-medium">{file ? file.name : t('res.choose')}</span>
-          <span className="text-[12px] text-muted">PDF · PNG · JPEG · WebP · ≤ 30 MiB</span>
+          <span className="text-base font-medium">{file ? file.name : t('res.choose')}</span>
+          <span className="text-xs text-muted">PDF · PNG · JPEG · WebP · ≤ 30 MiB</span>
           <input
             type="file"
             accept="application/pdf,image/png,image/jpeg,image/webp"
@@ -72,7 +72,7 @@ export function UploadSheet({ open, ownerId, notebookId, onClose, onImported }: 
           />
         </label>
         <div className="space-y-2">
-          <div className="text-[13px] font-semibold uppercase tracking-wide text-muted">{t('res.kind')}</div>
+          <div className="text-sm font-semibold uppercase tracking-wide text-muted">{t('res.kind')}</div>
           <div className="grid grid-cols-3 gap-2">
             {KINDS.map((k) => {
               const Icon = KIND_ICON[k];
@@ -81,7 +81,7 @@ export function UploadSheet({ open, ownerId, notebookId, onClose, onImported }: 
                   key={k}
                   type="button"
                   onClick={() => setKind(k)}
-                  className={clsx('flex min-h-20 flex-col items-center justify-center gap-1 rounded-2xl text-[13px] font-medium ring-2 transition', kind === k ? 'bg-accent-soft text-accent-strong ring-accent' : 'bg-paper ring-transparent hover:ring-border')}
+                  className={clsx('flex min-h-20 flex-col items-center justify-center gap-1 rounded-2xl text-sm font-medium ring-2 transition', kind === k ? 'bg-accent-soft text-accent-strong ring-accent' : 'bg-paper ring-transparent hover:ring-border')}
                 >
                   <Icon size={20} />
                   {t(`res.kind.${k}`)}
@@ -92,8 +92,8 @@ export function UploadSheet({ open, ownerId, notebookId, onClose, onImported }: 
         </div>
         {isPdf && (
           <div className="space-y-2">
-            <div className="text-[13px] font-semibold uppercase tracking-wide text-muted">{t('res.range')}</div>
-            <div className="flex items-center gap-2 text-[15px]">
+            <div className="text-sm font-semibold uppercase tracking-wide text-muted">{t('res.range')}</div>
+            <div className="flex items-center gap-2 text-base">
               <input type="number" min={1} value={first} onChange={(e) => setFirst(Math.max(1, Number(e.target.value) || 1))} className="h-11 w-20 rounded-xl bg-paper px-3 ring-1 ring-border" />
               <span className="text-muted">{t('res.from')}</span>
               <input type="number" min={first} value={last} onChange={(e) => setLast(Math.max(first, Number(e.target.value) || first))} className="h-11 w-20 rounded-xl bg-paper px-3 ring-1 ring-border" />
@@ -101,7 +101,7 @@ export function UploadSheet({ open, ownerId, notebookId, onClose, onImported }: 
             </div>
           </div>
         )}
-        {error && <p className="rounded-xl bg-wrong-soft p-3 text-[14px] text-wrong-strong">{error}</p>}
+        {error && <p className="rounded-xl bg-danger-soft p-3 text-md text-danger">{error}</p>}
       </div>
     </Sheet>
   );

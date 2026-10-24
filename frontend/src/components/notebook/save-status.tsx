@@ -32,7 +32,7 @@ export function SaveStatus() {
     };
     return (
       <div className="flex items-center gap-1" aria-live="polite">
-        <span className="text-[13px] text-wrong-strong">{t('top.conflict')}</span>
+        <span className="text-sm text-danger">{t('top.conflict')}</span>
         <Button size="sm" disabled={busy} onClick={run(() => engine.reload())}>
           {t('top.reload')}
         </Button>
@@ -49,9 +49,9 @@ export function SaveStatus() {
       : state === 'offline'
         ? { icon: <CloudOff size={15} aria-hidden />, label: t('sync.offline'), tone: 'text-ink-soft' }
         : state === 'auth'
-          ? { icon: <KeyRound size={15} aria-hidden />, label: t('sync.auth'), tone: 'text-wrong-strong' }
+          ? { icon: <KeyRound size={15} aria-hidden />, label: t('sync.auth'), tone: 'text-danger' }
           : state === 'error'
-            ? { icon: <CircleAlert size={15} aria-hidden />, label: t('sync.error'), tone: 'text-wrong-strong' }
+            ? { icon: <CircleAlert size={15} aria-hidden />, label: t('sync.error'), tone: 'text-danger' }
             : dirty
               ? { icon: <RefreshCw size={14} aria-hidden />, label: t('sync.pending'), tone: 'text-muted' }
               : { icon: <Check size={15} aria-hidden />, label: t('sync.saved'), tone: 'text-muted' };
@@ -64,7 +64,7 @@ export function SaveStatus() {
       onClick={() => void engine.save()}
       title={state === 'error' || state === 'auth' ? (error ?? view.label) : t('sync.saveNow')}
       className={clsx(
-        'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2.5 text-[13px] transition-colors hover:bg-black/5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+        'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2.5 text-sm transition-colors hover:bg-hover outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
         view.tone,
       )}
     >

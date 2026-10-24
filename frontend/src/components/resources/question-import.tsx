@@ -1,7 +1,7 @@
 'use client';
 
 import { FileInput, ScanText } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QuestionPageSchema, hasUnparsed, hasUnreadable, type QuestionPage } from '@mn/contracts';
 import { ApiCallError } from '@/core/api/client';
@@ -63,10 +63,10 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
     return () => { alive = false; };
   }, [pdf, pageNo]);
 
-  const segments = useMemo(() => {
+  const segments = (() => {
     if (!selection || !question) return [];
     try { return parseStatement(selection.statement, question.functions); } catch { return []; }
-  }, [selection, question]);
+  })();
   const needsReview = page && question && (hasUnparsed(segments) || hasUnreadable(segments) || page.lines.some((l) => question.line_ids.includes(l.id) && l.has_unreadable));
 
   const showError = (e: unknown) => {
@@ -142,25 +142,25 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
     <Button variant="secondary" size="md" icon={<FileInput size={18} />} onClick={() => void start()} title={t('question.import')}>
       <span className="hidden lg:inline">{t('question.import')}</span><span className="sr-only lg:hidden">{t('question.import')}</span>
     </Button>
-    {open && createPortal(<div className="fixed inset-0 z-50"><Sheet open onClose={close} title={t('question.import')}
+    {open && createPortal(<div className="fixed inset-0 z-overlay"><Sheet open onClose={close} title={t('question.import')}
       footer={<Button variant="primary" className="w-full" disabled={!!busy || !selection || !segments.length} onClick={adopt}>{t('question.adopt')}</Button>}>
-      <div className="space-y-4 text-[14px]">
+      <div className="space-y-4 text-md">
         <p>{t('question.local')}</p>
         <label className="block space-y-2 font-medium">{t('question.file')}
-          <input type="file" accept="application/pdf,.pdf" disabled={!!busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void readFile(file); }} className="block w-full rounded-xl bg-paper p-3 text-[13px]" />
+          <input type="file" accept="application/pdf,.pdf" disabled={!!busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void readFile(file); }} className="block w-full rounded-xl bg-paper p-3 text-sm" />
         </label>
         {busy && <p role="status" className="flex items-center gap-2"><Spinner />{t(busy === 'file' ? 'question.reading' : 'question.transcribing')}</p>}
         {error && <p role="alert" className="rounded-xl bg-wrong-soft p-3 text-wrong-strong">{t(error)}</p>}
         {pdf && page && <>
-          <p className="break-all text-[12px] text-muted">{pdf.fileName} · {t('res.pages', { n: pdf.pages.length })}</p>
+          <p className="break-all text-xs text-muted">{pdf.fileName} · {t('res.pages', { n: pdf.pages.length })}</p>
           <label className="block font-medium">{t('question.page')}
             <select value={pageNo} disabled={!!busy} onChange={(e) => { setPageNo(Number(e.target.value)); setSelection(null); setError(null); }} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border">{pdf.pages.map((p) => <option key={p.page} value={p.page}>{t('res.page', { n: p.page })}</option>)}</select>
           </label>
-          <details open><summary className="cursor-pointer py-2 font-medium">{t('question.original')}</summary><div ref={previewHost} className="max-h-60 overflow-auto rounded-xl border border-border bg-white" /></details>
-          <p className="text-[12px] text-muted">{t(page.method === 'ai' ? 'question.aiRead' : 'question.textRead')}</p>
+          <details open><summary className="cursor-pointer py-2 font-medium">{t('question.original')}</summary><div ref={previewHost} className="max-h-60 overflow-auto rounded-xl border border-border bg-page" /></details>
+          <p className="text-xs text-muted">{t(page.method === 'ai' ? 'question.aiRead' : 'question.textRead')}</p>
           {page.mock && <p className="text-wrong-strong">{t('question.mock')}</p>}
           <Button icon={<ScanText size={17} />} disabled={!!busy} onClick={() => void transcribe()}>{t('question.ai')}</Button>
-          <p className="text-[12px] text-muted">{t('question.aiConsent')}</p>
+          <p className="text-xs text-muted">{t('question.aiConsent')}</p>
           <label className="block font-medium">{t('question.choose')}
             <select value={selection?.questionId ?? ''} disabled={!!busy} onChange={(e) => selectQuestion(e.target.value)} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border">
               <option value="">{t('question.choosePlaceholder', { n: page.questions.length })}</option>
@@ -172,18 +172,18 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
             <label className="block font-medium">{t('question.title')}<input maxLength={200} value={selection.title} disabled={!!busy} onChange={(e) => setSelection({ ...selection, title: e.target.value })} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border" /></label>
             <div className="rounded-xl bg-paper p-3 leading-loose"><InlineSegments segments={segments} /></div>
             {needsReview && <p className="rounded-xl bg-unknown-soft p-3">{t('question.unreadable')}</p>}
-            <label className="block font-medium">{t('question.edit')}<textarea rows={5} value={selection.statement} disabled={!!busy} onChange={(e) => setSelection({ ...selection, statement: e.target.value })} className="mt-1 w-full rounded-xl bg-paper p-3 text-[13px] ring-1 ring-border" /></label>
-            <p className="text-[12px] text-muted">{t('question.editHelp')}</p>
+            <label className="block font-medium">{t('question.edit')}<textarea rows={5} value={selection.statement} disabled={!!busy} onChange={(e) => setSelection({ ...selection, statement: e.target.value })} className="mt-1 w-full rounded-xl bg-paper p-3 text-sm ring-1 ring-border" /></label>
+            <p className="text-xs text-muted">{t('question.editHelp')}</p>
             <label className="block font-medium">{t('question.unknowns')}<input value={selection.unknowns} disabled={!!busy} onChange={(e) => setSelection({ ...selection, unknowns: e.target.value })} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border" /></label>
             <label className="block font-medium">{t('question.independentVar')}<input value={selection.independentVar} disabled={!!busy} onChange={(e) => setSelection({ ...selection, independentVar: e.target.value })} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border" /></label>
             <fieldset className="space-y-2"><legend className="mb-2 font-medium">{t('question.premises')}</legend>
               {!question.premises.length && <p>{t('question.noPremises')}</p>}
               {question.premises.map((candidate) => <label key={candidate.id} className="flex min-h-11 items-start gap-3 rounded-xl bg-paper p-3">
                 <input type="checkbox" className="mt-1 h-5 w-5" disabled={!!busy || !candidate.selectable} checked={selection.premiseIds.includes(candidate.id)} onChange={(e) => setSelection({ ...selection, premiseIds: e.target.checked ? [...selection.premiseIds, candidate.id] : selection.premiseIds.filter((id) => id !== candidate.id) })} />
-                <span><span className="block text-[12px] text-muted">{t(`question.kind.${candidate.kind}`)}</span><Tex latex={candidate.latex} />{!candidate.selectable && <span className="block text-[12px]">{t('question.notSelectable')}</span>}</span>
+                <span><span className="block text-xs text-muted">{t(`question.kind.${candidate.kind}`)}</span><Tex latex={candidate.latex} />{!candidate.selectable && <span className="block text-xs">{t('question.notSelectable')}</span>}</span>
               </label>)}
             </fieldset>
-            <p className="text-[12px] text-muted">{t('question.domain')}</p>
+            <p className="text-xs text-muted">{t('question.domain')}</p>
             <p className="rounded-xl bg-accent-soft p-3">{t('question.replace')}</p>
           </>}
         </>}

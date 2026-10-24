@@ -33,8 +33,11 @@ import { buildReferences } from '@/core/resources/references';
 import { canAdoptQuestion, questionImportSnapshot, type QuestionSource } from '@/core/resources/question-adoption';
 import { copyNotebookResources } from '@/core/resources/service';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
+import { SUGGEST_ATTEMPTS, checkerFeedback, runAttempts, type Attempt } from '@/core/suggest/attempts';
 
 const SUGGEST_IDLE_MS = 1200;
+
+const segmentsLatex = (segments: Line['segments']) => segments.map((seg) => (seg.type === 'math' ? printSegmentLatex(seg.expr, seg.notation) : seg.text)).join(' ');
 
 export interface EngineDeps {
   ownerId: string;
@@ -48,7 +51,6 @@ export class NotebookEngine {
   private cas: CasController = getCas();
   private aborts = new Map<string, AbortController>();
   private suggestTimer: ReturnType<typeof setTimeout> | null = null;
-  private retried = new Set<string>();
   private cache = new Map<string, Proof>();
   private unsub: (() => void) | null = null;
   private disposed = false;
@@ -87,8 +89,7 @@ export class NotebookEngine {
   dispose() {
     this.disposed = true;
     // leaving the notebook: send what is left; the outbox keeps it if that fails
-    void this.autosave.flush();
-    this.autosave.stop();
+    void this.autosave.close();
     this.offAutosave();
     for (const a of this.aborts.values()) a.abort();
     this.aborts.clear();
@@ -456,7 +457,7 @@ export class NotebookEngine {
     try {
       const recentText = ctxLines.slice(-8).map(mathLatexOf).join(' ');
       const reference = await buildReferences(this.deps.ownerId, nb.id, recentText).catch(() => []);
-      const input: SuggestInput = {
+      const base: Omit<SuggestInput, 'rejected_hashes'> = {
         context: {
           problem: nb.problem,
           lines: ctxLines.filter((l) => l.segments.length > 0).slice(-64).map((l) => ({ id: l.id, role: l.role, source: l.source, status: proofOf(l)?.status, segments: l.segments })),
@@ -465,21 +466,38 @@ export class NotebookEngine {
         based_on_line_id: last.id,
         target_line_id: targetId,
         ...(mode === 'COMPLETE_RHS' && lastMath?.type === 'math' ? { lhs_expr: (lastMath.expr as MathJSON[])[1] as MathJSON } : {}),
-        rejected_hashes: s.rejectedHashes.slice(-64),
-        rejected_latex: s.rejectedLatex.slice(-16),
         ...(reference.length ? { reference } : {}),
         ui_lang: this.deps.lang(),
         demo: demoBinding(nb),
       };
-      const res = await api.suggest(this.meta(last.id, last.version), input, ctl.signal);
-      if (this.isStale(epoch, last)) return;
-      if (res.state === 'NONE' || !res.candidate) {
-        store.getState().set('candidate', null);
-        if (manual) store.getState().showToast(this.deps.t('toast.noSuggestion'));
+      const result = await runAttempts<Candidate>(SUGGEST_ATTEMPTS, async (feedback, tried) => {
+        const cur = store.getState();
+        // checker rejections travel as feedback (with the reason), so list them only once
+        const fed = new Set(feedback.map((f) => f.latex));
+        const input: SuggestInput = {
+          ...base,
+          rejected_hashes: [...new Set([...cur.rejectedHashes, ...tried])].slice(-64),
+          rejected_latex: cur.rejectedLatex.filter((l) => !fed.has(l)).slice(-16),
+          ...(feedback.length ? { checker_feedback: feedback } : {}),
+        };
+        if (feedback.length) cur.set('candidate', pending);
+        const res = await api.suggest(this.meta(last.id, last.version), input, ctl.signal);
+        if (this.isStale(epoch, last)) return { kind: 'stale' };
+        if (res.state === 'NONE' || !res.candidate) return { kind: 'none' };
+        store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
+        return this.verifyCandidate(res.candidate, pending, ctxLines);
+      });
+      if (result.kind === 'stale') return;
+      if (result.kind === 'show') {
+        const cur = store.getState();
+        const active = cur.activeLineId ? findLine(this.nb, cur.activeLineId) : undefined;
+        const writing = active && active.state === 'DRAFT' && active.ink.length > 0;
+        cur.set('candidate', { ...result.candidate, state: writing ? 'HELD' : 'READY' });
         return;
       }
-      store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
-      await this.verifyCandidate(res.candidate, pending, ctxLines, manual);
+      store.getState().set('candidate', null);
+      // after checker rejections the rejected-suggestion marker explains the empty result
+      if (manual && result.rejected === 0) store.getState().showToast(this.deps.t('toast.noSuggestion'));
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
       if (store.getState().candidate?.id === pending.id || store.getState().candidate?.state === 'GENERATING') store.getState().set('candidate', null);
@@ -500,8 +518,7 @@ export class NotebookEngine {
     draft: NonNullable<Awaited<ReturnType<typeof api.suggest>>['candidate']>,
     pending: Candidate,
     ctxLines: Line[],
-    manual: boolean,
-  ) {
+  ): Promise<Attempt<Candidate>> {
     const nb = this.nb;
     const basedOn = findLine(nb, pending.basedOnLineId)!;
     const verifiedLines: Candidate['lines'] = [];
@@ -513,10 +530,10 @@ export class NotebookEngine {
       const casVersion = this.cas.versionString;
       const hash = inputHash(nb, payload, casVersion);
       const out = await this.cas.verify(payload);
-      if (this.isStale(pending.epoch, basedOn)) return;
+      if (this.isStale(pending.epoch, basedOn)) return { kind: 'stale' };
       if (out.kind === 'unavailable') {
         store.getState().set('candidate', null);
-        return;
+        return { kind: 'stale' };
       }
       const proof = composeProof(out.kind === 'ok' ? out.proof : null, {
         inputHash: hash,
@@ -528,15 +545,7 @@ export class NotebookEngine {
       });
       if (proof.status === 'wrong') {
         this.recordCheckerRejection(draft, pending, cl.segments, proof);
-        const key = `${basedOn.id}:${basedOn.version}`;
-        if (!this.retried.has(key)) {
-          this.retried.add(key);
-          store.getState().set('candidate', null);
-          void this.requestSuggestion(manual);
-        } else {
-          store.getState().set('candidate', null);
-        }
-        return;
+        return { kind: 'wrong', hash: draft.content_hash, feedback: checkerFeedback(segmentsLatex(cl.segments), proof) };
       }
       if (proof.status === 'unknown') policy = 'unverified';
       else if (proof.status === 'none' && policy === 'verified') policy = 'assumption';
@@ -544,17 +553,13 @@ export class NotebookEngine {
       verifiedLines.push({ target, segments: cl.segments, verified });
       chain.push({ id: target.id, version: 1, source: 'ai', role: target.role, state: 'SETTLED', ink: [], segments: cl.segments, verified });
     }
-    const s = store.getState();
-    const active = s.activeLineId ? findLine(this.nb, s.activeLineId) : undefined;
-    const writing = active && active.state === 'DRAFT' && active.ink.length > 0;
-    s.set('candidate', { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy, state: writing ? 'HELD' : 'READY' });
+    return { kind: 'ready', candidate: { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy } };
   }
 
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
     const s = store.getState();
-    const latex = segments.map((seg) => (seg.type === 'math' ? printSegmentLatex(seg.expr, seg.notation) : seg.text)).join(' ');
     s.set('rejectedHashes', [...s.rejectedHashes, draft.content_hash]);
-    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
+    s.set('rejectedLatex', [...s.rejectedLatex, segmentsLatex(segments)]);
     s.set('rejection', { id: draft.id, segments, proof, basedOnLineId: pending.basedOnLineId });
   }
 
