@@ -180,14 +180,21 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     }
   }, [width, height, dim, inkSize, editable, tool, zoom, updateBacking]);
 
+  useEffect(() => {
+    draw();
+  }, [draw]);
+
   const drawRef = useRef(draw);
   useLayoutEffect(() => {
     drawRef.current = draw;
   });
 
   useLayoutEffect(() => {
-    const confirmed = new Set(strokes.map((s) => s.id));
-    if (pendingStrokesRef.current.length > 0) {
+    // If strokes count decreased (e.g. Undo or Clear), purge pending strokes to avoid resurrection
+    if (strokes.length < strokesRef.current.length) {
+      pendingStrokesRef.current = [];
+    } else if (pendingStrokesRef.current.length > 0) {
+      const confirmed = new Set(strokes.map((s) => s.id));
       pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !confirmed.has(s.id));
     }
     const map = new Map<string, Stroke>();
