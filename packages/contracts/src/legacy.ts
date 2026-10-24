@@ -16,6 +16,7 @@ interface LegacyAssumption {
 }
 
 interface LegacyProblem {
+  origin?: { kind?: string; name?: string; page?: number; question_label?: string; transcription?: string; corrected?: boolean; mock?: boolean };
   statement?: unknown[];
   definitions?: MathJSON[];
   conditions?: MathJSON[];
@@ -64,7 +65,10 @@ export function migrateNotebook(raw: unknown, version: string): unknown {
     let n = given.length + 1;
     while (taken.has(`given-${n}`)) n += 1;
     taken.add(`given-${n}`);
-    given.push({ id: `given-${n}`, version: 1, source: 'user', role, state: 'SETTLED', ink: [], segments });
+    const origin = p.origin;
+    const pdf = origin?.kind === 'pdf' && typeof origin.name === 'string';
+    given.push({ id: `given-${n}`, version: 1, source: pdf ? 'pdf' : 'user', role, state: 'SETTLED', ink: [], segments,
+      ...(pdf ? { document_origin: { name: origin.name, page: origin.page ?? 1, has_unreadable: false }, extensions: { pdf_question: { label: origin.question_label, transcription: origin.transcription, corrected: origin.corrected, mock: origin.mock } } } : {}) });
   };
   const math = (expr: MathJSON) => ({ type: 'math', expr, notation: 'plain', latex: printLatex(expr) });
   // functions share a line, and so do the assumptions, as in the templates

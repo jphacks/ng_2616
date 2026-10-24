@@ -11,7 +11,7 @@
     "start": "next start",
     "typecheck": "pnpm prepare-assets && tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test --conditions=react-server tests/unit/history.test.ts tests/unit/autosave.test.ts tests/unit/outbox.test.ts tests/unit/scratch.test.ts tests/unit/suggest-attempts.test.ts tests/unit/presets.test.ts tests/unit/suggest/candidate.test.ts tests/unit/suggest/client.test.ts tests/unit/suggest/engine-adopt.test.ts tests/unit/suggest/engine-held.test.ts tests/unit/suggest/engine-suggest.test.ts tests/unit/suggest/epoch.test.ts tests/unit/suggest/model.test.ts tests/unit/suggest/pending-fixes.test.ts tests/unit/suggest/pure.test.ts tests/unit/suggest/service.test.ts",
+    "test": "tsx --test --conditions=react-server tests/unit/*.test.ts tests/unit/suggest/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -25,6 +25,8 @@
     "@supabase/supabase-js": "2.118.0",
     "clsx": "2.1.1",
     "dexie": "4.4.7",
+    "html-to-image": "1.11.13",
+    "jspdf": "4.2.1",
     "katex": "0.19.1",
     "lucide-react": "1.61.0",
     "motion": "14.1.0",

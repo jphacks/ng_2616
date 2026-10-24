@@ -17,6 +17,7 @@ frontend/src/features/registry.generated.ts
 .env
 .env.*
 !.env.example
+!.env.*.example
 
 # python
 __pycache__/
