@@ -53,6 +53,20 @@ describe('suggestion attempts', () => {
     assert.deepEqual(calls[1]!.tried, ['h:x = 3']);
   });
 
+  it('asks again when the model repeats a rejected suggestion, within the budget', async () => {
+    const { calls, attempt } = script([{ kind: 'repeat' }, wrong('x = 3'), { kind: 'ready', candidate: 'x = 2' }]);
+    assert.deepEqual(await runAttempts(3, attempt), { kind: 'show', candidate: 'x = 2' });
+    assert.equal(calls.length, 3);
+    assert.deepEqual(calls[1], { feedback: [], tried: [] });
+    assert.deepEqual(calls[2]!.tried, ['h:x = 3']);
+  });
+
+  it('gives up after the budget of repeats', async () => {
+    const { calls, attempt } = script([{ kind: 'repeat' }, { kind: 'repeat' }, { kind: 'repeat' }]);
+    assert.deepEqual(await runAttempts(3, attempt), { kind: 'none', rejected: 0 });
+    assert.equal(calls.length, 3);
+  });
+
   it('accumulates feedback and stops after the attempt budget', async () => {
     const { calls, attempt } = script([wrong('a'), wrong('b'), wrong('c')]);
     assert.deepEqual(await runAttempts(3, attempt), { kind: 'none', rejected: 3 });
