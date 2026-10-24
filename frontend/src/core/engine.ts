@@ -6,7 +6,7 @@ import {
 } from '@mn/contracts/ir';
 import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { suggestBlockerOf, suggestModeOf } from '@/core/candidates/blocker';
+import { blockerToastKey, suggestBlockerOf, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
@@ -373,7 +373,7 @@ export class NotebookEngine {
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 
-  private suggestBlocker(): string | null {
+  private suggestBlocker(): SuggestBlocker | null {
     const s = store.getState();
     return suggestBlockerOf({
       notebook: s.notebook,
@@ -383,16 +383,16 @@ export class NotebookEngine {
     });
   }
 
-  canSuggest(manual: boolean): boolean {
-    const b = this.suggestBlocker();
-    return b === null || (manual && b === 'busy' && store.getState().candidate?.state === 'HELD');
+  /** True when pressing the suggest button would start a request (the same rules as the automatic start). */
+  canSuggest(_manual = false): boolean {
+    return this.suggestBlocker() === null;
   }
 
   async requestSuggestion(manual: boolean) {
     const blocker = this.suggestBlocker();
     if (blocker) {
       if (manual) {
-        const key = blocker === 'wrong' ? 'toast.fixWrongFirst' : blocker === 'cas' ? 'toast.casLoading' : blocker === 'empty' ? 'toast.writeFirst' : blocker === 'writing' ? 'toast.confirmFirst' : null;
+        const key = blockerToastKey(blocker, store.getState().candidate?.state ?? null);
         if (key) store.getState().showToast(this.deps.t(key));
       }
       return;

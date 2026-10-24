@@ -8,9 +8,6 @@ import { describe, it } from 'node:test';
 // what is missing is that engine.ts / notebook-store.ts call them.
 
 describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', () => {
-  // Needs engine.ts to accept a fake CAS and a fake api (today: `private cas = getCas()`, direct `api` import).
-  it.skip('D3 canSuggest(manual) and requestSuggestion agree while a candidate is HELD (R27)', () => {});
-
   // R13: addStroke only holds the candidate when the stroke lands on the candidate's target line.
   it.skip('G4 writing on any draft line turns a READY candidate into HELD (R13)', () => {});
 

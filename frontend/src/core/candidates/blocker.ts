@@ -38,3 +38,29 @@ export function suggestModeOf(last: Line): 'COMPLETE_RHS' | 'NEXT_STEP' {
     proofOf(last)?.reason === 'INCOMPLETE' && math?.type === 'math' && Array.isArray(math.expr) && math.expr[0] === 'Equal';
   return incomplete ? 'COMPLETE_RHS' : 'NEXT_STEP';
 }
+
+/**
+ * The short message a manual press of the suggest button gets when nothing starts, or null when the
+ * reason is already obvious on screen. `candidate` is the state of the current candidate, if any.
+ * Messages are keys of src/i18n; the four toast.suggest* keys are provisional wording (NOTES, 要確認).
+ */
+export function blockerToastKey(blocker: SuggestBlocker, candidate: CandidateStateName | null): string | null {
+  switch (blocker) {
+    case 'wrong':
+      return 'toast.fixWrongFirst';
+    case 'cas':
+      return 'toast.casLoading';
+    case 'empty':
+      return 'toast.writeFirst';
+    case 'writing':
+      return 'toast.confirmFirst';
+    case 'pending':
+      return 'toast.suggestPending';
+    case 'cannot-continue':
+      return 'toast.suggestCannotContinue';
+    case 'busy':
+      return candidate === 'HELD' ? 'toast.suggestHeld' : 'toast.suggestBusy';
+    case 'none':
+      return null;
+  }
+}

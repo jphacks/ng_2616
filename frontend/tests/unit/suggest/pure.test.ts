@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { Meta } from '@mn/contracts';
-import { suggestBlockerOf, suggestModeOf, type BlockerInput } from '../../../src/core/candidates/blocker';
+import { blockerToastKey, suggestBlockerOf, suggestModeOf, type BlockerInput, type SuggestBlocker } from '../../../src/core/candidates/blocker';
 import { candidateHash, lineHash, mathKey } from '../../../src/core/candidates/hash';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '../../../src/core/candidates/rejection';
 import { matchesSlot, mismatchedFields, suggestFingerprint, type SlotMeta } from '../../../src/core/candidates/slot';
+import { en } from '../../../src/i18n/en';
+import { ja } from '../../../src/i18n/ja';
 import { line, notebook, problem, segs, settled, stroke, ZERO } from './fixtures';
 
 describe('core/candidates/hash', () => {
@@ -204,5 +206,37 @@ describe('core/candidates/blocker (R4, R10)', () => {
     assert.equal(suggestModeOf(settled('L1', '$A = $', 'unknown', 'INCOMPLETE')), 'COMPLETE_RHS');
     assert.equal(suggestModeOf(settled('L1', '$x = 1$', 'ok')), 'NEXT_STEP');
     assert.equal(suggestModeOf(settled('L1', '$x < 1$', 'unknown', 'INCOMPLETE')), 'NEXT_STEP');
+  });
+});
+
+describe('manual press of the suggest button gets an answer (R27)', () => {
+  const blockers: SuggestBlocker[] = ['none', 'cas', 'pending', 'wrong', 'empty', 'cannot-continue', 'busy', 'writing'];
+
+  it('D3 every reason that is not obvious on screen has a message; a held candidate gets its own', () => {
+    for (const b of blockers) {
+      if (b === 'none') assert.equal(blockerToastKey(b, null), null);
+      else assert.ok(blockerToastKey(b, null), `no message for ${b}`);
+    }
+    assert.equal(blockerToastKey('busy', 'HELD'), 'toast.suggestHeld');
+    for (const c of ['GENERATING', 'VERIFYING', 'READY'] as const) assert.equal(blockerToastKey('busy', c), 'toast.suggestBusy', c);
+    assert.equal(blockerToastKey('pending', null), 'toast.suggestPending');
+    assert.equal(blockerToastKey('cannot-continue', null), 'toast.suggestCannotContinue');
+  });
+
+  it('D3 the button and the automatic start follow the same rule while a candidate is HELD', () => {
+    const nb = notebook([settled('L1', '$x = 1$', 'ok')]);
+    const held = suggestBlockerOf({ notebook: nb, casReady: true, candidate: 'HELD', activeLine: undefined });
+    assert.equal(held, 'busy', 'nothing starts while a candidate is held, for the button and for the timer alike');
+    assert.equal(blockerToastKey(held!, 'HELD'), 'toast.suggestHeld', 'but the button now says why');
+  });
+
+  it('every message key exists in English and Japanese', () => {
+    const keys = new Set<string>();
+    for (const b of blockers) for (const c of [null, 'HELD', 'READY'] as const) { const k = blockerToastKey(b, c); if (k) keys.add(k); }
+    assert.ok(keys.size >= 7);
+    for (const k of keys) {
+      assert.ok(k in en, `en is missing ${k}`);
+      assert.ok(k in ja, `ja is missing ${k}`);
+    }
   });
 });
