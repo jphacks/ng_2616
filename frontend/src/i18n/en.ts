@@ -311,6 +311,11 @@ export const en = {
   'toast.confirmFirst': 'Confirm the line you are writing first.',
   'toast.noSuggestion': 'No suggestion for this step.',
   'toast.suggestFailed': 'The suggestion could not be generated.',
+  // shown when the suggest button is pressed but nothing starts (R27)
+  'toast.suggestPending': 'Wait until the line is checked, then try again.',
+  'toast.suggestCannotContinue': 'This line cannot be continued yet. Check it, or fix it first.',
+  'toast.suggestBusy': 'A suggestion is already being prepared or waiting for you.',
+  'toast.suggestHeld': 'A suggestion is ready. It will appear when you stop writing.',
   'toast.waitForChecks': 'Wait for the current checks to finish.',
 
   'frame.rotate': 'Rotate',
