@@ -6,6 +6,7 @@ import {
 } from '@mn/contracts/ir';
 import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
+import { suggestBlockerOf, suggestModeOf } from '@/core/candidates/blocker';
 import { getCas, type CasController } from '@/core/cas/controller';
 import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine } from '@/core/cas/payload';
 import type { Snapshot } from '@/core/history/history';
@@ -13,7 +14,6 @@ import { shortId, uuid } from '@/core/ids';
 import { rasterizeStrokes } from '@/core/ink/raster';
 import {
   anyPending,
-  canContinueFrom,
   contextLinesFor,
   emptyDraft,
   findLine,
@@ -370,19 +370,12 @@ export class NotebookEngine {
 
   private suggestBlocker(): string | null {
     const s = store.getState();
-    const nb = s.notebook;
-    if (!nb) return 'none';
-    if (this.cas.status !== 'ready') return 'cas';
-    if (anyPending(nb)) return 'pending';
-    if (hasUnresolvedWrong(nb)) return 'wrong';
-    const last = lastSettledMath(nb);
-    if (!last) return 'empty';
-    const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
-    if (!incomplete && !canContinueFrom(last)) return 'cannot-continue';
-    if (s.candidate && ['GENERATING', 'VERIFYING', 'READY', 'HELD'].includes(s.candidate.state)) return 'busy';
-    const active = s.activeLineId ? findLine(nb, s.activeLineId) : undefined;
-    if (active && active.state === 'DRAFT' && active.ink.length > 0) return 'writing';
-    return null;
+    return suggestBlockerOf({
+      notebook: s.notebook,
+      casReady: this.cas.status === 'ready',
+      candidate: s.candidate?.state ?? null,
+      activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
+    });
   }
 
   canSuggest(manual: boolean): boolean {
@@ -403,8 +396,7 @@ export class NotebookEngine {
     const nb = this.nb;
     const last = lastSettledMath(nb)!;
     const lastMath = last.segments.find((seg) => seg.type === 'math');
-    const incomplete = proofOf(last)?.reason === 'INCOMPLETE' && lastMath?.type === 'math' && Array.isArray(lastMath.expr) && lastMath.expr[0] === 'Equal';
-    const mode = incomplete ? 'COMPLETE_RHS' : 'NEXT_STEP';
+    const mode = suggestModeOf(last);
     const draftAfter = nb.lines.slice(lineIndex(nb, last.id) + 1).find((l) => emptyDraft(l));
     const targetId = mode === 'COMPLETE_RHS' ? last.id : (draftAfter?.id ?? shortId('L'));
     const epoch = s.epoch;
