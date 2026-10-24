@@ -4,7 +4,7 @@ import { create } from 'zustand';
 
 export type LibrarySort = 'custom' | 'updated' | 'title';
 
-/** Per-user notebook list preferences. Kept on this device until settings sync to Supabase. */
+/** Per-user notebook list preferences: cached here, synced to Supabase by core/settings/sync.ts. */
 export interface LibraryPrefs {
   order: string[];
   sort: LibrarySort;
@@ -79,6 +79,27 @@ export const useLibraryPrefs = create<LibraryState>((set, get) => {
     },
   };
 });
+
+/** Parses stored or synced preferences; null when there are none. */
+export function parseLibraryPrefs(raw: unknown): LibraryPrefs | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<LibraryPrefs>;
+  return {
+    order: Array.isArray(r.order) ? r.order.filter((id): id is string => typeof id === 'string') : [],
+    sort: r.sort === 'updated' || r.sort === 'title' ? r.sort : 'custom',
+  };
+}
+
+/** The account's preferences arrived from the cloud: cache them and show them if this user is active. */
+export function applyRemoteLibraryPrefs(ownerId: string, prefs: LibraryPrefs) {
+  localPrefs.save(ownerId, prefs);
+  if (useLibraryPrefs.getState().ownerId === ownerId) useLibraryPrefs.setState(prefs);
+}
+
+/** This device's cached preferences for a user (for the first upload to the account). */
+export function cachedLibraryPrefs(ownerId: string): LibraryPrefs | null {
+  return localPrefs.load(ownerId);
+}
 
 export function clearLibraryPrefs(ownerId: string) {
   localPrefs.clear(ownerId);
