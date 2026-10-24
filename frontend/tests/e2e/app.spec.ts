@@ -1,15 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { mockRecognition, mockSuggestions, openHome, openPreset, rows, statusOf, writeAndConfirm } from './helpers';
 
-test('save, reload and reopen keep lines and verification', async ({ page }) => {
+test('autosave, reload and reopen keep lines and verification', async ({ page }) => {
   await mockRecognition(page, ['$(x-2)(x-3)$', '$= x^2 - 5x + 6$']);
   await mockSuggestions(page, []);
   await openPreset(page, /Expansion/);
   await writeAndConfirm(page);
   await writeAndConfirm(page);
   await expect(statusOf(page, 1)).toHaveAttribute('title', 'Verified');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible();
+  // no Save button: the edits reach storage on their own within a few seconds
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
   const url = page.url();
 
   await page.reload();
@@ -22,6 +23,20 @@ test('save, reload and reopen keep lines and verification', async ({ page }) => 
   await expect(item).toHaveCount(1);
   await item.getByRole('button').first().click();
   await expect(page).toHaveURL(url);
+});
+
+test('edits made just before a reload are recovered from the device outbox', async ({ page }) => {
+  await mockRecognition(page, ['$(x-2)(x-3)$']);
+  await mockSuggestions(page, []);
+  await openPreset(page, /Expansion/);
+  await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
+  await writeAndConfirm(page);
+  await expect(statusOf(page, 0)).toHaveAttribute('title', /./);
+  // reload before the 3 s cloud debounce: pagehide writes the outbox, the next open resumes it
+  await page.reload();
+  await expect(page.getByText('Checker ready')).toBeVisible({ timeout: 120_000 });
+  await expect(rows(page)).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible({ timeout: 20_000 });
 });
 
 test('a notebook can be deleted from the list, and the delete undone first', async ({ page }) => {

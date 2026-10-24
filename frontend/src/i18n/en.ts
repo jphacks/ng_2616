@@ -71,7 +71,6 @@ export const en = {
   'account.signOutTitle': 'Sign out?',
   'account.signOutClears': 'Notebook copies and resources stored on this device will be removed. Your notebooks stay in your account.',
   'account.signOutKeeps': 'Notebooks saved on this device stay here for when you sign back in.',
-  'account.signOutUnsaved': 'This notebook has unsaved changes, which will be lost.',
 
   'settings.title': 'Settings',
   'settings.account': 'Account',
@@ -109,16 +108,10 @@ export const en = {
   'top.checkerFailed': 'Checker unavailable',
   'top.demo': 'Demo · scripted AI',
   'top.mock': 'Mock AI',
-  'top.save': 'Save',
-  'top.saving': 'Saving…',
-  'top.saved': 'Saved',
-  'top.unsaved': 'Unsaved changes',
-  'top.saveFailed': 'Save failed',
   'top.conflict': 'Changed elsewhere',
   'top.reload': 'Reload',
   'top.saveCopy': 'Save as copy',
   'top.language': '日本語',
-  'top.unsavedLeave': 'You have unsaved changes. Leave anyway?',
 
   'tool.pen': 'Pen',
   'tool.eraser': 'Eraser',
@@ -293,6 +286,21 @@ export const en = {
   'toast.waitForChecks': 'Wait for the current checks to finish.',
 
   'frame.rotate': 'Rotate',
+
+  'sync.saving': 'Saving…',
+  'sync.saved': 'Saved',
+  'sync.pending': 'Edited',
+  'sync.offline': 'Offline · kept on this device',
+  'sync.auth': 'Sign in again to save',
+  'sync.error': 'Not saved · retrying',
+  'sync.saveNow': 'Save now',
+  'sync.copyTitle': '{title} (copy)',
+  'sync.openedOffline': 'Offline: this device’s copy is open. Changes are sent when you’re back online.',
+  'sync.recoveredCopy': 'Changes not sent in an earlier session were saved as “{title}”.',
+  'sync.migrationMissing': 'Saving is not set up yet: apply supabase/migrations/0002_mn_cloud_sync.sql to the Supabase project.',
+  'sync.uploadedFromDevice': '{n} notebook(s) from this device were saved to your account.',
+  'sync.uploadedWithCopies': '{n} notebook(s) from this device were saved to your account; {copies} kept as copies because they changed elsewhere.',
+  'sync.signOutUnsent': 'Some changes haven’t reached your account yet. Signing out sends them first; anything that can’t be sent is lost.',
 } as const;
 
 export type MessageKey = keyof typeof en;

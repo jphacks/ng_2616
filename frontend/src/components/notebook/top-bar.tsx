@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { ChevronLeft, CircleAlert, Cpu, Save } from 'lucide-react';
+import { ChevronLeft, CircleAlert, Cpu } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -10,10 +10,10 @@ import { demoBinding } from '@/core/presets';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { AccountMenu } from '@/components/account/account-menu';
-import { Button } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { SegmentedTabs } from '@/ui/tabs';
 import { useEngine } from './engine-context';
+import { SaveStatus } from './save-status';
 
 export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser }) {
   const t = useT();
@@ -23,7 +23,6 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
   const tab = useNotebook((s) => s.tab);
   const cas = useNotebook((s) => s.cas);
   const dirty = useNotebook((s) => s.dirty);
-  const saveState = useNotebook((s) => s.saveState);
   const set = useNotebook((s) => s.set);
   const [editing, setEditing] = useState(false);
   if (!nb) return null;
@@ -31,11 +30,9 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
 
   return (
     <header className="relative z-20 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">
+      {/* leaving flushes the autosave; anything unsent stays in the outbox */}
       <Link
         href="/notebooks"
-        onClick={(e) => {
-          if (dirty && !window.confirm(t('top.unsavedLeave'))) e.preventDefault();
-        }}
         className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-[15px] text-ink-soft hover:bg-black/5"
       >
         <ChevronLeft size={20} />
@@ -76,8 +73,8 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
         />
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
-        <SaveButton dirty={dirty} state={saveState} onSave={() => void engine.save()} />
-        <AccountMenu user={user} unsaved={dirty} canLeave={() => !useNotebook.getState().dirty || window.confirm(t('top.unsavedLeave'))} />
+        <SaveStatus />
+        <AccountMenu user={user} unsaved={dirty} />
       </div>
     </header>
   );
@@ -90,35 +87,5 @@ function CasPill({ state }: { state: string }) {
       {state === 'ready' ? <Cpu size={13} /> : state === 'failed' ? <CircleAlert size={13} /> : <Spinner size={12} />}
       {t(state === 'ready' ? 'top.checkerReady' : state === 'failed' ? 'top.checkerFailed' : 'top.checkerLoading')}
     </span>
-  );
-}
-
-function SaveButton({ dirty, state, onSave }: { dirty: boolean; state: string; onSave: () => void }) {
-  const t = useT();
-  const engine = useEngine();
-  if (state === 'conflict') {
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-[13px] text-wrong-strong">{t('top.conflict')}</span>
-        <Button size="sm" onClick={() => window.location.reload()}>
-          {t('top.reload')}
-        </Button>
-        <Button size="sm" onClick={() => void engine.saveAsCopy()}>
-          {t('top.saveCopy')}
-        </Button>
-      </div>
-    );
-  }
-  const label = state === 'saving' ? t('top.saving') : state === 'error' ? t('top.saveFailed') : dirty ? t('top.save') : t('top.saved');
-  return (
-    <Button
-      variant={dirty ? 'primary' : 'secondary'}
-      icon={state === 'saving' ? <Spinner /> : state === 'error' ? <CircleAlert size={18} /> : <Save size={18} />}
-      disabled={state === 'saving' || (!dirty && state !== 'error')}
-      onClick={onSave}
-      title={dirty ? t('top.unsaved') : undefined}
-    >
-      <span className="hidden sm:inline">{label}</span>
-    </Button>
   );
 }

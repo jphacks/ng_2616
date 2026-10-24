@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEV_BYPASS, useSessionUser } from '@/core/auth/browser';
 import { duplicateNotebook, renameNotebook } from '@/core/persistence/library';
-import { getRepository, isCloudUnavailable, type NotebookSummary } from '@/core/persistence/repo';
+import { pushAllPending } from '@/core/persistence/outbox';
+import { getRepository, importDeviceNotebooks, isCloudUnavailable, RepoError, type NotebookSummary } from '@/core/persistence/repo';
 import { arrange, useLibraryPrefs, type LibrarySort } from '@/core/prefs/library';
 import { buildNotebook, presetText, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
 import { addBuiltinResource } from '@/core/resources/service';
@@ -31,6 +32,7 @@ export function NotebookHome() {
   const { user, loading } = useSessionUser();
   const [items, setItems] = useState<NotebookSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState<PresetId | null>(null);
   const [local, setLocal] = useState(false);
   const [query, setQuery] = useState('');
@@ -53,14 +55,33 @@ export function NotebookHome() {
       setItems(await repo.list());
       setLocal(repo.kind === 'local' || isCloudUnavailable());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof RepoError && e.code === 'MIGRATION_MISSING' ? t('sync.migrationMissing') : e instanceof Error ? e.message : String(e));
       setItems([]);
     }
-  }, [user]);
+  }, [user, t]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // notebooks an older build kept on this device, and edits not sent before the app closed
+  useEffect(() => {
+    if (!user || DEV_BYPASS) return;
+    let alive = true;
+    const copyTitle = (title: string) => t('sync.copyTitle', { title });
+    void (async () => {
+      const moved = await importDeviceNotebooks(user.id, copyTitle).catch(() => 0);
+      const pushed = await pushAllPending(user.id, copyTitle).catch(() => []);
+      const copies = pushed.filter((p) => p.kind === 'copied').length;
+      const sent = moved + pushed.filter((p) => p.kind === 'saved').length;
+      if (!alive || (!sent && !copies)) return;
+      setSyncNotice(t(copies ? 'sync.uploadedWithCopies' : 'sync.uploadedFromDevice', { n: sent + copies, copies }));
+      void refresh();
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user, t, refresh]);
 
   useEffect(() => {
     if (items === null || !firstLoad) return;
@@ -179,6 +200,15 @@ export function NotebookHome() {
             <p className="flex items-start gap-2 rounded-2xl bg-unknown-soft p-4 text-[14px] text-unknown">
               <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
               {t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}
+            </p>
+          )}
+          {syncNotice && (
+            <p className="flex items-start gap-2 rounded-2xl bg-accent-soft p-4 text-[14px] text-accent-strong">
+              <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
+              <span className="flex-1">{syncNotice}</span>
+              <button type="button" aria-label={t('common.close')} onClick={() => setSyncNotice(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-black/5">
+                <X size={16} aria-hidden />
+              </button>
             </p>
           )}
           {error && (

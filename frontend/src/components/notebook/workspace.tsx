@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { api } from '@/core/api/client';
 import { useSessionUser } from '@/core/auth/browser';
 import { NotebookEngine } from '@/core/engine';
-import { getRepository } from '@/core/persistence/repo';
+import { openNotebook } from '@/core/persistence/outbox';
+import { RepoError } from '@/core/persistence/repo';
 import { useNotebook } from '@/core/store/notebook-store';
 import { ResourcesView } from '@/components/resources/resources-view';
 import { currentLocale, translate, useT } from '@/i18n';
@@ -34,19 +35,24 @@ export function Workspace({ notebookId }: { notebookId: string }) {
     if (!user) return;
     let alive = true;
     let created: NotebookEngine | null = null;
-    getRepository(user.id)
-      .load(notebookId)
+    const tr = (k: string, v?: Record<string, string | number>) => translate(currentLocale(), k, v);
+    openNotebook(user.id, notebookId, (title) => tr('sync.copyTitle', { title }))
       .then((res) => {
         if (!alive) return;
         if (!res) {
           setError('not_found');
           return;
         }
-        useNotebook.getState().load(res.notebook, res.revision);
-        created = new NotebookEngine({ ownerId: user.id, lang: currentLocale, t: (k, v) => translate(currentLocale(), k, v) });
+        const s = useNotebook.getState();
+        s.load(res.notebook, res.revision);
+        // edits this device had not sent yet: autosave picks them up
+        if (res.dirty) s.set('dirty', true);
+        created = new NotebookEngine({ ownerId: user.id, lang: currentLocale, t: tr });
         setEngine(created);
+        if (res.offline) s.showToast(tr('sync.openedOffline'));
+        else if (res.recoveredCopy) s.showToast(tr('sync.recoveredCopy', { title: res.recoveredCopy }));
       })
-      .catch((e: Error) => alive && setError(e.message));
+      .catch((e: Error) => alive && setError(e instanceof RepoError && e.code === 'MIGRATION_MISSING' ? tr('sync.migrationMissing') : e.message));
     api.capabilities().then((c) => alive && setMockAi(c.llm.mock), () => undefined);
     return () => {
       alive = false;
@@ -84,8 +90,10 @@ export function Workspace({ notebookId }: { notebookId: string }) {
         void engine.confirmLine(s.activeLineId);
       }
     };
+    // unsent edits are kept on this device either way; warn only when the cloud is out of reach
     const onUnload = (e: BeforeUnloadEvent) => {
-      if (useNotebook.getState().dirty) e.preventDefault();
+      const s = useNotebook.getState();
+      if (engine.hasUnsent && (s.saveState === 'offline' || s.saveState === 'auth' || s.saveState === 'error' || s.saveState === 'conflict')) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('beforeunload', onUnload);
