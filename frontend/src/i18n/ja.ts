@@ -38,6 +38,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'home.choose': '新しく始める',
   'home.devChip': '開発モード・この端末',
   'home.localChip': 'この端末に保存',
+  'home.shelfPrev': '前の始め方',
+  'home.shelfNext': 'ほかの始め方',
   'home.loadFailed': 'ノートを読み込めませんでした：{msg}',
   'home.search': 'ノートを検索',
   'home.clearSearch': '検索をクリア',

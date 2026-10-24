@@ -36,6 +36,8 @@ export const en = {
   'home.choose': 'Start something new',
   'home.devChip': 'Dev mode · this device',
   'home.localChip': 'Saved on this device',
+  'home.shelfPrev': 'Previous starting points',
+  'home.shelfNext': 'More starting points',
   'home.loadFailed': 'Could not load notebooks: {msg}',
   'home.search': 'Search notebooks',
   'home.clearSearch': 'Clear search',
