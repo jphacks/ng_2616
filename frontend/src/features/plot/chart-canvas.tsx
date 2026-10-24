@@ -59,6 +59,7 @@ export function ChartCanvas({
       const entry = entries[0];
       if (!entry) return;
       const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0) return;
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
@@ -67,10 +68,10 @@ export function ChartCanvas({
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawChart(ctx, {
-        width: canvas.width,
-        height: canvas.height,
+        width,
+        height,
         xData,
         yData,
         xMin,
@@ -91,9 +92,14 @@ export function ChartCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawChart(ctx, {
-      width: canvas.width,
-      height: canvas.height,
+      width: rect.width,
+      height: rect.height,
       xData,
       yData,
       xMin,

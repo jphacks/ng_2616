@@ -127,7 +127,7 @@ export function PlotSheet({ line, open, onClose }: PlotSheetProps) {
         ) : (
           <>
             {/* Chart Area */}
-            <div className="h-72 w-full overflow-hidden shadow-card">
+            <div className="h-72 w-full overflow-hidden rounded-2xl shadow-card">
               <ChartCanvas
                 canvasRef={canvasRef}
                 xData={plotData.x}
