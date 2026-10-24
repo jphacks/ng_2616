@@ -86,8 +86,7 @@ export class NotebookEngine {
   dispose() {
     this.disposed = true;
     // leaving the notebook: send what is left; the outbox keeps it if that fails
-    void this.autosave.flush();
-    this.autosave.stop();
+    void this.autosave.close();
     this.offAutosave();
     for (const a of this.aborts.values()) a.abort();
     this.aborts.clear();
