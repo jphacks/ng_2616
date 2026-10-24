@@ -242,8 +242,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.suggestPending': '行の確認が終わってから、もう一度押してください。',
   'toast.suggestCannotContinue': 'この行からはまだ続けられません。先に確認するか、直してください。',
   'toast.suggestBusy': '提案を作成中か、採用待ちの提案があります。',
-  // TODO(R14): 「ペンを離して 1.2 秒」で表示すると決まったら戻す：'提案の準備ができています。書き終えると表示されます。'
-  'toast.suggestHeld': '書いている途中なので、提案を隠しています。',
+  'toast.suggestHeld': '提案の準備ができています。書き終えると表示されます。',
   'toast.waitForChecks': '現在の検証が終わるまでお待ちください。',
 
   'frame.rotate': '回転',

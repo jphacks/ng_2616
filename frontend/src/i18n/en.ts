@@ -240,8 +240,7 @@ export const en = {
   'toast.suggestPending': 'Wait until the line is checked, then try again.',
   'toast.suggestCannotContinue': 'This line cannot be continued yet. Check it, or fix it first.',
   'toast.suggestBusy': 'A suggestion is already being prepared or waiting for you.',
-  // TODO(R14): when "stopped writing" is defined (pen up for 1.2 s), restore: 'A suggestion is ready. It will appear when you stop writing.'
-  'toast.suggestHeld': 'A suggestion is hidden while you are writing.',
+  'toast.suggestHeld': 'A suggestion is ready. It will appear when you stop writing.',
   'toast.waitForChecks': 'Wait for the current checks to finish.',
 
   'frame.rotate': 'Rotate',

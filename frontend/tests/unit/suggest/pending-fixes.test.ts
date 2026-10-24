@@ -19,9 +19,6 @@ describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', 
   // R22: the pure rules (empty hash, READY/HELD only, per-context key) are tested in pure.test.ts (F3, G9).
   // What stays here is the wiring inside NotebookEngine.reject(), which needs a fake CAS and api (constructor owner).
   it.skip('G9 pressing Esc while a candidate is still being generated leaves the rejection history unchanged (engine wiring, R22)', () => {});
-
-  // R14: HELD returns to READY only when the draft is emptied; the definition of "writing stopped" is not agreed yet.
-  it.skip('G3 a HELD candidate returns to READY once writing has stopped in an unchanged context (R14)', () => {});
 });
 
 describe('no component test setup yet', () => {

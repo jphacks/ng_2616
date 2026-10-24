@@ -34,6 +34,8 @@ import { buildReferences } from '@/core/resources/references';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
 
 const SUGGEST_IDLE_MS = 1200;
+/** A hidden (HELD) suggestion comes back after this long without a new stroke (R14; same value as C-01's pen-up wait). */
+export const HELD_QUIET_MS = 1200;
 
 export interface EngineDeps {
   ownerId: string;
@@ -58,6 +60,8 @@ export class NotebookEngine {
   private api: ApiPort;
   private aborts = new Map<string, AbortController>();
   private suggestTimer: ReturnType<typeof setTimeout> | null = null;
+  private heldTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastStrokeAt = 0;
   /** the active suggestion request: results are applied only if they still match it (spec §7.3) */
   private suggestSlot: SlotMeta | null = null;
   private retried = new Set<string>();
@@ -84,6 +88,7 @@ export class NotebookEngine {
     for (const a of this.aborts.values()) a.abort();
     this.aborts.clear();
     this.cancelSuggestion();
+    if (this.heldTimer) clearTimeout(this.heldTimer);
     this.unsub?.();
   }
 
@@ -134,6 +139,7 @@ export class NotebookEngine {
     if (s.candidate && s.candidate.state === 'READY' && findLine(this.nb, lineId)?.state === 'DRAFT') {
       s.set('candidate', { ...s.candidate, state: 'HELD' });
     }
+    this.restartHeldTimer();
   }
 
   eraseStrokes(lineId: string, ids: string[]) {
@@ -159,6 +165,42 @@ export class NotebookEngine {
     const line = findLine(this.nb, lineId);
     if (s.candidate?.state === 'HELD' && emptyDraft(line)) s.set('candidate', { ...s.candidate, state: 'READY' });
     else if (emptyDraft(line)) this.scheduleSuggestion();
+  }
+
+  /** After every stroke the pen is up: count the quiet time again from now (R14). */
+  private restartHeldTimer() {
+    this.lastStrokeAt = Date.now();
+    this.armHeldTimer();
+  }
+
+  /** Wait out the rest of the quiet time since the last stroke, then try to bring a HELD suggestion back. */
+  private armHeldTimer() {
+    if (this.heldTimer) clearTimeout(this.heldTimer);
+    const wait = Math.max(0, HELD_QUIET_MS - (Date.now() - this.lastStrokeAt));
+    this.heldTimer = setTimeout(() => {
+      this.heldTimer = null;
+      this.releaseHeldAfterQuiet();
+    }, wait);
+  }
+
+  /**
+   * HELD -> READY once no stroke has come for HELD_QUIET_MS and the context is still the one the suggestion was made
+   * in (same slot: request, epoch, line version, suggestFingerprint). If the context changed it is STALE and dropped.
+   */
+  private releaseHeldAfterQuiet() {
+    const s = store.getState();
+    const c = s.candidate;
+    if (!c || c.state !== 'HELD' || this.disposed) return;
+    if (Date.now() - this.lastStrokeAt < HELD_QUIET_MS) return this.armHeldTimer();
+    // a NEXT_STEP suggestion lands on its reserved draft line: while that very draft holds the student's ink, showing it
+    // would offer to replace their writing, so it stays hidden until the draft is emptied or confirmed
+    const target = findLine(this.nb, c.targetLineId);
+    if (c.mode === 'NEXT_STEP' && target?.state === 'DRAFT' && target.ink.length > 0) return;
+    if (!this.suggestSlot || this.isStale(this.suggestSlot)) {
+      s.set('candidate', null);
+      return;
+    }
+    s.set('candidate', { ...c, state: 'READY' });
   }
 
   /** New line keeps the current draft and moves to a fresh one without submitting (spec §8.1). */
@@ -565,6 +607,7 @@ export class NotebookEngine {
     const active = s.activeLineId ? findLine(this.nb, s.activeLineId) : undefined;
     const writing = active && active.state === 'DRAFT' && active.ink.length > 0;
     s.set('candidate', { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy, state: writing ? 'HELD' : 'READY' });
+    if (writing) this.armHeldTimer(); // it may already have been quiet long enough while the suggestion was being made
   }
 
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
