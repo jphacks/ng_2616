@@ -12,6 +12,7 @@ import { Button } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { SegmentedTabs } from '@/ui/tabs';
 import { useEngine } from './engine-context';
+import { QuestionImportButton } from '@/components/resources/question-import';
 
 export function TopBar({ mockAi }: { mockAi: boolean }) {
   const t = useT();
@@ -75,6 +76,7 @@ export function TopBar({ mockAi }: { mockAi: boolean }) {
         />
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
+        <QuestionImportButton />
         <SaveButton dirty={dirty} state={saveState} onSave={() => void engine.save()} />
         <Button variant="ghost" size="md" icon={<Languages size={18} />} onClick={() => setLocale(locale === 'en' ? 'ja' : 'en')}>
           <span className="hidden lg:inline">{t('top.language')}</span>

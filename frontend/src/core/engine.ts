@@ -4,7 +4,7 @@ import {
   printSegmentLatex,
   type MathJSON,
 } from '@mn/contracts/ir';
-import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
+import type { Line, Meta, Notebook, Problem, Proof, QuestionPageInput, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
 import { getCas, type CasController } from '@/core/cas/controller';
 import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine } from '@/core/cas/payload';
@@ -28,6 +28,7 @@ import {
 import { getRepository } from '@/core/persistence/repo';
 import { demoBinding } from '@/core/presets';
 import { buildReferences } from '@/core/resources/references';
+import { canAdoptQuestion, questionImportSnapshot, type QuestionSource } from '@/core/resources/question-adoption';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
 
 const SUGGEST_IDLE_MS = 1200;
@@ -655,13 +656,13 @@ export class NotebookEngine {
   undo() {
     this.abortAll();
     this.cancelSuggestion();
-    if (store.getState().undo()) this.scheduleSuggestion();
+    if (store.getState().undo()) { void this.recheckStale(); this.scheduleSuggestion(); }
   }
 
   redo() {
     this.abortAll();
     this.cancelSuggestion();
-    if (store.getState().redo()) this.scheduleSuggestion();
+    if (store.getState().redo()) { void this.recheckStale(); this.scheduleSuggestion(); }
   }
 
   editProblem(problem: Notebook['problem']) {
@@ -684,6 +685,30 @@ export class NotebookEngine {
   }
 
   // ------------------------------------------------------------------ resources
+
+  transcribeQuestionPage(input: QuestionPageInput, signal: AbortSignal) {
+    return api.questionPage(this.meta(), input, signal);
+  }
+
+  adoptPdfQuestion(problem: Problem, source: QuestionSource): boolean {
+    const nb = this.nb;
+    if (!nb || !canAdoptQuestion(nb, source)) throw new Error('QUESTION_CONTEXT_CHANGED');
+    if (problem.origin?.mock && nb.mode !== 'mock') throw new Error('QUESTION_MOCK_MISMATCH');
+    if (anyPending(nb)) throw new Error('QUESTION_CHECKS_PENDING');
+    this.abortAll();
+    this.cancelSuggestion();
+    const s = store.getState();
+    s.commit('IMPORT_PDF', (snapshot) => questionImportSnapshot(snapshot, problem));
+    s.bumpEpoch();
+    s.set('candidate', null);
+    s.set('rejection', null);
+    s.set('ghostConfirm', false);
+    s.set('rejectedHashes', []);
+    s.set('rejectedLatex', []);
+    s.set('tab', 'canvas');
+    void this.recheckStale();
+    return true;
+  }
 
   /** Lazy OCR for a resource page without a text layer (spec §15.2: only when opened). */
   async ocrPage(image: { mime: 'image/jpeg' | 'image/png'; data: string }): Promise<string | null> {

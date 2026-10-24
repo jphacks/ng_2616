@@ -4,6 +4,7 @@ import {
   FeatureSchema,
   MetaSchema,
   OcrPageInputSchema,
+  QuestionPageInputSchema,
   RecognizeInputSchema,
   SCHEMA_VERSION,
   SuggestInputSchema,
@@ -15,7 +16,7 @@ import {
 } from '@mn/contracts';
 import { z } from 'zod';
 import { AiError } from '@/server/ai/errors';
-import { getAiService } from '@/server/ai/service';
+import { getAiService, getDocumentAiService } from '@/server/ai/service';
 import { serverEnv } from '@/server/env';
 import { authenticate, type AuthedUser } from '@/server/supabase';
 import { fail, GatewayError, ok, readJson } from './http';
@@ -23,13 +24,17 @@ import { lookup, remember } from './idempotency';
 import { withLimits } from './limits';
 
 type JobRoute = {
-  kind: 'recognize' | 'suggest' | 'resources_page';
+  kind: 'recognize' | 'suggest' | 'resources_page' | 'resources_questions';
   input: z.ZodType;
   deadlineMs: number;
   run: (input: never, user: AuthedUser, signal: AbortSignal) => Promise<unknown>;
 };
 
 const JOB_ROUTES: Record<string, JobRoute> = {
+  'resources/questions': {
+    kind: 'resources_questions', input: QuestionPageInputSchema, deadlineMs: 45_000,
+    run: (input, user, signal) => getDocumentAiService().questionPage(input, { userId: user.id, signal }),
+  },
   recognize: {
     kind: 'recognize',
     input: RecognizeInputSchema,

@@ -32,7 +32,7 @@ export const ProblemCard = memo(function ProblemCard({ problem }: { problem: Pro
   const [open, setOpen] = useState(true);
   const fns = problem.functions ?? [];
   return (
-    <section className="mx-4 mt-4 mb-2 rounded-2xl bg-sheet shadow-card">
+    <section aria-label={t('question.card')} className="mx-4 mt-4 mb-2 rounded-2xl bg-sheet shadow-card">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full min-h-12 items-center gap-3 px-5 py-3 text-left">
         <span className="flex-1 truncate text-[17px] font-semibold">{problem.title}</span>
         <ChevronDown size={18} className={clsx('text-muted transition-transform', open && 'rotate-180')} />
@@ -41,6 +41,14 @@ export const ProblemCard = memo(function ProblemCard({ problem }: { problem: Pro
         <div className="space-y-3 px-5 pb-5">
           {problem.statement.length > 0 && <InlineSegments segments={problem.statement} className="text-[16px] [&_.katex]:text-[1.1em]" />}
           <dl className="grid gap-x-6 gap-y-2 text-[14px] sm:grid-cols-[auto_1fr]">
+            {problem.origin?.kind === 'pdf' && (
+              <Row label={t('question.source')}>
+                <span>{problem.origin.name} · p.{problem.origin.page} · {t('question.number', { n: problem.origin.question_label ?? '' })}</span>
+                {problem.origin.mock && <span>{t('question.mock')}</span>}
+                {problem.origin.corrected && <span>{t('question.corrected')}</span>}
+              </Row>
+            )}
+            {problem.independent_var && <Row label={t('question.independentVar')}><Tex latex={symbolToLatex(problem.independent_var)} /></Row>}
             {problem.conditions.length > 0 && (
               <Row label={t('problem.given')}>
                 {problem.conditions.map((c, i) => (
@@ -76,7 +84,9 @@ export const ProblemCard = memo(function ProblemCard({ problem }: { problem: Pro
                 <Tex latex={problem.unknowns.map(symbolToLatex).join(', ')} />
               </Row>
             )}
+            {problem.origin?.kind === 'pdf' && problem.assumptions.length === 0 && problem.conditions.length === 0 && problem.definitions.length === 0 && <Row label={t('question.premises')}><span>{t('question.noPremises')}</span></Row>}
           </dl>
+          {problem.origin?.kind === 'pdf' && <p className="text-[12px] text-muted">{t('question.domain')}</p>}
         </div>
       )}
     </section>

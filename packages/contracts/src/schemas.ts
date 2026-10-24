@@ -63,7 +63,7 @@ export const ProblemSchema = z.object({
   independent_var: z.string().optional(),
   functions: z.array(FunctionDeclSchema).max(16).optional(),
   origin: z
-    .object({ kind: z.enum(['preset', 'pdf', 'resource']), name: z.string(), page: z.number().int().optional() })
+    .object({ kind: z.enum(['preset', 'pdf', 'resource']), name: z.string(), page: z.number().int().optional(), question_label: z.string().optional(), transcription: z.enum(['text', 'ai', 'fixture']).optional(), corrected: z.boolean().optional(), mock: z.boolean().optional() })
     .optional(),
 });
 

@@ -11,7 +11,7 @@
     "start": "next start",
     "typecheck": "pnpm prepare-assets && tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test tests/unit/history.test.ts",
+    "test": "tsx --test tests/unit/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

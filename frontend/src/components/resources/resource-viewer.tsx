@@ -11,6 +11,7 @@ import { useT } from '@/i18n';
 import { IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { RichText } from '@/ui/tex';
+import { QuestionImportButton } from './question-import';
 
 /** Page preview with a thumbnail strip; PDFs render with pdf.js, built-in sheets as formatted text. */
 export function ResourceViewer({ ownerId, resource, onChanged }: { ownerId: string; resource: ResourceRecord; onChanged: () => void }) {
@@ -106,6 +107,11 @@ export function ResourceViewer({ ownerId, resource, onChanged }: { ownerId: stri
             {ocr === 'failed' && <span className="ml-2 text-wrong-strong">{t('res.ocrFailed')}</span>}
           </div>
         </div>
+        {resource.mime === 'application/pdf' && !resource.builtin && <QuestionImportButton initialPage={page} loadFile={async () => {
+          const blob = await getFile(ownerId, resource.id);
+          if (!blob) throw new Error('QUESTION_FILE_INVALID');
+          return new File([blob], resource.name, { type: 'application/pdf' });
+        }} />}
         {resource.kind === 'textbook' && (
           <button
             type="button"
