@@ -188,7 +188,7 @@ export function NotebookHome() {
     <MotionConfig reducedMotion="user">
       <div className="scrollbar-thin h-full overflow-y-auto">
         <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-6 pt-[env(safe-area-inset-top)] backdrop-blur">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-ink text-white">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Sigma size={19} aria-hidden />
           </span>
           <h1 className="flex-1 text-[16px] font-semibold">{t('app.name')}</h1>
@@ -311,10 +311,10 @@ function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: bool
       onClick={onCreate}
       className={clsx(
         'flex min-h-32 flex-col items-start gap-3 rounded-3xl p-4 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-not-allowed',
-        primary ? 'bg-ink text-white shadow-float' : 'bg-sheet shadow-card hover:-translate-y-0.5',
+        primary ? 'border border-dashed border-accent/40 bg-accent-soft/40 hover:bg-accent-soft/70' : 'bg-sheet shadow-card hover:-translate-y-0.5',
       )}
     >
-      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-white/15' : 'bg-accent-soft text-accent')}>
+      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-accent text-white' : 'bg-accent-soft text-accent')}>
         {busy ? <Spinner size={18} /> : <Icon size={19} aria-hidden />}
       </span>
       <span className="space-y-1">
@@ -326,7 +326,7 @@ function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: bool
             </span>
           )}
         </span>
-        <span className={clsx('line-clamp-3 block text-[13px] leading-snug text-pretty', primary ? 'text-white/75' : 'text-muted')}>{t(`preset.${id}.desc`)}</span>
+        <span className="line-clamp-2 block text-[13px] leading-snug text-pretty text-muted">{t(`preset.${id}.desc`)}</span>
       </span>
     </button>
   );

@@ -21,7 +21,7 @@ import { TextFieldDialog } from '@/ui/dialog';
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from '@/ui/menu';
 import { NotebookCard, type CardHandlers } from './notebook-card';
 
-// how long a touch must rest on a card before it lifts (menu), and how far it may drift meanwhile
+// how long a press must rest on a card before it lifts (menu), and how far it may drift meanwhile
 const HOLD_MS = 400;
 const HOLD_TOLERANCE = 8;
 // once lifted, moving this far turns the hold into a drag and closes the menu
@@ -53,20 +53,19 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
   const target = menu ? items.find((n) => n.id === menu.id) : undefined;
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { delay: HOLD_MS, tolerance: HOLD_TOLERANCE } }),
     useSensor(TouchSensor, { activationConstraint: { delay: HOLD_MS, tolerance: HOLD_TOLERANCE } }),
   );
 
-  const onDragStart = ({ active, activatorEvent }: DragStartEvent) => {
+  // every drag starts with a hold (finger, pen or mouse), like a long-press on a home screen:
+  // the card lifts and shows its menu; moving on turns the hold into a drag
+  const onDragStart = ({ active }: DragStartEvent) => {
     const id = String(active.id);
     setDragging(id);
-    if (typeof TouchEvent !== 'undefined' && activatorEvent instanceof TouchEvent) {
-      // like a long-press on a home screen: lift and show the menu; moving on turns it into a drag
-      hold.current = { id, moved: false };
-      const el = document.querySelector(`[data-card-id="${CSS.escape(id)}"]`);
-      if (el) setMenu({ id, anchor: el, touch: true });
-      navigator.vibrate?.(8);
-    }
+    hold.current = { id, moved: false };
+    const el = document.querySelector(`[data-card-id="${CSS.escape(id)}"]`);
+    if (el) setMenu({ id, anchor: el, touch: true });
+    navigator.vibrate?.(8);
   };
 
   const onDragMove = ({ delta }: DragMoveEvent) => {

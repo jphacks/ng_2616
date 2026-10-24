@@ -6,7 +6,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'accent-soft';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-ink text-white hover:bg-ink-soft disabled:bg-faint',
+  primary: 'bg-ink text-white hover:bg-ink-soft disabled:bg-black/[0.06] disabled:text-faint',
   secondary: 'bg-sheet text-ink shadow-card hover:bg-white disabled:text-faint',
   ghost: 'bg-transparent text-ink-soft hover:bg-black/5 disabled:text-faint',
   danger: 'bg-wrong-strong text-white hover:bg-wrong disabled:opacity-50',
@@ -55,7 +55,7 @@ export function IconButton({
       aria-pressed={active}
       className={clsx(
         'inline-flex h-11 w-11 select-none items-center justify-center rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-35',
-        active ? 'bg-ink text-white' : 'text-ink-soft hover:bg-black/5',
+        active ? 'bg-accent-soft text-accent-strong' : 'text-ink-soft hover:bg-black/5',
         className,
       )}
       {...rest}

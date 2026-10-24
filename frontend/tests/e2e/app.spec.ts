@@ -145,7 +145,7 @@ test('iPad frame for demos rotates between landscape and portrait', async ({ pag
   }).toBe(true);
 });
 
-test('touch: holding a card opens its menu; holding and moving reorders the cards', async ({ page }) => {
+test('holding a card (touch or mouse) opens its menu; holding and moving reorders the cards', async ({ page }) => {
   await openPreset(page, /Expansion/);
   await openPreset(page, /Solving an equation/);
   await openHome(page);
@@ -161,6 +161,16 @@ test('touch: holding a card opens its menu; holding and moving reorders the card
   await page.waitForTimeout(700);
   await touch('touchEnd');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
+
+  // a mouse hold behaves the same, and releasing it does not open the notebook
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
+  await expect(page).toHaveURL(/\/notebooks$/);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
 
