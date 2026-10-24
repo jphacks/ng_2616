@@ -25,8 +25,31 @@ set `LLM_PROVIDER=mock`: the demo notebook maps any ink to its scripted lines.
 | `pnpm --filter frontend test` | history, autosave scheduler, ink split (Node test runner) |
 | `pnpm contracts:emit && pnpm cas:test` | CAS oracle fixtures through SymPy (pytest) |
 | `pnpm backend:test` | FastAPI template |
+| `pnpm lean:test` | lean-worker: source screening, message mapping; real Lean once built |
 | `pnpm --filter frontend test:e2e` | Playwright: demo end to end with mock AI + real Pyodide CAS |
 | `pnpm typecheck`, `pnpm lint` | TypeScript and ESLint |
+
+## Lean proof checking (optional)
+Proof lines are checked by `lean-worker`, a separate service holding Lean 4, Mathlib and the
+Lean REPL ([ADR 0007](adr/0007-lean-proof-checking.md)). The toolchain, Mathlib and REPL are
+pinned together in `lean-worker/lean/` (`lean-toolchain`, `lakefile.toml`, `lake-manifest.json`).
+
+1. Install [elan](https://github.com/leanprover/elan) (it picks the toolchain from
+   `lean-toolchain`).
+2. `pnpm lean:setup` downloads Mathlib's prebuilt cache and builds the REPL. That's about 5 GB in
+   `lean-worker/lean/.lake` (git-ignored). On Windows with a small system drive, point `.lake` at
+   another disk first: `mklink /J lean-worker\lean\.lake D:\somewhere\lake`, and set
+   `MATHLIB_CACHE_DIR` to a folder there too.
+3. `pnpm lean:dev` starts the worker on `http://127.0.0.1:8100`. At startup it loads the part of
+   Mathlib that proofs use (about 15 s; `LEAN_IMPORTS` in `lean-worker/.env` changes the list,
+   `Mathlib` for all of it if the machine has the memory). `GET /health` reports `lean_ready`.
+4. In `frontend/.env.local`, set `NEXT_PUBLIC_ENABLED_FEATURES=lean` and
+   `LEAN_WORKER_URL=http://127.0.0.1:8100`. Lean needs a real model (`LLM_PROVIDER=gemini`); with
+   the mock provider, proof lines show "Lean unavailable".
+
+`pnpm lean:test` runs the worker's tests. The real-Lean ones, which prove both proof templates and
+check that false statements and `sorry` never pass, skip until step 2 is done. For a container
+instead: `cd lean-worker && docker compose up --build`. The image includes the Mathlib cache.
 
 ## Supabase setup
 1. Run the migrations in order (SQL editor or `npx supabase db push`):

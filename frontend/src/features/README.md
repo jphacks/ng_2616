@@ -16,7 +16,7 @@ Stage 1 ships with every optional feature **off**, so this folder holds only the
 | `hints` | S-01 | toolbar button + recovery sheet |
 | `assist_modes`, `bridge` | S-02, S-03 | toolbar mode switch, multi-line candidates |
 | `plot` | S-04 | line action, CAS worker `plot` function |
-| `lean` | S-05 | top-bar panel, backend job |
+| `lean` | S-05 | built into the line pipeline instead of a plug-in: proof lines go to lean-worker ([ADR 0007](../../../docs/adr/0007-lean-proof-checking.md)) |
 | `autosave` | S-06 | background scheduler on `NotebookRepository` |
 | `auto_submit` | C-01 | ink idle detector → Confirm |
 | `resources` | C-02 | promoted to core in Stage 1 |
