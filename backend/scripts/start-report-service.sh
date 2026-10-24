@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Run inside the uploaded backend directory. Never prints the generated API key.
+# Run inside backend/ of the git clone. Never prints the generated API key.
 set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
-test -f compose.report.yaml
+test -f compose.azure.yaml
 umask 077
 if [ ! -e .env.report ]; then
     python3 - <<'PY'
@@ -12,8 +12,8 @@ Path('.env.report').write_text('APP_ENV=preview\nBACKEND_API_KEY=' + secrets.tok
 PY
 fi
 chmod 600 .env.report
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml config --quiet
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml build pdf-compiler
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml run --rm --no-deps https caddy validate --config /etc/caddy/Caddyfile
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml up -d
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml ps
+sudo docker compose -f compose.azure.yaml config --quiet
+sudo docker compose -f compose.azure.yaml build pdf-compiler
+sudo docker compose -f compose.azure.yaml run --rm --no-deps https caddy validate --config /etc/caddy/Caddyfile
+sudo docker compose -f compose.azure.yaml up -d
+sudo docker compose -f compose.azure.yaml ps

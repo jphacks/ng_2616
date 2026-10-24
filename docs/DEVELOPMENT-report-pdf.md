@@ -25,21 +25,29 @@ uv run uvicorn app.reports_api:app --host 127.0.0.1 --port 8001
 
 Ubuntu 24.04の既存VMを使用する。Azureの受信規則でTCP 80/443が必要。SSHの既存設定はそのまま。8001をインターネットに公開しない。
 
-1. `backend` のソース、`pyproject.toml`、`uv.lock`、`Dockerfile.report`、`report-warmup.tex`、`compose.report.yaml`、`Caddyfile.report`、`scripts/` をVM専用フォルダーへ転送する。秘密鍵、ローカル `.env`、`.venv` は転送しない。
+VMはこのリポジトリのgit cloneから動かす。ファイルを手作業で転送しない。VMで動くものはすべて `backend/compose.azure.yaml` と `backend/Caddyfile.azure` にまとめる（CAS・Leanも今後ここへ追加する）。
+
+1. `git clone https://github.com/jphacks/ng_2616 ~/ng_2616` し、`cd ~/ng_2616/backend` で以降を実行する。
 2. 初回のみ `bash scripts/install-report-docker.sh` を実行する。Docker公式aptリポジトリを追加し、EngineとComposeをインストールする。既存ランタイムを検出したら停止する。
-3. `bash scripts/start-report-service.sh` を実行する。`.env.report` を初回のみ生成し、権限600で保存する。キーをログに表示しない。専用Composeプロジェクト `math-notebook-pdf` を起動する。
+3. `bash scripts/start-report-service.sh` を実行する。`.env.report` を初回のみ生成し、権限600で保存する（gitの管理外）。キーをログに表示しない。Composeプロジェクト `math-notebook-pdf` を起動する。
 4. 外部から `https://hackerserver.japaneast.cloudapp.azure.com/api/v1/health` が200になることを確認する。コンパイラーの8001はコンテナ内部だけで待ち受け、ホストにも公開しない。
 5. `.env.report` の `BACKEND_API_KEY` を安全な経路でWeb設定へ渡す。チャット、Git、スクリーンショットに貼らない。ユーザーやブラウザに配布しない。
 6. 認証なしのコンパイル要求が403になることと、Webの認証済み要求で実際のPDFが返ることを確認する。
 
 証明書が取得できない場合はDNSとAzureの80/443受信規則を確認する。HTTPへフォールバックしない。
 
+更新はGitHubへpushした後、VMで次を実行する。cloneが追跡しているブランチをfast-forwardし、再ビルドして再起動する。
+
+```sh
+cd ~/ng_2616/backend && bash scripts/deploy.sh
+```
+
 ```sh
 # 状態・ログ（本文やキーをログへ出す変更はしない）
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml ps
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml logs --tail=50
+sudo docker compose -f compose.azure.yaml ps
+sudo docker compose -f compose.azure.yaml logs --tail=50
 # 停止（証明書ボリュームとキーは残す）
-sudo docker compose -p math-notebook-pdf -f compose.report.yaml down
+sudo docker compose -f compose.azure.yaml down
 ```
 
 ## 検証
