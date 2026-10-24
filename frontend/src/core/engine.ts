@@ -7,8 +7,9 @@ import {
 import type { Line, Meta, Notebook, Proof, Recovery, Stroke, SuggestInput, UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
 import { suggestBlockerOf, suggestModeOf } from '@/core/candidates/blocker';
+import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { getCas, type CasController } from '@/core/cas/controller';
-import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine } from '@/core/cas/payload';
+import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine, semanticHash } from '@/core/cas/payload';
 import type { Snapshot } from '@/core/history/history';
 import { shortId, uuid } from '@/core/ids';
 import { rasterizeStrokes } from '@/core/ink/raster';
@@ -403,6 +404,9 @@ export class NotebookEngine {
     // the model always sees the current line (for COMPLETE_RHS that is the incomplete line itself);
     // the CAS checks a completion against the lines before it (verifyCandidate)
     const ctxLines = [...contextLinesFor(nb, last.id), last];
+    // rejections are remembered per context: the same notebook content, mode and kind of target (spec §7.3)
+    const rejectKey = rejectionKey(semanticHash(nb, payloadForCandidate(nb, ctxLines, { id: targetId, role: 'step', segments: [] })), mode);
+    const rejected = rejectionsFor(s.rejections, rejectKey);
     const pending: Candidate = {
       id: uuid(),
       mode,
@@ -414,6 +418,7 @@ export class NotebookEngine {
       lines: [],
       policy: 'unverified',
       mock: false,
+      rejectKey,
     };
     s.set('candidate', pending);
     s.set('suggesting', true);
@@ -430,8 +435,8 @@ export class NotebookEngine {
         based_on_line_id: last.id,
         target_line_id: targetId,
         ...(mode === 'COMPLETE_RHS' && lastMath?.type === 'math' ? { lhs_expr: (lastMath.expr as MathJSON[])[1] as MathJSON } : {}),
-        rejected_hashes: s.rejectedHashes.slice(-64),
-        rejected_latex: s.rejectedLatex.slice(-16),
+        rejected_hashes: rejected.hashes.slice(-64),
+        rejected_latex: rejected.latex.slice(-16),
         ...(reference.length ? { reference } : {}),
         ui_lang: this.deps.lang(),
         demo: demoBinding(nb),
@@ -518,8 +523,7 @@ export class NotebookEngine {
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
     const s = store.getState();
     const latex = segments.map((seg) => (seg.type === 'math' ? printSegmentLatex(seg.expr, seg.notation) : seg.text)).join(' ');
-    s.set('rejectedHashes', [...s.rejectedHashes, draft.content_hash]);
-    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
+    s.set('rejections', addRejection(s.rejections, pending.rejectKey, draft.content_hash, latex));
     s.set('rejection', { id: draft.id, segments, proof, basedOnLineId: pending.basedOnLineId });
   }
 
@@ -584,8 +588,6 @@ export class NotebookEngine {
     );
     s.set('candidate', null);
     s.set('rejection', null);
-    s.set('rejectedHashes', []);
-    s.set('rejectedLatex', []);
     this.scheduleSuggestion(500);
     return 'adopted';
   }
@@ -596,8 +598,8 @@ export class NotebookEngine {
     const c = s.candidate;
     if (!c) return;
     const latex = c.lines.map((l) => l.segments.map((seg) => (seg.type === 'math' ? seg.latex : seg.text)).join(' ')).join(' ; ');
-    s.set('rejectedHashes', [...s.rejectedHashes, c.contentHash]);
-    s.set('rejectedLatex', [...s.rejectedLatex, latex]);
+    // a candidate that is still being generated or checked was never shown: dismissing it rejects nothing
+    if (isRecordable(c.state)) s.set('rejections', addRejection(s.rejections, c.rejectKey, c.contentHash, latex));
     s.set('candidate', null);
     this.abortSlot('suggest');
   }

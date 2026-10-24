@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import type { Meta } from '@mn/contracts';
 import { suggestBlockerOf, suggestModeOf, type BlockerInput } from '../../../src/core/candidates/blocker';
 import { candidateHash, lineHash, mathKey } from '../../../src/core/candidates/hash';
-import { rejectionKey, targetKindOf } from '../../../src/core/candidates/rejection';
+import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '../../../src/core/candidates/rejection';
 import { matchesSlot, mismatchedFields, type SlotMeta } from '../../../src/core/candidates/slot';
 import { line, notebook, segs, settled, stroke, ZERO } from './fixtures';
 
@@ -39,6 +39,45 @@ describe('core/candidates/rejection', () => {
     assert.notEqual(k, rejectionKey(`sha256:${'1'.repeat(64)}`, 'NEXT_STEP', 'new'));
     assert.equal(rejectionKey(ZERO, 'COMPLETE_RHS'), rejectionKey(ZERO, 'COMPLETE_RHS', 'existing'));
     assert.equal(targetKindOf('NEXT_STEP'), 'new');
+  });
+});
+
+describe('core/candidates/rejection history (R22)', () => {
+  const k1 = rejectionKey(ZERO, 'NEXT_STEP');
+  const k2 = rejectionKey(`sha256:${'2'.repeat(64)}`, 'NEXT_STEP');
+  const h = (c: string) => `sha256:${c.repeat(64)}`;
+
+  it('F3 a rejection counts only in the context it was made in', () => {
+    const hist = addRejection({}, k1, h('a'), 'x = 1');
+    assert.deepEqual(rejectionsFor(hist, k1), { hashes: [h('a')], latex: ['x = 1'] });
+    assert.deepEqual(rejectionsFor(hist, k2), { hashes: [], latex: [] }, 'a changed context starts with a clean history');
+    assert.deepEqual(rejectionsFor(hist, rejectionKey(ZERO, 'COMPLETE_RHS')).hashes, [], 'another mode is another context');
+  });
+
+  it('F3 returning to the same context (e.g. after Undo) finds the earlier rejections again', () => {
+    const hist = addRejection(addRejection({}, k1, h('a'), 'a'), k2, h('b'), 'b');
+    assert.deepEqual(rejectionsFor(hist, k1).hashes, [h('a')]);
+    assert.deepEqual(rejectionsFor(hist, k2).hashes, [h('b')]);
+  });
+
+  it('F3 adding is immutable, keeps order, and ignores repeats', () => {
+    const empty = {};
+    const one = addRejection(empty, k1, h('a'), 'a');
+    const two = addRejection(one, k1, h('b'), 'b');
+    assert.deepEqual(empty, {});
+    assert.deepEqual(rejectionsFor(one, k1).hashes, [h('a')]);
+    assert.deepEqual(rejectionsFor(two, k1).hashes, [h('a'), h('b')]);
+    assert.equal(addRejection(two, k1, h('a'), 'again'), two);
+  });
+
+  it('G9 an empty hash is never recorded', () => {
+    const hist = {};
+    assert.equal(addRejection(hist, k1, '', 'x'), hist);
+  });
+
+  it('G9 only a finished candidate (READY or HELD) is recorded as rejected', () => {
+    for (const state of ['READY', 'HELD']) assert.equal(isRecordable(state), true, state);
+    for (const state of ['GENERATING', 'VERIFYING', 'NONE', 'ADOPTED', 'REJECTED', 'STALE']) assert.equal(isRecordable(state), false, state);
   });
 });
 

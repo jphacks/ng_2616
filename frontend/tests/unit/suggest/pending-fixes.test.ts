@@ -20,11 +20,9 @@ describe('waiting for the Canvas/history owner (engine.ts, notebook-store.ts)', 
   // R16: engine.isStale compares only epoch and the base line version.
   it.skip('G6 a result whose request_id or context_fingerprint differs from the active slot is discarded (R16)', () => {});
 
-  // R22: reject() pushes c.contentHash even while it is still '' (GENERATING / VERIFYING).
-  it.skip('G9 pressing Esc while a candidate is still being generated adds no empty hash (R22)', () => {});
-
-  // R22: rejectedHashes is cleared by adopt / undo / load, not keyed by context; redo and confirm do not clear it.
-  it.skip('F3 the rejection history is keyed by rejectionKey(semanticHash, mode) and a changed context starts a fresh one (R22)', () => {});
+  // R22: the pure rules (empty hash, READY/HELD only, per-context key) are tested in pure.test.ts (F3, G9).
+  // What stays here is the wiring inside NotebookEngine.reject(), which needs a fake CAS and api (constructor owner).
+  it.skip('G9 pressing Esc while a candidate is still being generated leaves the rejection history unchanged (engine wiring, R22)', () => {});
 
   // R14: HELD returns to READY only when the draft is emptied; the definition of "writing stopped" is not agreed yet.
   it.skip('G3 a HELD candidate returns to READY once writing has stopped in an unchanged context (R14)', () => {});

@@ -2,6 +2,7 @@
 
 import type { Line, Notebook, Proof, Segment, SuggestMode, Target, Verified } from '@mn/contracts';
 import { create } from 'zustand';
+import type { RejectionHistory } from '@/core/candidates/rejection';
 import { HISTORY_LIMIT, interruptPending, patchPending, type Command, type CommandType, type Snapshot } from '@/core/history/history';
 
 export type Tool = 'pen' | 'eraser' | 'view';
@@ -27,6 +28,8 @@ export interface Candidate {
   lines: CandidateLine[];
   policy: CandidatePolicy;
   mock: boolean;
+  /** rejectionKey of the context this candidate was requested in */
+  rejectKey: string;
 }
 
 export interface CheckerRejection {
@@ -61,8 +64,8 @@ export interface NotebookState {
   cas: CasStatus;
   candidate: Candidate | null;
   rejection: CheckerRejection | null;
-  rejectedHashes: string[];
-  rejectedLatex: string[];
+  /** hashes and LaTeX of rejected candidates, per context (core/candidates/rejection.ts) */
+  rejections: RejectionHistory;
   sheet: Sheet;
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
@@ -110,8 +113,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
   cas: { state: 'idle' },
   candidate: null,
   rejection: null,
-  rejectedHashes: [],
-  rejectedLatex: [],
+  rejections: {},
   sheet: null,
   suggesting: false,
   ghostConfirm: false,
@@ -130,8 +132,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
       saveState: 'idle',
       candidate: null,
       rejection: null,
-      rejectedHashes: [],
-      rejectedLatex: [],
+      rejections: {},
       sheet: null,
     });
   },
@@ -176,8 +177,6 @@ export const useNotebook = create<NotebookState>((set, get) => ({
       dirty: true,
       candidate: null,
       rejection: null,
-      rejectedHashes: [],
-      rejectedLatex: [],
     });
     return true;
   },
