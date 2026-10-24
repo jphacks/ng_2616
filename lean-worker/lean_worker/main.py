@@ -1,4 +1,4 @@
-"""HTTP face of the worker: GET /health and POST /check (ADR 0007).
+"""HTTP face of the worker: GET /health and POST /check (ADR 0008).
 
 Only the Next.js gateway (later the FastAPI backend) calls this, over loopback or a private
 network. It holds no secrets and calls no model: it answers whether Lean accepts a proof.

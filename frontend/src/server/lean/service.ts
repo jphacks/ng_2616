@@ -21,7 +21,7 @@ export const LEAN_ATTEMPTS = 3;
 const clip = (s: string | null | undefined, n: number) => (s ? s.slice(0, n) : undefined);
 
 /**
- * One Lean check of a notebook line (ADR 0007): the model translates the lines that have no Lean
+ * One Lean check of a notebook line (ADR 0008): the model translates the lines that have no Lean
  * yet, lean-worker runs the whole proof so far, and a refused translation is repaired with Lean's
  * own messages. Earlier lines keep the tactics they were checked with, so a proof never shifts
  * under the student; only the lines translated in this call are retried.

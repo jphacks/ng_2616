@@ -1,7 +1,7 @@
 [project]
 name = "math-notebook-lean-worker"
 version = "0.1.0"
-description = "Checks Lean proofs against a pinned Mathlib for Math Notebook (ADR 0007). No LLM, no secrets."
+description = "Checks Lean proofs against a pinned Mathlib for Math Notebook (ADR 0008). No LLM, no secrets."
 requires-python = ">=3.12"
 dependencies = [
   "fastapi==0.162.0",

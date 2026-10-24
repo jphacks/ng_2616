@@ -41,7 +41,7 @@ export const RecognizeResultSchema = z.object({
   mock: z.boolean(),
   /** the raw transcription, kept for debugging and for the "we read…" hint on failure */
   transcription: z.string().optional(),
-  /** v2.3: the checker the model chose for this line (ADR 0007) */
+  /** v2.3: the checker the model chose for this line (ADR 0008) */
   route: CheckerRouteSchema.optional(),
 });
 
@@ -51,7 +51,7 @@ export const SuggestContextLineSchema = z.object({
   source: z.enum(['user', 'ai', 'pdf', 'resource']),
   status: StatusSchema.optional(),
   segments: z.array(SegmentSchema),
-  /** v2.3: the checker this line went to, and what Lean said about it (ADR 0007) */
+  /** v2.3: the checker this line went to, and what Lean said about it (ADR 0008) */
   route: CheckerRouteSchema.optional(),
   lean: LeanStepStateSchema.optional(),
 });
@@ -93,7 +93,7 @@ export const SuggestInputSchema = z.object({
 export const CandidateDraftLineSchema = z.object({
   target: TargetSchema,
   segments: z.array(SegmentSchema),
-  /** v2.3: a proof step goes to Lean, not the CAS (ADR 0007) */
+  /** v2.3: a proof step goes to Lean, not the CAS (ADR 0008) */
   route: CheckerRouteSchema.optional(),
 });
 

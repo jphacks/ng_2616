@@ -59,7 +59,7 @@ const input = (over: Partial<LeanCheckInput> = {}): LeanCheckInput => ({
 
 const wire = (steps: LeanStepWire['steps'], over: Partial<LeanStepWire> = {}): LeanStepWire => ({ scope: 'theorem', statement: '', steps, hint: 'Try induction.', ...over });
 
-describe('LeanService.check (ADR 0007)', () => {
+describe('LeanService.check (ADR 0008)', () => {
   it('without a worker or with the mock model it answers unavailable and calls nothing', async () => {
     const { llm, calls } = fakeLlm([wire([])]);
     assert.equal((await new LeanService(llm, null, env).check(input(), ctx())).state, 'unavailable');

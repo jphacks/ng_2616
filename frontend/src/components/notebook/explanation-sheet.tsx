@@ -174,7 +174,7 @@ export function ExplanationSheet() {
   const proof = line?.verified?.proof;
   if (!line || !proof) return null;
   const n = lineNumber(nb, line.id) ?? 0;
-  // a proof line Lean checked shows Lean's verdict, not the CAS's "cannot read this" (ADR 0007)
+  // a proof line Lean checked shows Lean's verdict, not the CAS's "cannot read this" (ADR 0008)
   const lean = leanOf(line);
   const leanChecked = lean?.proof ? lean : undefined;
   const title = leanChecked

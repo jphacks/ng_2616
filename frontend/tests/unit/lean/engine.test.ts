@@ -51,7 +51,7 @@ function withLeanTheorem(r: ReturnType<typeof rig>) {
   r.store.getState().set('notebook', withTheorem(nb, { statement: THEOREM, given_hash: givenHash(nb.lines), source: 'template' }));
 }
 
-describe('Lean routing (ADR 0007)', () => {
+describe('Lean routing (ADR 0008)', () => {
   it('a line the model routed to Lean is checked after the CAS, and keeps its verdict', async () => {
     const api = leanApi((input) => okResult(input));
     const r = rig({ lines: [given, proofLine('L1', 'Let $n$ be natural.', { route: 'lean', lean: { tactic: 'intro n' } }), line('L2', 'VERIFYING', { segments: segs('By induction on $n$.'), extensions: { route: 'lean' } }), line('D1', 'DRAFT')], api, cas: fakeCas(() => casStatus('none', { reason: 'TEXT_ONLY' })) });
@@ -170,7 +170,7 @@ describe('Lean routing (ADR 0007)', () => {
   });
 });
 
-describe('Lean-checked suggestions (ADR 0007)', () => {
+describe('Lean-checked suggestions (ADR 0008)', () => {
   const lines = (): Line[] => [given, proofLine('L1', 'Let $n$ be natural.', { route: 'lean', lean: { tactic: 'intro n', step: 'ok', proof: 'incomplete' } }), line('D1', 'DRAFT')];
   const proofDraft = (input: Parameters<typeof draftFor>[0]) => {
     const d = draftFor(input, 'We use induction on $n$.');

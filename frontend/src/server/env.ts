@@ -14,14 +14,16 @@ const schema = z.object({
   LLM_THINKING_RECOGNIZE: thinking.default('medium'),
   LLM_THINKING_SUGGEST: thinking.default('medium'),
   LLM_THINKING_OCR: thinking.default('minimal'),
-  // ADR 0007: Lean translation needs the strongest model and real thinking
+  // ADR 0008: Lean translation needs the strongest model and real thinking
   LLM_MODEL_LEAN: z.string().default('gemini-3.8-flash'),
   LLM_THINKING_LEAN: thinking.default('high'),
   BACKEND_URL: z.string().optional(),
   BACKEND_API_KEY: z.string().optional(),
-  /** lean-worker (ADR 0007): loopback HTTP in development, HTTPS or a private network otherwise */
+  /** lean-worker (ADR 0008): loopback HTTP in development, HTTPS or a private network otherwise */
   LEAN_WORKER_URL: z.string().optional(),
   LEAN_WORKER_KEY: z.string().optional(),
+  PDF_COMPILER_URL: z.string().optional(),
+  PDF_COMPILER_API_KEY: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().default(''),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().default(''),
   NEXT_PUBLIC_AUTH_DEV_BYPASS: z.string().default('false'),

@@ -1,4 +1,4 @@
-# ADR 0007: Lean checks proof lines; the model routes each line
+# ADR 0008: Lean checks proof lines; the model routes each line
 
 **Status:** accepted (Stage 1, local Lean; Azure later)
 

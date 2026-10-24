@@ -1,6 +1,13 @@
 # AI数式補完 実装メモ
 
-最終更新：2026-10-24（段階3 完了時点。①の関数の変更を含む。main の PR #39 を取り込み済み、衝突なし）。担当：AI数式補完（M-06）。
+**PR マージ済み**：PR #41 は main にマージ済み（マージコミット `47ae591`、2026-10-24）。この NOTES は main の `4f46b73`（PR #54 取り込み時点）から作った `Riku_feature2` で更新している。以下は、マージ後に ③ の Must 部分に残っている作業の整理（詳細は各節）。
+
+1. **S-01 の live 確認**：人手で実施済み（下の「live（本物の Gemini）での確認記録」）。S-01 の完了条件は満たした。残りは、採用後の行2が「未検証」になった原因の調査と、自動の live E2E（未実施）。
+2. **②の回答待ち**：R3（`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`）、R10（修正行 unknown の直接判定）、R30（`Proof.mock` の意味。回答後に ③ が `verifyCandidate` と ghost-line の mock 表示を直す）。
+3. **⑤の作業待ち**：R16 の `Job.meta`、R28（BRIDGE の 403）、`test` script、MT-10／GT-7 の読み替えの承認、I2（描画テスト基盤）。
+
+
+最終更新：2026-10-25（段階3 完了＋PR #41 マージ後の作業。`Riku_feature2` に origin/main `98fa5f8` を取り込み済み、衝突なし）。担当：AI数式補完（M-06）。
 
 **方針（人間の決定）**：案A＝Python の suggest は作らない。既存の TypeScript 実装を仕上げる。基準設計書は `docs/design/v2.0-en.md` + `v2.1-deltas.md` + ADR。`docs/tasks/AI_COMPLETION_TASK.md`（v1.9 前提）は担当範囲の考え方と「他担当の領域に触らない」ルールだけを参照する。v1.9 前提の部分は失効しており、末尾の「履歴」にある。
 
@@ -88,10 +95,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 ### 次にやること
 
-1. ①のレビュー待ち：「①のレビューが必要な変更」の 3 つ（コンストラクタ、R13、R14）。
-2. ⑤の回答待ち：`Job.meta` の照合（R16）、BRIDGE の 403（R28）、`test` script、描画テスト基盤（I2）。
-3. R30 は②の回答後に決める。
-4. E2E を live の LLM で一度流す（live の記録はまだ無い）。
+上の「PR マージ済み」の 3 つ（S-01 の live 確認、②の回答待ち、⑤の作業待ち）。①のレビュー（R14 の 1.2 秒など）は PR #41 のマージで済んでいるが、結論の記録は無いので、あれば「①のレビューが必要な変更」の節に追記する。
 
 ## 依頼事項（縦割りの役割ごと・現在有効）
 
@@ -114,11 +118,89 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 **⑤ 共有基盤・QA 担当**
 - [ ] **R16**：`client.ts` が `Job.meta` を呼び出し側に返す。補完の `context_fingerprint` は `suggestFingerprint`（`core/candidates/slot.ts`）で、`contextFingerprint`（`cas/payload.ts`）ではない。この値でスロットを照合する。
 - [ ] **R28**：BRIDGE を gateway で 403 `FEATURE_DISABLED` にする（現状は 202 の failed ジョブ）。Must では UI から送られない。
-- [ ] **test script**：`frontend/package.json` の `test` を `tests/unit/**/*.test.ts` に広げ、`--conditions=react-server` を付ける（付けないと `server-only` で失敗する）。
+- [x] **test script**：main の `13e1206`（RedBlueBird）で対応済み。`frontend/package.json` の `test` は `--conditions=react-server` 付きで、`tests/unit/` のファイルを **1 つずつ列挙**する形になり、CI（`.github/workflows/ci.yml`）が `pnpm --filter frontend test` を実行する。注意：列挙なので、新しい単体テストのファイルは `package.json` の `test` に足さないと CI で走らない（`engine-suggest` など補完のテストは入っている）。
 - [ ] **MT-10／GT-7 の読み替え**：「ok のみ採用」を ADR 0003 に合わせて「wrong は採用不可・非表示、unknown は二重確認でのみ採用、ok／none は 1 タップ」と読むことの承認（QA）。
 - [ ] **I2 の描画テスト基盤**：jsdom と React Testing Library の導入（`GhostLine` のラベルの描画テスト用）。
 - [ ] **補完ボタン**：`toolbar.tsx` の補完ボタンは、wrong の行があるとき **灰色（`aria-disabled`）にするが `disabled` にはしない**（押すと理由を案内する。R27）。③が実装済み（`b671464`）。今後 `disabled` に変えないこと（案内が出なくなる）。
 - [ ] **live の E2E**：実 LLM での通しは未実施。実施者と環境。
+
+## PR #41 のマージ後に単体テストが 8 件落ちた件の調査（コードは直していない）
+
+**結論**：原因は PR #41 の取り込み（`d90c6cb`）で、**main の `13e1206` で修復済み。`Riku_feature2` に origin/main を取り込んだあと、通過を確認した**（単体テスト全体 192 件：191 通過／0 失敗／1 skip。`pnpm --filter frontend test` も同じ）。
+
+**単体テストの経過**（`tests/unit/suggest/*.test.ts`、`--conditions=react-server`、各コミットを checkout して実行）
+
+| コミット | 内容 | 通過／失敗 |
+| --- | --- | --- |
+| `d364016` | ③の最終（PR #41 の head の一つ前） | 146／0 |
+| `d90c6cb` | tarumikun による「Merge origin/main into Riku_feature（engine、toolbar、notebook-store の衝突を解消）」 | 96／**50** |
+| `47ae591` | PR #41 のマージ（`0570144` を含む） | 138／**8** |
+| `4f46b73` | PR #54 のマージ | 138／**8** |
+| `13e1206` | RedBlueBird「#41 のマージで失われた補完の流れを直し、CI で実行」 | 146／0 |
+| `origin/main` | PR #58 まで | 146／0 |
+
+壊したコミット：**`d90c6cb`**（PR #41 の取り込みの衝突解消。tarumikun、2026-10-25 00:30）。`0570144`（同じ人の型の整合）で 50→8 に減ったが、8 件は残った。`git bisect` は使わず、上の各コミットを直接 checkout して確かめた。
+
+**main の変更**（`47ae591..origin/main` で engine.ts、store、candidates、direct、i18n、tests/unit/suggest に触ったもの）：`13e1206`（RedBlueBird、補完の修復）、`24cfb2b`（RedBlueBird、`beforeunload` でも outbox を書く）、`b0bab1e`（RedBlueBird、PR #54 内の merge）、`2e0591c`（RedBlueBird、「identity と解のリストを正しく検査し、補完を再度頼めるように」）。`candidates/`、`direct/`、i18n を触ったものは無い。
+
+**8 件の判定**（根拠は `d364016`／`d90c6cb`／`4f46b73`／`13e1206` の engine.ts の差分）
+
+| テスト | 判定 | 根拠と中身 |
+| --- | --- | --- |
+| G6（編集された行から作った結果を捨てる） | **(a)** | ③の `isStale(slot)`（7 項目照合）が、衝突解消で main の再試行ループ（PR #50 `ea7ca73`）の `isStale(epoch, last)` に置き換わった。`13e1206` が slot 照合に戻した |
+| G6（検証中に文脈が変わった結果を捨てる） | **(a)** | 同上（`verifyCandidate` の `isStale(pending.epoch, basedOn)`）。`13e1206` が `slot` を渡す形に戻した |
+| G9（検証中の却下）、G9（却下した候補が検証後に戻る） | **(a)** | `d4ffffa` の「却下で `suggestSlot` を空にする」が、epoch だけの照合では効かなくなった |
+| G9（却下したハッシュを次の要求が送る）、G9（却下は自分の文脈だけ） | **(a)＋(b)** | R22 の文脈ごとの却下履歴を、PR #50 のループが読まず、全体のリスト（`rejectedHashes`／`rejectedLatex`）を送っていた。リストは別のノートブックを開いても残る。`13e1206` が文脈ごとのものに揃え、全体のリストを消した |
+| G7（wrong は出さない。再生成は 1 回） | **(b)** | PR #50 が「最大 3 回まで再試行」に変えた（意図した変更）。テストの前提がずれた。`13e1206` がテストを 3 回に直し、ADR 0003 にも書いた |
+| G5（問題カードの編集で要求を取り消す） | **(b)** | PR #52（`9f85a1c`）が問題カードを無くした。テストの前提が消えた。`13e1206` が「given 行の指定」を使う形に書き換えた |
+| F1（Undo／Redo で再検証しない） | **(b)** | `2e0591c` が、Undo で入力ハッシュの合わない行を再検証するようにした（意図）。テストの偽の `input_hash`（仮の文字列）がこれに当たった。`13e1206` が harness に本物のハッシュを入れた |
+
+**(a) の項目でアプリが実際に壊れていたか**（`4f46b73` 時点のテストの中身から。いまの main では直っている）
+- **G6：** 候補を作っている間に行を直すと、古い文脈の候補が表示されえた（epoch が同じなら捨てない）。
+- **G9：** 検証中に Esc で却下した候補が、検証が終わると **再表示された**。実際のテストの失敗が「却下した候補が検証後に戻る」だった。
+- **却下の履歴：** ✕ で却下した候補の `content_hash` が次の要求に載らず（全体のリストだけ）、別のノートブックの却下が混ざった。
+
+**E2E「a failed recognition keeps the ink…」**：補完とは無関係（①の筆記・Canvas）。`c74e788`（PR #43 のマージ、tarumikun、ink-canvas）から失敗し、`3186d16`（RedBlueBird「行の canvas が resize されたら筆跡を再描画」）で直った。`c74e788^`、`3186d16`、`47ae591`、`origin/main` で通過、`c74e788`、`4f46b73` で失敗（「Expected: > 0 / Received: 0」）。なお `d364016` は今回の node_modules（新しい依存）で 5.2 分でタイムアウトして失敗した（古い commit と新しい依存の組み合わせによる環境の差と思われる。原因は未確認）。
+
+**取り込み後のテスト**（`Riku_feature2` ＝ main `98fa5f8` を取り込み、2026-10-25、ローカル、mock＋実 CAS）：単体テスト全体 192 件：191 通過／0 失敗／1 skip（`pnpm --filter frontend test` と、`tests/unit/suggest/*.test.ts` ＋ `tests/unit/*.test.ts` の直接実行で同じ）、`tsc --noEmit` エラー 0、`eslint src tests` エラー 0（警告 11 件）、E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件など計 12 件通過（1.7 分。「a failed recognition…」も通過）。
+
+## 問題カードの廃止（PR #52）と、補完の前提
+
+**問題カードは PR #52（`9f85a1c`、RedBlueBird「問題カードを、手書きできる given 行に置き換える」）で廃止された**（v2.2）。前提（`L > 0`、`n ∈ ℤ⁺`、`ψ(x) ≠ 0`）と関数宣言（`Ψ(x, t)`）は **ふつうの行**で、形で判別される（`packages/cas-core/cas_core/context.py` の冒頭に「there is no problem card」）。このメモの古い節（段階0〜2、部品対応表など）に残る「問題カード」は、廃止前の記述。
+
+### 行2が「未検証」になった原因の調査（コードは変えていない）
+
+調査の材料は `frontend/src/core/engine.ts`、`core/cas/payload.ts`、`packages/cas-core/cas_core/{context,checks}.py`、`core/notebook/model.ts`。CAS は動かしていない（ローカルに SymPy が無い。ブラウザ内の Pyodide でしか動かさない）ので、**CAS の判定結果そのものは推測**。
+
+**前提（L > 0、A > 0）の指定のしかた（操作）**
+1. 前提を **ふつうの行**として、確認する行の **上**に手書きして確定する（例：行 `L > 0`、`A > 0`）。`x > 0`、`x ≥ 0`、`x ≠ 0`、`x ∈ ℝ`、`lo ≤ x ≤ hi`、カンマ区切りの組み合わせは、**given の印が無くても**形から前提として扱われる（`assumptions_of`）。
+2. 印を付けたいときは、行の状態バッジを押して詳細シートを開き、「Mark as given（given にする）」を押す（`explanation-sheet.tsx` → `engine.setGiven`、role が `premise` になる）。given 行は検証されず（状態「Given」）、後ろの行が使える。「A²L/2 = 1」のような **方程式を問題文として与える**ときは、この印が要る（印が無いと、その行自体も検証される）。
+3. 前提の行が **対象の行より下**にあると効かない（文脈は対象より上の、確定した有効な行だけ。`contextLinesFor`）。
+4. 再検証：`setGiven`（given の印の付け外し）は、その行以降を `recheckStale` で検証し直す。`syncDeclarations` が見るのは **関数宣言**（`Ψ(x, t)`）だけで、`L > 0` のような前提の行を後から足しても、すでに確定した行は自動では検証し直されない（確認していない部分。上の行に前提を足すときは、後ろの行を書き直すか、given の印を付け外しして再検証させる必要があるかもしれない）。
+
+**候補の検証（`verifyCandidate`）は前提を使っているか：使っている**
+- 右辺補完（COMPLETE_RHS）：`payloadForCandidate(nb, contextLinesFor(nb, basedOn.id), target, 'identity')`。**未完成の行の上の、確定した有効な行すべて**（given 行、前提の行、関数宣言の行を含む）が CAS に渡る。CAS 側は `_declare` で前提の行を集めて `env.assumptions` に入れ、given 行の裸の記号は無視する（`build_context`）。
+- 次の一手（NEXT_STEP）：`chain`（上の行＋これまでの候補の行）を渡す。同じく前提を含む。
+- 採用後：`adopt` は候補の `verified` をそのまま行に付ける（再検証しない。関数宣言が変わって `syncDeclarations` が検出したときだけ `recheckStale`）。つまり **採用後の行の判定は、候補を検証した時点の判定のまま**。候補の検証と採用後の検証が別の文脈になることは無い（採用時に入力ハッシュを照合し、変わっていれば stale として捨てる）。
+
+**live の行2が「未検証」だった理由（推測）**：行1「A²L/2 = 1」だけでは A の符号が決まらない。CAS は `A = √(2/L)` を、方程式 `A²L/2 = 1` の解の一部（`A = ±√(2/L)` の片方）と見て、`SUBSET_OF_SOLUTIONS`（「他の解を除いていない」）で `unknown` にする（`checks.py`）。`A > 0`（と `L > 0`）の前提の行が無いと、この「一部だけ」が解消しない。**前提の行（`A > 0`、`L > 0`）を行1の上に足して再度補完すれば、`ok` になる可能性が高い**が、CAS の実測はしていない。次に確かめること：ブラウザで前提の行を足して、同じ補完を試す（ユーザー）。
+
+**②への依頼**：今回の調査では不要（CAS のコードの欠陥は見つからなかった）。判定が期待と違うときの追加の材料があれば、そのとき書く。
+
+## live（本物の Gemini）での確認記録
+
+実施者：ユーザー（人手のブラウザ確認）。実施日はユーザーからの報告時（2026-10-25 時点で報告済み）。mock ではなく `LLM_PROVIDER=gemini`。この節の内容はユーザーの報告で、③は再現していない。
+
+| 項目 | 操作 | 結果 |
+| --- | --- | --- |
+| S-01 右辺補完 | 行1「A^2 L/2 = 1」、行2「A =」で補完（COMPLETE_RHS） | 候補「A = √(2/L)」が返り、採用できた。採用後の行2の判定は **「未検証」**。S-01 の完了条件（`A =` に対して `A = √(2/L)` が返る）は **満たした** |
+| 次の一手 | 「1 + 1 = 2」の次で補完（NEXT_STEP） | 「ここで ψ(x) = √(2/L) sin(nπx/L)」という **仮定の提案**が出た。直前の行から離れた提案で、問題カードか参考資料（`reference`）に引っぱられた可能性がある |
+
+- **観察として記録するだけ**：次の一手のプロンプトの調整は今はしない。
+- **使ったモデル**（設定ファイルの値。実行時の環境変数は確認していない）：補完 `LLM_MODEL_SUGGEST=gemini-3.5-flash-lite`、手書き認識 `LLM_MODEL_RECOGNIZE=gemini-3.8-flash`、OCR `LLM_MODEL_OCR=gemini-3.5-flash-lite`（`frontend/.env.example` と `frontend/.env.local` で同じ）。
+- **所要時間**：未計測（ログが残っていない）。
+- **採用後の行2が「未検証」になった原因**：調査済み。上の「問題カードの廃止（PR #52）と、補完の前提」の節。推測の結論：`A > 0`、`L > 0` の前提の行が無く、`SUBSET_OF_SOLUTIONS` で unknown。
+- **E2E の注意**：ここでの live は人手の確認で、自動の E2E ではない。自動 E2E は引き続き mock＋実 CAS のみ。
 
 ## S-04：wrong の行があるあいだのロック（完了）
 

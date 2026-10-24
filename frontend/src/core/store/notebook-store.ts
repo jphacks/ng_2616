@@ -16,7 +16,7 @@ export interface CandidateLine {
   target: Target;
   segments: Segment[];
   verified?: Verified;
-  /** route and Lean verdict the line keeps when adopted (ADR 0007) */
+  /** route and Lean verdict the line keeps when adopted (ADR 0008) */
   extensions?: Line['extensions'];
 }
 
@@ -80,7 +80,7 @@ export interface NotebookState {
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
   ghostConfirm: boolean;
-  /** lines whose Lean check is still running (ADR 0007) */
+  /** lines whose Lean check is still running (ADR 0008) */
   leanPending: Record<string, true>;
   toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
 

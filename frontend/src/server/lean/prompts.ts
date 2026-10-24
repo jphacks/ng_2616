@@ -4,7 +4,7 @@ import type { FunctionDecl, LeanCheckInput, Segment } from '@mn/contracts';
 import type { Part } from '../ai/direct/providers/types';
 
 /**
- * AI-LF + AI-LP of spec §13 in one call (ADR 0007): the model states the theorem when it is not
+ * AI-LF + AI-LP of spec §13 in one call (ADR 0008): the model states the theorem when it is not
  * known yet and writes one Lean tactic per proof line. Lean, not the model, decides what holds.
  */
 export const LEAN_SYSTEM = `You translate a student's handwritten proof into Lean 4 with Mathlib so that Lean can check it line by line. You never judge whether the mathematics is right: Lean does.

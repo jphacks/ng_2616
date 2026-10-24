@@ -33,7 +33,7 @@ function Heading({ children }: { children: ReactNode }) {
   return <h4 className="text-sm font-semibold tracking-wide text-muted uppercase">{children}</h4>;
 }
 
-/** Lean's side of a proof line (ADR 0007): the theorem, this line's Lean step, and what Lean said. */
+/** Lean's side of a proof line (ADR 0008): the theorem, this line's Lean step, and what Lean said. */
 export function LeanBody({ line, nb, lean }: { line: Line; nb: Notebook; lean: LineLean }) {
   const t = useT();
   const engine = useEngine();

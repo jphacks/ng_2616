@@ -8,7 +8,7 @@ import { useT } from '@/i18n';
 
 export type Tone = 'ok' | 'local' | 'wrong' | 'unknown' | 'none';
 
-/** Lean's verdict on a proof line (ADR 0007): never "wrong", since an unproved step is not a false one. */
+/** Lean's verdict on a proof line (ADR 0008): never "wrong", since an unproved step is not a false one. */
 function leanTone(lean: LineLean): Tone {
   if (lean.step === 'ok') return lean.after_failure ? 'local' : 'ok';
   // "so the formula holds, which completes the proof": nothing new, but the proof is done

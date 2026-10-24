@@ -1,4 +1,4 @@
-# Math Notebook lean-worker (ADR 0007): the pinned Lean project with Mathlib's cache, its REPL, and
+# Math Notebook lean-worker (ADR 0008): the pinned Lean project with Mathlib's cache, its REPL, and
 # the FastAPI checker. Non-root UID 10001; compose.yaml drops capabilities and sets no-new-privileges.
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy \

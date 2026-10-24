@@ -1,5 +1,5 @@
 /**
- * Lean proof checking (ADR 0007). The model decides which checker a line needs: the CAS for
+ * Lean proof checking (ADR 0008). The model decides which checker a line needs: the CAS for
  * algebra, Lean for proof steps written in words, or neither for filler. Lean's verdicts live
  * beside the CAS report, never inside it: `Line.extensions.lean` and `Notebook.extensions.lean`.
  */

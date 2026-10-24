@@ -24,7 +24,7 @@ export function candidateHash(mode: SuggestMode, lines: readonly (readonly (Segm
 
 /**
  * A proof step is mostly words ("Let ε > 0 be given"), so its identity keeps the prose, compared
- * without case or extra spaces (ADR 0007). Used for Lean-routed suggestions only.
+ * without case or extra spaces (ADR 0008). Used for Lean-routed suggestions only.
  */
 function proofKey(segments: readonly (Segment | InputSegment)[]) {
   return segments.map((s) => (s.type === 'math' ? { expr: s.expr, notation: s.notation } : s.text.toLowerCase().replace(/\s+/g, ' ').trim()));

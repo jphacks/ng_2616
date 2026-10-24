@@ -34,7 +34,7 @@ export interface LeanWorker {
   health(signal: AbortSignal): Promise<WorkerHealth>;
 }
 
-/** lean-worker over HTTP (loopback in development, a private network later; ADR 0007). */
+/** lean-worker over HTTP (loopback in development, a private network later; ADR 0008). */
 export class HttpLeanWorker implements LeanWorker {
   constructor(
     private url: string,

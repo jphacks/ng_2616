@@ -16,7 +16,7 @@ function sameIr(a: unknown, b: unknown): boolean {
  * The result is still unverified; the browser CAS decides what may be shown.
  */
 export function finalizeCandidate(input: SuggestInput, segments: Segment[], role: Role, mock: boolean, route?: CheckerRoute): CandidateDraftResult {
-  // a proof step may be words only: Lean, not the CAS, checks it (ADR 0007)
+  // a proof step may be words only: Lean, not the CAS, checks it (ADR 0008)
   if (route !== 'lean' && !segments.some((s) => s.type === 'math')) return none('PROSE_ONLY', mock);
   if (!segments.length) return none('PROSE_ONLY', mock);
   let segs = segments;

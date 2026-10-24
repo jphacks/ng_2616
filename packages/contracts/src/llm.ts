@@ -10,7 +10,7 @@ export const WireSegmentSchema = z.object({
   content: z.string().max(4000),
 });
 
-/** v2.3 (ADR 0007): which checker the line needs; older outputs and scripted lines mean the CAS */
+/** v2.3 (ADR 0008): which checker the line needs; older outputs and scripted lines mean the CAS */
 export const RouteWireSchema = z.enum(['cas', 'lean', 'none']);
 
 export const RecognizeWireSchema = z.object({

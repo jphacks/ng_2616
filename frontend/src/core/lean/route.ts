@@ -14,7 +14,7 @@ import {
 import { declaredFunctions } from '@mn/contracts';
 import { contextLinesFor, findLine, hasMath, isActive, isGiven, proofOf } from '@/core/notebook/model';
 
-/** The `lean` feature (S-05, ADR 0007); the server answers "unavailable" when no worker is configured. */
+/** The `lean` feature (S-05, ADR 0008); the server answers "unavailable" when no worker is configured. */
 export function leanEnabled(): boolean {
   return (process.env.NEXT_PUBLIC_ENABLED_FEATURES ?? '').split(',').some((f) => f.trim() === 'lean');
 }

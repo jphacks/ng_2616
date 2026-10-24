@@ -241,7 +241,7 @@ export function NotebookHome() {
           <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Sigma size={19} aria-hidden />
           </span>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <h1 className="text-lg font-semibold">{t('app.name')}</h1>
             {(local || DEV_BYPASS) && (
               <span
@@ -480,4 +480,3 @@ function SortMenu({ value, onChange }: { value: LibrarySort; onChange: (v: Libra
     </Menu.Root>
   );
 }
-

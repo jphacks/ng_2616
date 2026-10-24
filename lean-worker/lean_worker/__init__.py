@@ -1,1 +1,1 @@
-"""Lean proof checker for Math Notebook (ADR 0007)."""
+"""Lean proof checker for Math Notebook (ADR 0008)."""

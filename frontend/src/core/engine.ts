@@ -324,7 +324,7 @@ export class NotebookEngine {
         version: version + 1,
         state: 'VERIFYING',
         segments: result.segments,
-        // the checker the model chose (ADR 0007); a new reading has no Lean verdict yet
+        // the checker the model chose (ADR 0008); a new reading has no Lean verdict yet
         extensions: { ...withoutReading(line.extensions), ...(result.route ? { route: result.route } : {}) },
       };
       store.getState().settleLine(recognized);
@@ -504,7 +504,7 @@ export class NotebookEngine {
     }
   }
 
-  // ------------------------------------------------------------------ Lean (ADR 0007)
+  // ------------------------------------------------------------------ Lean (ADR 0008)
 
   private setLeanPending(lineId: string, on: boolean) {
     const s = store.getState();
@@ -812,7 +812,7 @@ export class NotebookEngine {
       const verified = { verification_id: uuid(), input_hash: hash, proof };
       const probe: Line = { id: target.id, version: 1, source: 'ai', role: target.role, state: 'SETTLED', ink: [], segments: cl.segments, verified };
       if (cl.route === 'lean' && leanEnabled() && this.api.leanCheck) {
-        // a proof step: Lean, not the CAS, says whether the model got it right (ADR 0007)
+        // a proof step: Lean, not the CAS, says whether the model got it right (ADR 0008)
         const lean = await this.leanCandidate({ ...probe, extensions: { route: 'lean' } }, basedOn, slot, signal);
         if (lean.kind === 'stale') return lean;
         if (lean.kind === 'rejected') return { kind: 'wrong', hash: draft.content_hash, feedback: lean.feedback };

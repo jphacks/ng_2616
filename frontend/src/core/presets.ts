@@ -40,7 +40,7 @@ const TEXT: Record<PresetId, Record<UiLang, PresetText>> = {
     en: { title: 'Solving an equation', statement: 'Solve $x^2 = 4$ over the real numbers.' },
     ja: { title: '方程式を解く', statement: '実数の範囲で $x^2 = 4$ を解きなさい。' },
   },
-  // Proof templates (ADR 0007). The claim is prose on purpose: a formula on a given line is a fact
+  // Proof templates (ADR 0008). The claim is prose on purpose: a formula on a given line is a fact
   // the CAS may use, and the statement to prove must not prove itself. Lean gets the exact theorem.
   induction: {
     en: {

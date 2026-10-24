@@ -14,14 +14,14 @@ export interface BlockerInput {
   candidate: CandidateStateName | null;
   /** the line the student is writing on */
   activeLine: Line | undefined;
-  /** a Lean check is still running for some line (ADR 0007) */
+  /** a Lean check is still running for some line (ADR 0008) */
   leanPending?: boolean;
 }
 
 const BUSY: ReadonlySet<CandidateStateName> = new Set(['GENERATING', 'VERIFYING', 'READY', 'HELD']);
 
 /**
- * The line a suggestion continues from: the last settled formula, or in a proof (ADR 0007) the last
+ * The line a suggestion continues from: the last settled formula, or in a proof (ADR 0008) the last
  * proof line, which may be words only.
  */
 export function suggestBaseLine(nb: Notebook): Line | undefined {

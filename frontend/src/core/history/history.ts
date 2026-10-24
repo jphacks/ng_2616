@@ -50,7 +50,7 @@ export function patchPending(commands: Command[], settled: Line): Command[] {
 }
 
 /**
- * A verdict that does not change a line's content (Lean's, ADR 0007) reaches every history
+ * A verdict that does not change a line's content (Lean's, ADR 0008) reaches every history
  * snapshot holding the same version of that line, so Undo/Redo keep it instead of asking again.
  */
 export function patchSameVersion(commands: Command[], annotated: Line): Command[] {

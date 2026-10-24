@@ -87,7 +87,7 @@ export class DirectAiService implements AiService {
     if (process.env.NODE_ENV === 'development') console.info('[suggest]', input.mode, JSON.stringify(raw).slice(0, 600));
     if (!wire.data.has_candidate) return { state: 'NONE', reason: 'MODEL_DECLINED', mock: false };
     const strict = wireToSegments(wire.data.segments, { functions: input.context.functions ?? [] });
-    // a proof step keeps notation the CAS cannot read: Lean checks it instead (ADR 0007)
+    // a proof step keeps notation the CAS cannot read: Lean checks it instead (ADR 0008)
     const proofStep = wire.data.route === 'lean' && input.mode === 'NEXT_STEP';
     const parsed = proofStep ? wireToSegments(wire.data.segments, { functions: input.context.functions ?? [], allowUnparsed: true }) : strict;
     if (!parsed.ok) {
