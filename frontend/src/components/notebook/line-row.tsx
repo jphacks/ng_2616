@@ -70,9 +70,9 @@ export function LineRow({ line, nb, number, isLastDraft }: { line: Line; nb: Not
             )}
             <InkCanvas
               strokes={line.ink}
-              editable={active}
+              editable
               tool={tool}
-              onActivate={() => engine.activate(line.id)}
+              onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
             />

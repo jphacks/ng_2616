@@ -1,7 +1,7 @@
 'use client';
 
 import type { Stroke, StrokePoint } from '@mn/contracts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { shortId } from '@/core/ids';
 import { drawStroke, strokesBounds, strokesHit } from '@/core/ink/stroke';
 import type { Tool } from '@/core/store/notebook-store';
@@ -50,6 +50,10 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const erasing = useRef<Set<string> | null>(null);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
   const frame = useRef(0);
+  // every draw reads the latest strokes, so a frame queued before React re-renders can never
+  // paint a stale list; a finished stroke stays visible until the notebook confirms it
+  const strokesRef = useRef(strokes);
+  const pending = useRef<{ stroke: Stroke; timer: ReturnType<typeof setTimeout> } | null>(null);
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(() => inkHeight(strokes));
 
@@ -75,19 +79,33 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     const hidden = erasing.current;
-    for (const s of strokes) {
+    const list = strokesRef.current;
+    for (const s of list) {
       ctx.fillStyle = hidden?.has(s.id) ? 'rgba(26,32,48,0.18)' : dim ? 'rgba(26,32,48,0.55)' : '#1a2030';
       drawStroke(ctx, s.points, undefined, true);
+    }
+    const p = pending.current?.stroke;
+    if (p && !list.some((s) => s.id === p.id)) {
+      ctx.fillStyle = '#1a2030';
+      drawStroke(ctx, p.points, undefined, true);
     }
     if (live.current) {
       ctx.fillStyle = '#1a2030';
       drawStroke(ctx, live.current.points, undefined, false);
     }
-  }, [strokes, width, height, dim]);
+  }, [width, height, dim]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    strokesRef.current = strokes;
+    const p = pending.current;
+    if (p && strokes.some((s) => s.id === p.stroke.id)) {
+      clearTimeout(p.timer);
+      pending.current = null;
+    }
     draw();
-  }, [draw]);
+  }, [strokes, draw]);
+
+  useEffect(() => () => clearTimeout(pending.current?.timer), []);
 
   const schedule = () => {
     cancelAnimationFrame(frame.current);
@@ -125,7 +143,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
   const eraseAt = (e: PointerEvent | React.PointerEvent) => {
     const p = local(e, 0);
-    for (const id of strokesHit(strokes, p.x, p.y)) erasing.current?.add(id);
+    for (const id of strokesHit(strokesRef.current, p.x, p.y)) erasing.current?.add(id);
     schedule();
   };
 
@@ -167,7 +185,13 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     const l = live.current;
     if (!l || l.id !== e.pointerId) return;
     live.current = null;
-    if (l.points.length > 0) onStroke?.({ id: shortId('s'), points: l.points });
+    if (l.points.length > 0) {
+      const stroke = { id: shortId('s'), points: l.points };
+      if (pending.current) clearTimeout(pending.current.timer);
+      // drop the placeholder if the notebook never takes the stroke (e.g. the line was confirmed)
+      pending.current = { stroke, timer: setTimeout(() => { pending.current = null; schedule(); }, 1500) };
+      onStroke?.(stroke);
+    }
     schedule();
   };
 
