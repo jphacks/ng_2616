@@ -2,7 +2,7 @@
 
 import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
-import { Check, CornerUpLeft, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
+import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -13,6 +13,7 @@ import { GhostLine, RejectionChip } from './ghost-line';
 import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
 import { StatusBadge } from './status';
+import { SwipeRow, type SwipeAction } from './swipe-row';
 
 interface RowProps {
   line: Line;
@@ -53,9 +54,26 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
     );
   }
 
+  // swiping a settled or failed line left reveals its actions, as in Mail
+  const swipe: SwipeAction[] =
+    line.state === 'SETTLED'
+      ? [
+          ...(line.verified?.proof.status === 'wrong'
+            ? [{ label: t('line.revise'), icon: <CornerUpLeft size={18} />, onClick: () => engine.startRevision(line.id), tone: 'warn' as const }]
+            : []),
+          { label: t('line.details'), icon: <Info size={18} />, onClick: openDetails, tone: 'accent' },
+        ]
+      : line.state === 'RECOGNIZE_FAILED'
+        ? [
+            ...(line.ink.length > 0 ? [{ label: t('line.backToInk'), icon: <PenLine size={18} />, onClick: () => engine.backToInk(line.id) }] : []),
+            { label: t('line.retry'), icon: <RotateCcw size={18} />, onClick: () => void engine.retry(line.id), tone: 'accent' },
+          ]
+        : [];
+
   return (
-    <div
-      data-line-id={line.id}
+    <SwipeRow
+      id={line.id}
+      actions={swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
     >
       <Gutter n={number} line={line} />
@@ -167,7 +185,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </Button>
         )}
       </div>
-    </div>
+    </SwipeRow>
   );
 });
 
