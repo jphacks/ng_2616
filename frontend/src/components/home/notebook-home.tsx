@@ -1,27 +1,31 @@
 'use client';
 
 import clsx from 'clsx';
-import { ArrowDownUp, Atom, Info, Plus, Search, Sigma, Sparkles, SquareFunction, Variable, X } from 'lucide-react';
+import { ArrowDownUp, Atom, Copy, Info, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { DEV_BYPASS, useSessionUser } from '@/core/auth/browser';
 import { duplicateNotebook, renameNotebook } from '@/core/persistence/library';
 import { pushAllPending } from '@/core/persistence/outbox';
 import { getRepository, importDeviceNotebooks, isCloudUnavailable, RepoError, type NotebookSummary } from '@/core/persistence/repo';
 import { arrange, useLibraryPrefs, type LibrarySort } from '@/core/prefs/library';
-import { buildNotebook, presetText, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
+import { buildNotebook, PRESET_IDS, SCHRODINGER_SHEET, type PresetId } from '@/core/presets';
 import { addBuiltinResource } from '@/core/resources/service';
 import { APP_BUILD_VERSION } from '@/core/version';
 import { useLocale, useT } from '@/i18n';
 import { AccountMenu } from '@/components/account/account-menu';
 import { Button } from '@/ui/button';
+import { IntegralIcon } from '@/ui/icons';
 import { Menu, MenuPopup, MenuRadioItem } from '@/ui/menu';
+import { Shelf } from '@/ui/shelf';
 import { Spinner } from '@/ui/spinner';
 import { NotebookCardSkeleton } from './notebook-card';
 import { NotebookGrid, type GridActions } from './notebook-grid';
+import { PULL_THRESHOLD, usePullToRefresh } from './use-pull-refresh';
+import { enter } from '@/ui/motion';
 
-const PRESET_ICON: Record<PresetId, typeof Atom> = { blank: Plus, schrodinger: Atom, integral: Sigma, expansion: Variable, solutions: SquareFunction };
+const PRESET_ICON: Record<PresetId, ComponentType<LucideProps>> = { blank: Plus, schrodinger: Atom, integral: IntegralIcon, expansion: Variable, solutions: SquareFunction };
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
 // a deleted card can be restored from the toast until this passes
 const UNDO_MS = 5000;
@@ -37,10 +41,13 @@ export function NotebookHome() {
   const [creating, setCreating] = useState<PresetId | null>(null);
   const [local, setLocal] = useState(false);
   const [query, setQuery] = useState('');
-  const [deleted, setDeleted] = useState<NotebookSummary | null>(null);
+  const [deleted, setDeleted] = useState<NotebookSummary[]>([]);
+  // selection mode: which cards are picked, or null when not selecting
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   // card actions report failures at the bottom, where their feedback appears
   const [actionError, setActionError] = useState<string | null>(null);
-  const pendingDelete = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const pendingDelete = useRef<{ ids: string[]; timer: ReturnType<typeof setTimeout> } | null>(null);
   // cards stagger in on the first load only
   const [firstLoad, setFirstLoad] = useState(true);
   const prefs = useLibraryPrefs();
@@ -95,10 +102,12 @@ export function NotebookHome() {
     if (!p || !user) return;
     clearTimeout(p.timer);
     pendingDelete.current = null;
-    setDeleted(null);
-    void getRepository(user.id)
-      .remove(p.id)
-      .then(refresh, (e: Error) => setActionError(t('home.actionFailed', { msg: e.message })));
+    setDeleted([]);
+    const repo = getRepository(user.id);
+    void Promise.all(p.ids.map((id) => repo.remove(id))).then(refresh, (e: Error) => {
+      setActionError(t('home.actionFailed', { msg: e.message }));
+      void refresh();
+    });
   }, [user, refresh, t]);
 
   // leaving the page finishes a delete that is still waiting for Undo
@@ -113,7 +122,8 @@ export function NotebookHome() {
   const visible = useMemo(() => {
     if (!items) return null;
     const q = query.trim().toLocaleLowerCase(locale);
-    const shown = items.filter((n) => n.id !== deleted?.id && (!q || n.title.toLocaleLowerCase(locale).includes(q)));
+    const hidden = new Set(deleted.map((n) => n.id));
+    const shown = items.filter((n) => !hidden.has(n.id) && (!q || n.title.toLocaleLowerCase(locale).includes(q)));
     return arrange(shown, prefs, locale);
   }, [items, deleted, query, prefs, locale]);
 
@@ -145,36 +155,58 @@ export function NotebookHome() {
         return t('home.actionFailed', { msg: e instanceof Error ? e.message : String(e) });
       }
     },
-    duplicate: async (id) => {
-      try {
-        const copy = await duplicateNotebook(user!.id, id, (title) => t('home.copyTitle', { title }));
-        if (prefs.sort === 'custom' && visible) {
-          // the copy sits right after its original
-          const order = visible.map((n) => n.id);
-          order.splice(order.indexOf(id) + 1, 0, copy);
-          prefs.setOrder(order);
-        }
-        await refresh();
-      } catch (e) {
-        setActionError(t('home.actionFailed', { msg: e instanceof Error ? e.message : String(e) }));
-      }
-    },
-    remove: (nb) => {
-      commitDelete();
-      setActionError(null);
-      setDeleted(nb);
-      pendingDelete.current = { id: nb.id, timer: setTimeout(commitDelete, UNDO_MS) };
-    },
+    duplicate: (id) => void duplicateMany([id]),
+    remove: (nb) => removeMany([nb]),
     reorder: (ids) => {
       prefs.setOrder(ids);
       if (prefs.sort !== 'custom') prefs.setSort('custom');
     },
+    select: (id) => setSelected(new Set([id])),
+    toggle: (id) =>
+      setSelected((s) => {
+        const next = new Set(s);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
   };
+
+  // each copy sits right after its original
+  async function duplicateMany(ids: string[]) {
+    try {
+      const order = visible?.map((n) => n.id) ?? [];
+      for (const id of ids) {
+        const copy = await duplicateNotebook(user!.id, id, (title) => t('home.copyTitle', { title }));
+        order.splice(order.indexOf(id) + 1, 0, copy);
+      }
+      if (prefs.sort === 'custom') prefs.setOrder(order);
+    } catch (e) {
+      setActionError(t('home.actionFailed', { msg: e instanceof Error ? e.message : String(e) }));
+    }
+    await refresh();
+  }
+
+  function removeMany(nbs: NotebookSummary[]) {
+    commitDelete();
+    setActionError(null);
+    setDeleted(nbs);
+    pendingDelete.current = { ids: nbs.map((n) => n.id), timer: setTimeout(commitDelete, UNDO_MS) };
+  }
+
+  const picked = visible?.filter((n) => selected?.has(n.id)) ?? [];
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelected(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
+  const { pull, refreshing } = usePullToRefresh(scroller, refresh);
 
   const undoDelete = () => {
     if (pendingDelete.current) clearTimeout(pendingDelete.current.timer);
     pendingDelete.current = null;
-    setDeleted(null);
+    setDeleted([]);
   };
 
   if (loading || !user) {
@@ -187,114 +219,176 @@ export function NotebookHome() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="scrollbar-thin h-full overflow-y-auto">
-        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-6 pt-[env(safe-area-inset-top)] backdrop-blur">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-ink text-white">
+      <div ref={scroller} className="scrollbar-thin relative h-full overflow-y-auto overscroll-y-contain">
+        {(pull > 0 || refreshing) && (
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-16 z-lifted flex justify-center">
+            <span
+              className="mt-2 flex size-9 items-center justify-center rounded-full bg-sheet text-accent shadow-float"
+              style={{ transform: `translateY(${refreshing ? PULL_THRESHOLD / 2 : pull / 2}px)`, opacity: refreshing ? 1 : Math.min(1, pull / PULL_THRESHOLD) }}
+            >
+              {refreshing ? <Spinner size={16} /> : <RefreshCw size={16} style={{ transform: `rotate(${pull * 3}deg)` }} />}
+            </span>
+          </div>
+        )}
+        <header className="sticky top-0 z-sticky flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-6 pt-[env(safe-area-inset-top)] backdrop-blur">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Sigma size={19} aria-hidden />
           </span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <h1 className="text-[16px] font-semibold">{t('app.name')}</h1>
-            <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
-              {APP_BUILD_VERSION}
-            </span>
+            <h1 className="text-lg font-semibold">{t('app.name')}</h1>
+            <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-bold text-accent">{APP_BUILD_VERSION}</span>
+            {(local || DEV_BYPASS) && (
+              <span
+                title={t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}
+                className="inline-flex min-w-0 items-center gap-1 rounded-full bg-unknown-soft px-2.5 py-1 text-xs font-medium text-unknown"
+              >
+                <Info size={13} className="shrink-0" aria-hidden />
+                <span className="truncate">{t(DEV_BYPASS ? 'home.devChip' : 'home.localChip')}</span>
+                <span className="sr-only">{t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}</span>
+              </span>
+            )}
           </div>
           <AccountMenu user={user} />
         </header>
 
-        <main className="mx-auto max-w-5xl space-y-10 px-6 py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
-          {(local || DEV_BYPASS) && (
-            <p className="flex items-start gap-2 rounded-2xl bg-unknown-soft p-4 text-[14px] text-unknown">
-              <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
-              {t(DEV_BYPASS ? 'home.devNotice' : 'home.localNotice')}
-            </p>
-          )}
+        <main className={clsx('mx-auto max-w-5xl space-y-10 px-6 py-8', selected ? 'pb-28' : 'pb-[max(2rem,env(safe-area-inset-bottom))]')}>
           {syncNotice && (
-            <p className="flex items-start gap-2 rounded-2xl bg-accent-soft p-4 text-[14px] text-accent-strong">
+            <p className="flex items-start gap-2 rounded-2xl bg-accent-soft p-4 text-md text-accent-strong">
               <Info size={18} className="mt-0.5 shrink-0" aria-hidden />
               <span className="flex-1">{syncNotice}</span>
-              <button type="button" aria-label={t('common.close')} onClick={() => setSyncNotice(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-black/5">
+              <button type="button" aria-label={t('common.close')} onClick={() => setSyncNotice(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-hover">
                 <X size={16} aria-hidden />
               </button>
             </p>
           )}
           {error && (
-            <p role="alert" className="flex items-start gap-2 rounded-2xl bg-wrong-soft p-4 text-[14px] text-wrong-strong">
+            <p role="alert" className="flex items-start gap-2 rounded-2xl bg-danger-soft p-4 text-md text-danger">
               <span className="flex-1">{t('home.loadFailed', { msg: error })}</span>
-              <button type="button" aria-label={t('common.close')} onClick={() => setError(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-black/5">
+              <button type="button" aria-label={t('common.close')} onClick={() => setError(null)} className="-m-2 inline-flex size-9 items-center justify-center rounded-lg hover:bg-hover">
                 <X size={16} aria-hidden />
               </button>
             </p>
           )}
 
           <section className="space-y-4">
-            <h2 className="text-[13px] font-semibold text-balance uppercase tracking-wide text-muted">{t('home.choose')}</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <h2 className="text-3xl font-semibold text-balance">{t('home.choose')}</h2>
+            {/* a swipeable shelf: the cut-off card at the edge hints there are more */}
+            <Shelf className="-mx-6 scroll-px-6 gap-3 px-6 pb-1" prevLabel={t('home.shelfPrev')} nextLabel={t('home.shelfNext')}>
               {PRESET_IDS.map((id) => (
                 <PresetCard key={id} id={id} busy={creating === id} disabled={!!creating} onCreate={() => void create(id)} />
               ))}
-            </div>
+            </Shelf>
           </section>
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="flex-1 text-[13px] font-semibold text-balance uppercase tracking-wide text-muted">{t('home.title')}</h2>
+              <h2 className="flex-1 text-3xl font-semibold text-balance">{t('home.title')}</h2>
               <SearchField value={query} onChange={setQuery} />
               <SortMenu value={prefs.sort} onChange={prefs.setSort} />
             </div>
             {visible === null ? (
-              <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-busy="true" aria-label={t('common.loading')}>
-                {Array.from({ length: 4 }, (_, i) => (
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label={t('common.loading')}>
+                {Array.from({ length: 3 }, (_, i) => (
                   <NotebookCardSkeleton key={i} />
                 ))}
               </ul>
             ) : visible.length === 0 ? (
-              <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border p-8 text-center">
-                <p className="text-[15px] text-pretty text-muted">{query.trim() ? t('home.noMatches', { q: query.trim() }) : t('home.empty')}</p>
-                {query.trim() ? (
+              query.trim() ? (
+                <div className="flex flex-col items-center gap-4 py-10 text-center">
+                  <p className="text-base text-pretty text-muted">{t('home.noMatches', { q: query.trim() })}</p>
                   <Button variant="secondary" icon={<X size={16} aria-hidden />} onClick={() => setQuery('')}>
                     {t('home.clearSearch')}
                   </Button>
-                ) : (
-                  <Button variant="primary" icon={creating === 'blank' ? <Spinner /> : <Plus size={17} aria-hidden />} disabled={!!creating} onClick={() => void create('blank')}>
-                    {t('home.new')}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-5 py-12 text-center">
+                  <span className="flex size-20 items-center justify-center rounded-full bg-accent-soft text-accent">
+                    <PenLine size={36} strokeWidth={1.75} aria-hidden />
+                  </span>
+                  <p className="text-2xl font-semibold text-balance">{t('home.empty')}</p>
+                  <Button variant="primary" size="lg" icon={creating === 'blank' ? <Spinner /> : <Plus size={18} aria-hidden />} disabled={!!creating} onClick={() => void create('blank')}>
+                    {t('preset.blank.action')}
                   </Button>
-                )}
-              </div>
+                </div>
+              )
             ) : (
-              <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} actions={actions} />
+              <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} selected={selected} actions={actions} />
             )}
           </section>
         </main>
 
         <AnimatePresence>
-          {actionError && !deleted && (
+          {selected && (
+            <motion.div
+              key="selection"
+              role="toolbar"
+              aria-label={t('home.selected', { n: picked.length })}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={enter}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-overlay mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-1.5 rounded-2xl bg-sheet p-1.5 shadow-float"
+            >
+              <button type="button" aria-label={t('home.doneSelecting')} onClick={() => setSelected(null)} className="inline-flex size-10 items-center justify-center rounded-xl text-ink-soft hover:bg-hover">
+                <X size={18} aria-hidden />
+              </button>
+              <span className="min-w-24 px-1 text-base font-medium tabular-nums">{t('home.selected', { n: picked.length })}</span>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(visible?.map((n) => n.id)))}>
+                {t('home.selectAll')}
+              </Button>
+              <Button
+                size="sm"
+                icon={<Copy size={15} aria-hidden />}
+                disabled={!picked.length}
+                onClick={() => {
+                  setSelected(null);
+                  void duplicateMany(picked.map((n) => n.id));
+                }}
+              >
+                {t('home.duplicate')}
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                icon={<Trash2 size={15} aria-hidden />}
+                disabled={!picked.length}
+                onClick={() => {
+                  setSelected(null);
+                  removeMany(picked);
+                }}
+              >
+                {t('common.delete')}
+              </Button>
+            </motion.div>
+          )}
+          {actionError && !deleted.length && !selected && (
             <motion.div
               key="error"
               role="alert"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-wrong-strong py-2 pr-2 pl-4 text-[15px] text-white shadow-float"
+              transition={enter}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-overlay mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-danger py-2 pr-2 pl-4 text-base text-on-solid shadow-float"
             >
               <span className="text-pretty">{actionError}</span>
-              <button type="button" onClick={() => setActionError(null)} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold hover:bg-white/10">
+              <button type="button" onClick={() => setActionError(null)} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold hover:bg-on-solid/10">
                 {t('home.dismiss')}
               </button>
             </motion.div>
           )}
-          {deleted && (
+          {deleted.length > 0 && !selected && (
             <motion.div
-              key={deleted.id}
+              key={deleted.map((n) => n.id).join()}
               role="status"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-40 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-ink py-2 pr-2 pl-4 text-[15px] text-white shadow-float"
+              transition={enter}
+              className="fixed inset-x-0 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-overlay mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-2xl bg-ink py-2 pr-2 pl-4 text-base text-on-solid shadow-float"
             >
-              <span className="truncate">{t('home.deleted', { title: deleted.title })}</span>
-              <button type="button" onClick={undoDelete} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold text-accent-soft hover:bg-white/10">
+              <span className="truncate">{deleted.length === 1 ? t('home.deleted', { title: deleted[0]!.title }) : t('home.deletedMany', { n: deleted.length })}</span>
+              <button type="button" onClick={undoDelete} className="min-h-10 shrink-0 rounded-xl px-3 font-semibold text-accent-soft hover:bg-on-solid/10">
                 {t('home.undo')}
               </button>
             </motion.div>
@@ -305,35 +399,34 @@ export function NotebookHome() {
   );
 }
 
+/**
+ * A starting point: a solid accent card with its icon drawn large behind a big action title.
+ * "New empty notebook" uses the deeper accent as the screen's main action.
+ */
 function PresetCard({ id, busy, disabled, onCreate }: { id: PresetId; busy: boolean; disabled: boolean; onCreate: () => void }) {
   const t = useT();
-  const { locale } = useLocale();
   const Icon = PRESET_ICON[id];
-  const primary = id === 'blank';
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onCreate}
       className={clsx(
-        'flex min-h-32 flex-col items-start gap-3 rounded-3xl p-4 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-not-allowed',
-        primary ? 'bg-ink text-white shadow-float' : 'bg-sheet shadow-card hover:-translate-y-0.5',
+        '@container group relative flex aspect-[5/4] w-[64%] shrink-0 snap-start overflow-hidden rounded-3xl p-5 text-left shadow-card',
+        'transition-transform duration-fast active:scale-[0.97] disabled:cursor-not-allowed motion-reduce:transition-none sm:w-[38%] lg:w-[26%]',
+        id === 'blank' ? 'bg-accent-deep' : 'bg-accent',
       )}
     >
-      <span className={clsx('flex size-9 items-center justify-center rounded-xl', primary ? 'bg-white/15' : 'bg-accent-soft text-accent')}>
-        {busy ? <Spinner size={18} /> : <Icon size={19} aria-hidden />}
-      </span>
-      <span className="space-y-1">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] leading-snug font-semibold">
-          {presetText(id, locale).title}
-          {id === 'schrodinger' && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-strong">
-              <Sparkles size={11} aria-hidden /> {t('home.demo')}
-            </span>
-          )}
-        </span>
-        <span className={clsx('line-clamp-3 block text-[13px] leading-snug text-pretty', primary ? 'text-white/75' : 'text-muted')}>{t(`preset.${id}.desc`)}</span>
-      </span>
+      <Icon
+        aria-hidden
+        strokeWidth={1.5}
+        className={clsx(
+          'absolute top-4 right-4 h-[calc(100%-2rem)] w-auto transition-transform duration-fast group-active:-translate-y-1 group-active:-rotate-6 motion-reduce:transition-none',
+          id === 'blank' ? 'text-accent-deep-shade' : 'text-accent-shade',
+        )}
+      />
+      {busy && <Spinner size={20} className="absolute top-4 left-4 text-on-solid" />}
+      <span className="relative mt-auto text-display leading-tight font-semibold text-balance text-on-solid">{t(`preset.${id}.action`)}</span>
     </button>
   );
 }
@@ -350,7 +443,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (v: string)
         onKeyDown={(e) => e.key === 'Escape' && onChange('')}
         placeholder={t('home.search')}
         aria-label={t('home.search')}
-        className="min-h-11 w-full rounded-xl bg-sheet pr-11 pl-9 text-[15px] shadow-card outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/40 [&::-webkit-search-cancel-button]:hidden"
+        className="min-h-11 w-full rounded-xl bg-sheet pr-11 pl-9 text-base shadow-card outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/40 [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button type="button" aria-label={t('home.clearSearch')} onClick={() => onChange('')} className="absolute right-0 inline-flex size-11 items-center justify-center text-muted hover:text-ink">
@@ -365,7 +458,7 @@ function SortMenu({ value, onChange }: { value: LibrarySort; onChange: (v: Libra
   const t = useT();
   return (
     <Menu.Root>
-      <Menu.Trigger className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-[14px] font-medium text-ink-soft outline-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent/50 data-popup-open:bg-black/5">
+      <Menu.Trigger className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-md font-medium text-ink-soft outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/50 data-popup-open:bg-hover">
         <ArrowDownUp size={16} aria-hidden />
         {t(`home.sort.${value}`)}
       </Menu.Trigger>

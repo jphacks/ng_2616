@@ -30,11 +30,11 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
   const demo = nb.demo;
 
   return (
-    <header className="relative z-20 flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">
+    <header className="relative z-lifted flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">
       {/* leaving flushes the autosave; anything unsent stays in the outbox */}
       <Link
         href="/notebooks"
-        className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-[15px] text-ink-soft hover:bg-black/5"
+        className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-base text-ink-soft hover:bg-hover"
       >
         <ChevronLeft size={20} />
         <span className="hidden lg:inline">{t('top.notebooks')}</span>
@@ -50,18 +50,18 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
               setEditing(false);
             }}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            className="w-full rounded-lg bg-sheet px-2 py-1 text-[16px] font-semibold outline-none ring-2 ring-accent/40"
+            className="w-full rounded-lg bg-sheet px-2 py-1 text-lg font-semibold outline-none ring-2 ring-accent/40"
           />
         ) : (
-          <button type="button" onClick={() => setEditing(true)} className="max-w-full truncate rounded-lg px-2 py-1 text-left text-[16px] font-semibold hover:bg-black/5">
+          <button type="button" onClick={() => setEditing(true)} className="max-w-full truncate rounded-lg px-2 py-1 text-left text-lg font-semibold hover:bg-hover">
             {nb.title}
           </button>
         )}
-        <div className="flex items-center gap-2 px-2 text-[12px] text-muted">
+        <div className="flex items-center gap-2 px-2 text-xs text-muted">
           <CasPill state={cas.state} />
           {demo && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-strong">{t('top.demo')}</span>}
           {mockAi && <span className="rounded-full bg-unknown-soft px-2 py-0.5 font-medium text-unknown">{t('top.mock')}</span>}
-          <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent">
+          <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-2xs font-bold text-accent">
             {APP_BUILD_VERSION}
           </span>
         </div>
@@ -87,7 +87,7 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
 function CasPill({ state }: { state: string }) {
   const t = useT();
   return (
-    <span className={clsx('inline-flex items-center gap-1', state === 'failed' ? 'text-wrong-strong' : state === 'ready' ? 'text-ok' : 'text-muted')}>
+    <span className={clsx('inline-flex items-center gap-1', state === 'failed' ? 'text-danger' : state === 'ready' ? 'text-ok' : 'text-muted')}>
       {state === 'ready' ? <Cpu size={13} /> : state === 'failed' ? <CircleAlert size={13} /> : <Spinner size={12} />}
       {t(state === 'ready' ? 'top.checkerReady' : state === 'failed' ? 'top.checkerFailed' : 'top.checkerLoading')}
     </span>

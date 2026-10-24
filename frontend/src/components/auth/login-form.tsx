@@ -69,7 +69,7 @@ export function LoginForm() {
     <div className="flex h-full items-center justify-center overflow-y-auto p-6">
       <div className="w-full max-w-md space-y-8">
         <div className="flex items-center justify-between">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-white">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-on-solid">
             <Sigma size={22} />
           </span>
           <Button variant="ghost" icon={<Languages size={18} />} onClick={() => setLocale(locale === 'en' ? 'ja' : 'en')}>
@@ -78,21 +78,21 @@ export function LoginForm() {
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">{t('app.name')}</h1>
-            <span className="rounded bg-accent/15 px-2 py-0.5 font-mono text-[12px] font-bold text-accent">
+            <h1 className="text-4xl font-semibold tracking-tight">{t('app.name')}</h1>
+            <span className="rounded bg-accent-soft px-2 py-0.5 font-mono text-xs font-bold text-accent">
               {APP_BUILD_VERSION}
             </span>
           </div>
-          <p className="text-[15px] text-muted">{t('app.tagline')}</p>
+          <p className="text-base text-muted">{t('app.tagline')}</p>
         </div>
         <div className="space-y-5 rounded-3xl bg-sheet p-7 shadow-card">
           <div>
-            <h2 className="text-lg font-semibold">{t('login.title')}</h2>
-            <p className="text-[14px] text-muted">{t('login.subtitle')}</p>
+            <h2 className="text-2xl font-semibold">{t('login.title')}</h2>
+            <p className="text-md text-muted">{t('login.subtitle')}</p>
           </div>
           {DEV_BYPASS ? (
             <div className="space-y-3">
-              <p className="rounded-xl bg-unknown-soft p-3 text-[14px] text-unknown">{t('login.devBypass')}</p>
+              <p className="rounded-xl bg-unknown-soft p-3 text-md text-unknown">{t('login.devBypass')}</p>
               <Button variant="primary" className="w-full" onClick={() => router.push(next)}>
                 {t('login.continue')}
               </Button>
@@ -107,7 +107,7 @@ export function LoginForm() {
                 }}
               >
                 <label className="block space-y-1.5">
-                  <span className="text-[13px] font-medium text-muted">{t('login.email')}</span>
+                  <span className="text-sm font-medium text-muted">{t('login.email')}</span>
                   <input
                     type="email"
                     required
@@ -116,17 +116,17 @@ export function LoginForm() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={t('login.emailPlaceholder')}
-                    className="h-12 w-full rounded-xl bg-paper px-4 text-[16px] outline-none ring-1 ring-border focus:ring-2 focus:ring-accent/50"
+                    className="h-12 w-full rounded-xl bg-paper px-4 text-lg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent/50"
                   />
                 </label>
                 <Button type="submit" variant="primary" size="lg" className="w-full" disabled={state === 'sending' || cooldown > 0} icon={state === 'sending' ? <Spinner /> : <Mail size={18} />}>
                   {state === 'sending' ? t('login.sending') : state === 'sent' ? (cooldown > 0 ? t('login.resendIn', { s: cooldown }) : t('login.resend')) : t('login.sendLink')}
                 </Button>
-                {state === 'sent' && <p className="rounded-xl bg-ok-soft p-3 text-[14px] text-ok">{t('login.sent')}</p>}
+                {state === 'sent' && <p className="rounded-xl bg-ok-soft p-3 text-md text-ok">{t('login.sent')}</p>}
               </form>
               {AUTH_PROVIDERS.length > 0 && (
                 <>
-                  <div className="flex items-center gap-3 text-[12px] uppercase tracking-wide text-faint">
+                  <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-faint">
                     <span className="h-px flex-1 bg-border" />
                     {t('login.or')}
                     <span className="h-px flex-1 bg-border" />
@@ -142,7 +142,7 @@ export function LoginForm() {
               )}
             </>
           )}
-          {shownError && <p className="rounded-xl bg-wrong-soft p-3 text-[14px] text-wrong-strong">{shownError}</p>}
+          {shownError && <p className="rounded-xl bg-danger-soft p-3 text-md text-danger">{shownError}</p>}
         </div>
       </div>
     </div>

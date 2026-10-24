@@ -5,9 +5,9 @@ test.beforeEach(async ({ page }) => {
   // Ink and device preferences must work even when CAS cannot be downloaded.
   await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
   await page.goto('/notebooks');
-  await expect(page.getByRole('heading', { name: 'Choose a starting point' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start something new' })).toBeVisible();
   await expect(page.getByText('v-ink-map-1024', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /Untitled notebook/ }).first().click();
+  await page.getByRole('button', { name: /New empty notebook/ }).first().click();
   await expect(rows(page)).toHaveCount(1);
 });
 
@@ -97,3 +97,47 @@ for (const mode of ['auto', 'pen', 'touch'] as const) {
     else await expect.poll(() => inkPixels(row)).toBe(afterPen);
   });
 }
+
+test('main touch undo/redo gestures still work with native ink listeners', async ({ page }) => {
+  const row = rows(page).first();
+  await draw(page, row, [[[100, 60], [180, 60]]]);
+  const before = await inkPixels(row);
+  const box = (await row.boundingBox())!;
+  const cdp = await page.context().newCDPSession(page);
+  const tap = async (n: number) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: Array.from({ length: n }, (_, i) => ({ x: box.x + 300 + i * 60, y: box.y + 60, id: i })) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await tap(2);
+  await expect.poll(() => inkPixels(row)).toBe(0);
+  await tap(3);
+  await expect.poll(() => inkPixels(row)).toBe(before);
+});
+
+test('main scratch-to-erase still removes ink and Undo restores it', async ({ page }) => {
+  const row = rows(page).first();
+  await draw(page, row, [[[100, 60], [180, 60]]]);
+  const before = await inkPixels(row);
+  await draw(page, row, [[[100, 50], [180, 70], [100, 50], [180, 70], [100, 50], [180, 70], [100, 55]]]);
+  await expect.poll(() => inkPixels(row)).toBe(0);
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => inkPixels(row)).toBe(before);
+});
+
+test('main page zoom retains sharp ink and permits more writing', async ({ page }) => {
+  const row = rows(page).first();
+  await draw(page, row, [[[100, 60], [180, 60]]]);
+  const canvas = row.locator('canvas');
+  const before = await inkPixels(row);
+  const width = await canvas.evaluate((c: HTMLCanvasElement) => c.width);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -90);
+  await page.keyboard.up('Control');
+  const reset = page.getByRole('button', { name: 'Reset zoom to 100%', exact: true });
+  await expect(reset).toBeVisible();
+  await expect.poll(() => canvas.evaluate((c: HTMLCanvasElement) => c.width)).toBeGreaterThan(width);
+  await reset.click();
+  await expect.poll(() => inkPixels(row)).toBe(before);
+  await draw(page, row, [[[240, 40], [240, 110]]]);
+  await expect.poll(() => inkPixels(row)).toBeGreaterThan(before);
+});

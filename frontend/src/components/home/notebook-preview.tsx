@@ -9,11 +9,12 @@ import type { NotebookPreview as Preview, PreviewLine } from '@/core/notebook/pr
 import { InlineSegments } from '@/components/notebook/segments';
 import { Tex } from '@/ui/tex';
 
-// the miniature is laid out at this width, then scaled to the card
+// the miniature is laid out at this width, then scaled to the card; the height follows the
+// landscape page ratio of the card (--aspect-page)
 const PAGE_WIDTH = 560;
-const PAGE_HEIGHT = (PAGE_WIDTH * 3) / 4;
+const PAGE_HEIGHT = (PAGE_WIDTH * 820) / 1180;
 
-/** The top of the notebook's first page, drawn from its data and scaled into the card. */
+/** The top of the notebook's first page, drawn from its data and scaled to fill its card. */
 export const NotebookPreview = memo(function NotebookPreview({ preview }: { preview: Preview | undefined }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number | null>(null);
@@ -28,12 +29,12 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
 
   const lines = preview?.lines.length ? preview.lines : [null];
   return (
-    <div ref={box} aria-hidden className="relative aspect-[4/3] overflow-hidden bg-paper">
+    <div ref={box} aria-hidden className="absolute inset-0 overflow-hidden bg-paper">
       {scale !== null && (
         <div className="absolute top-0 left-0 origin-top-left p-4" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
           <div className="rounded-2xl bg-sheet px-5 py-4 shadow-card">
-            <div className="truncate text-[17px] font-semibold">{preview?.problemTitle}</div>
-            {!!preview?.statement.length && <InlineSegments segments={preview.statement} className="mt-1.5 line-clamp-3 text-[15px] text-ink-soft" />}
+            <div className="truncate text-xl font-semibold">{preview?.problemTitle}</div>
+            {!!preview?.statement.length && <InlineSegments segments={preview.statement} className="mt-1.5 line-clamp-3 text-base text-ink-soft" />}
           </div>
           <div className="mt-3 rounded-2xl bg-sheet shadow-card">
             {lines.map((line, i) => (
@@ -49,7 +50,7 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
 function PreviewRow({ number, line }: { number: number; line: PreviewLine | null }) {
   return (
     <div className="ruled flex h-[84px] items-center gap-3 overflow-hidden pr-5">
-      <span className="w-10 shrink-0 self-start pt-3 text-right text-[12px] text-faint tabular-nums">{number}</span>
+      <span className="w-10 shrink-0 self-start pt-3 text-right text-xs text-faint tabular-nums">{number}</span>
       <div className="min-w-0 flex-1 overflow-hidden">
         {line?.segments.length ? (
           <div className="flex items-center gap-x-4 whitespace-nowrap">
@@ -57,7 +58,7 @@ function PreviewRow({ number, line }: { number: number; line: PreviewLine | null
               s.type === 'math' ? (
                 <Tex key={i} latex={s.latex} className="shrink-0" />
               ) : (
-                <span key={i} className="shrink-0 text-[17px] text-ink-soft">
+                <span key={i} className="shrink-0 text-xl text-ink-soft">
                   {s.text}
                 </span>
               ),

@@ -12,7 +12,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { arrayMove, rectSortingStrategy, SortableContext } from '@dnd-kit/sortable';
-import { ArrowLeft, ArrowRight, Copy, FolderOpen, PenLine, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CircleCheck, Copy, FolderOpen, PenLine, Trash2 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { useMemo, useRef, useState } from 'react';
 import type { NotebookSummary } from '@/core/persistence/repo';
@@ -21,7 +21,7 @@ import { TextFieldDialog } from '@/ui/dialog';
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from '@/ui/menu';
 import { NotebookCard, type CardHandlers } from './notebook-card';
 
-// how long a touch must rest on a card before it lifts (menu), and how far it may drift meanwhile
+// how long a press must rest on a card before it lifts (menu), and how far it may drift meanwhile
 const HOLD_MS = 400;
 const HOLD_TOLERANCE = 8;
 // once lifted, moving this far turns the hold into a drag and closes the menu
@@ -39,9 +39,25 @@ export interface GridActions {
   remove: (nb: NotebookSummary) => void;
   /** New full order of the visible notebooks. */
   reorder: (ids: string[]) => void;
+  /** Starts selection mode with this notebook selected. */
+  select: (id: string) => void;
+  toggle: (id: string) => void;
 }
 
-export function NotebookGrid({ items, reorderable, stagger, actions }: { items: NotebookSummary[]; reorderable: boolean; stagger: boolean; actions: GridActions }) {
+export function NotebookGrid({
+  items,
+  reorderable,
+  stagger,
+  selected,
+  actions,
+}: {
+  items: NotebookSummary[];
+  reorderable: boolean;
+  stagger: boolean;
+  /** the selection while in selection mode, otherwise null */
+  selected: ReadonlySet<string> | null;
+  actions: GridActions;
+}) {
   const t = useT();
   const [menu, setMenu] = useState<{ id: string; anchor: Anchor; touch: boolean } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -53,20 +69,19 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
   const target = menu ? items.find((n) => n.id === menu.id) : undefined;
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { delay: HOLD_MS, tolerance: HOLD_TOLERANCE } }),
     useSensor(TouchSensor, { activationConstraint: { delay: HOLD_MS, tolerance: HOLD_TOLERANCE } }),
   );
 
-  const onDragStart = ({ active, activatorEvent }: DragStartEvent) => {
+  // every drag starts with a hold (finger, pen or mouse), like a long-press on a home screen:
+  // the card lifts and shows its menu; moving on turns the hold into a drag
+  const onDragStart = ({ active }: DragStartEvent) => {
     const id = String(active.id);
     setDragging(id);
-    if (typeof TouchEvent !== 'undefined' && activatorEvent instanceof TouchEvent) {
-      // like a long-press on a home screen: lift and show the menu; moving on turns it into a drag
-      hold.current = { id, moved: false };
-      const el = document.querySelector(`[data-card-id="${CSS.escape(id)}"]`);
-      if (el) setMenu({ id, anchor: el, touch: true });
-      navigator.vibrate?.(8);
-    }
+    hold.current = { id, moved: false };
+    const el = document.querySelector(`[data-card-id="${CSS.escape(id)}"]`);
+    if (el) setMenu({ id, anchor: el, touch: true });
+    navigator.vibrate?.(8);
   };
 
   const onDragMove = ({ delta }: DragMoveEvent) => {
@@ -88,6 +103,7 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
   const handlers: CardHandlers = {
     onOpen: actions.open,
     onMenu: (id, anchor) => setMenu({ id, anchor, touch: false }),
+    onToggle: actions.toggle,
   };
 
   // the keyboard and switch-access way to reorder, alongside dragging
@@ -111,7 +127,7 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
         }}
       >
         <SortableContext items={ids} strategy={reorderable ? rectSortingStrategy : () => null}>
-          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence initial={false}>
               {items.map((nb, i) => (
                 <NotebookCard
@@ -119,7 +135,8 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
                   nb={nb}
                   index={i}
                   stagger={stagger}
-                  reorderable={reorderable}
+                  reorderable={reorderable && !selected}
+                  selection={selected ? selected.has(nb.id) : null}
                   lifted={dragging === nb.id || (menu?.touch === true && menu.id === nb.id)}
                   handlers={handlers}
                 />
@@ -148,6 +165,9 @@ export function NotebookGrid({ items, reorderable, stagger, actions }: { items: 
             </MenuItem>
             <MenuItem icon={<Copy size={18} />} onClick={() => actions.duplicate(target.id)}>
               {t('home.duplicate')}
+            </MenuItem>
+            <MenuItem icon={<CircleCheck size={18} />} onClick={() => actions.select(target.id)}>
+              {t('home.select')}
             </MenuItem>
             {reorderable && items.length > 1 && (
               <>

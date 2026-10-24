@@ -65,11 +65,28 @@ class Deadline {
 }
 
 const running = new Set<Autosaver>();
+/** last saves of notebooks just closed, still on their way to the cloud */
+const closing = new Set<Promise<boolean>>();
 
 /** Sends every open notebook's unsent edits now; true when all reached the cloud. */
 export async function flushOpenNotebooks(): Promise<boolean> {
   const results = await Promise.all([...running].map((s) => s.flush()));
   return results.every(Boolean);
+}
+
+/** Waits for notebooks closed a moment ago to finish their last save. */
+export async function settleClosedNotebooks(): Promise<void> {
+  await Promise.all(closing);
+}
+
+/** Notebooks open in an editor: their own autosave sends their edits. */
+export function openNotebookIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const s of running) {
+    const id = s.notebookId;
+    if (id) ids.add(id);
+  }
+  return ids;
 }
 
 /**
@@ -112,6 +129,18 @@ export class Autosaver {
     if (s.notebook && s.dirty) this.changed(s.notebook);
   }
 
+  /**
+   * Leaving the notebook: sends what is left, then stops. Outbox pushes wait for this, so they
+   * never race it with a save at the same revision; anything it cannot send stays in the outbox.
+   */
+  close(): Promise<boolean> {
+    const done = this.flush().catch(() => false);
+    this.stop();
+    closing.add(done);
+    void done.finally(() => closing.delete(done));
+    return done;
+  }
+
   /** Stops scheduling; anything unsent stays in the outbox and goes out on the next open. */
   stop() {
     this.stopped = true;
@@ -142,6 +171,10 @@ export class Autosaver {
   /** Edits the cloud does not have yet. */
   get hasUnsent() {
     return this.latest !== null;
+  }
+
+  get notebookId(): string | undefined {
+    return (this.latest ?? this.deps.getState().notebook)?.id;
   }
 
   /** Writes the current state everywhere now; true when the cloud holds it. */
@@ -211,7 +244,11 @@ export class Autosaver {
             await this.localChain;
             await this.deps.clearLocal(nb.id).catch(() => undefined);
             this.deps.onStatus('saved');
-          } else if (!this.stopped) {
+          } else if (this.stopped) {
+            // closing (flush sends the rest): the device copy must not keep the old base, or it
+            // would later look like edits made against a revision the cloud has moved past
+            await this.writeLocal();
+          } else {
             // edited during the save: rewrite the device copy against the new base, then send
             this.local.poke();
             this.cloud.at(0);
