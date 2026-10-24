@@ -17,6 +17,7 @@ import { shortId, uuid } from '@/core/ids';
 import { rasterizeStrokes } from '@/core/ink/raster';
 import {
   anyPending,
+  canContinueFrom,
   contextLinesFor,
   emptyDraft,
   findLine,
@@ -573,7 +574,7 @@ export class NotebookEngine {
         const input: SuggestInput = {
           ...base,
           rejected_hashes: [...new Set([...cur.rejectedHashes, ...tried])].slice(-64),
-          rejected_latex: cur.rejectedLatex.filter((l) => !fed.has(l)).slice(-16),
+          rejected_latex: cur.rejectedLatex.filter((l: string) => !fed.has(l)).slice(-16),
           ...(feedback.length ? { checker_feedback: feedback } : {}),
         };
         if (feedback.length) cur.set('candidate', pending);
@@ -617,12 +618,16 @@ export class NotebookEngine {
       client_epoch: s.epoch,
       line_id: basedOn.id,
       line_version: basedOn.version,
-      context_fingerprint: suggestFingerprint({ notebookId: nb.id, problem: nb.problem, lines: ctxLines, sessionId: this.sessionId, epoch: s.epoch }),
+      context_fingerprint: suggestFingerprint({ notebookId: nb.id, problem: (nb as { problem?: unknown }).problem ?? null, lines: ctxLines, sessionId: this.sessionId, epoch: s.epoch }),
     };
   }
 
   /** A result is stale unless it carries all seven fields of what the active request would carry now. */
-  private isStale(slot: SlotMeta): boolean {
+  private isStale(slotOrEpoch: SlotMeta | number, basedOn?: Line): boolean {
+    if (typeof slotOrEpoch === 'number') {
+      return this.disposed || !basedOn || !findLine(this.nb, basedOn.id) || store.getState().epoch !== slotOrEpoch;
+    }
+    const slot = slotOrEpoch;
     const nb = store.getState().notebook;
     const cur = nb ? findLine(nb, slot.line_id!) : undefined;
     if (this.disposed || !nb || !cur || this.suggestSlot?.request_id !== slot.request_id) return true;

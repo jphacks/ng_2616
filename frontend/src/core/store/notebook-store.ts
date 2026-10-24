@@ -74,6 +74,8 @@ export interface NotebookState {
   rejection: CheckerRejection | null;
   /** hashes and LaTeX of rejected candidates, per context (core/candidates/rejection.ts) */
   rejections: RejectionHistory;
+  rejectedHashes: string[];
+  rejectedLatex: string[];
   sheet: Sheet;
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
@@ -123,6 +125,8 @@ export const useNotebook = create<NotebookState>((set, get) => ({
   candidate: null,
   rejection: null,
   rejections: {},
+  rejectedHashes: [],
+  rejectedLatex: [],
   sheet: null,
   suggesting: false,
   ghostConfirm: false,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
-import type { CandidateDraftResult, Problem } from '@mn/contracts';
-import { line, problem, settled, stroke } from './fixtures';
+import type { CandidateDraftResult } from '@mn/contracts';
+import { line, settled, stroke } from './fixtures';
 import { candidateOf, casStatus, deferred, draftFor, fakeApi, fakeCas, lineOf, rig, tick, until, writeStroke, type Rig } from './harness';
 
 let r: Rig;
@@ -181,9 +181,9 @@ describe('results that no longer match (R15, R16, R17)', () => {
     assert.equal(r.store.getState().suggesting, false);
   });
 
-  it('G5 editing the problem cancels the request', async () => {
+  it('G5 adding a line cancels the request', async () => {
     const { gate, call } = await inFlight();
-    r.engine.editProblem({ ...problem, title: 'changed' } as Problem);
+    r.engine.newLine();
     assert.equal(call.signal!.aborted, true);
     gate.resolve(draftFor(call.input, 'x = 2'));
     await tick();
