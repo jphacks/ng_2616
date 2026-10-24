@@ -62,7 +62,7 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
           <CasPill state={cas.state} />
           {demo && <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-strong">{t('top.demo')}</span>}
           {mockAi && <span className="rounded-full bg-unknown-soft px-2 py-0.5 font-medium text-unknown">{t('top.mock')}</span>}
-          <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-2xs font-bold text-accent">
+          <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-2xs font-bold text-accent">
             {APP_BUILD_VERSION}
           </span>
         </div>
