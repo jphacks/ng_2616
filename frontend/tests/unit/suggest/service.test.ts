@@ -8,7 +8,7 @@ import { DEMO_SCRIPT_ID } from '../../../src/server/ai/direct/demo';
 import { suggestParts } from '../../../src/server/ai/direct/prompts';
 import type { JsonRequest, LlmProvider } from '../../../src/server/ai/direct/providers/types';
 import type { ServerEnv } from '../../../src/server/env';
-import { line, settled, suggestInput } from './fixtures';
+import { line, segs, settled, suggestInput } from './fixtures';
 
 // run with: npx tsx --test --conditions=react-server <file>
 
@@ -38,6 +38,37 @@ describe('DirectAiService.suggest (R6a, R28, R29, R30)', () => {
     const { llm, calls } = fakeProvider(wire('x'));
     await assert.rejects(new DirectAiService(llm, env).suggest(suggestInput({ lines: [A], mode: 'BRIDGE' }), ctx()), (e: unknown) => e instanceof AiError && e.code === 'FEATURE_DISABLED');
     assert.equal(calls.length, 0);
+  });
+
+  it('B7 a wrong line in the context locks completion: NONE / UNRESOLVED_WRONG and the model is never called', async () => {
+    const { llm, calls } = fakeProvider(wire('2 A^{2} L = 4'));
+    const input = suggestInput({ lines: [A, line('L2', 'SETTLED', { segments: segs('x = 2') })] });
+    input.context.lines[1]!.status = 'wrong';
+    for (const mode of ['NEXT_STEP', 'COMPLETE_RHS'] as const) {
+      const r = await new DirectAiService(llm, env).suggest({ ...input, mode, lhs_expr: 'x' }, ctx());
+      assert.deepEqual([r.state, r.reason, r.mock, r.candidate], ['NONE', 'UNRESOLVED_WRONG', false, undefined], mode);
+    }
+    assert.equal(calls.length, 0);
+  });
+
+  it('B7 the lock also holds for a mock provider and for the demo script (the model is not the only thing skipped)', async () => {
+    const { llm, calls } = fakeProvider(wire('x'), { mock: true });
+    const input = suggestInput({ lines: [A], demo: { script: DEMO_SCRIPT_ID } });
+    input.context.lines[0]!.status = 'wrong';
+    const r = await new DirectAiService(llm, env).suggest(input, ctx());
+    assert.deepEqual([r.reason, r.mock], ['UNRESOLVED_WRONG', true]);
+    assert.equal(calls.length, 0);
+  });
+
+  it('B7 other statuses, or none at all, do not lock', async () => {
+    for (const status of [undefined, 'ok', 'unknown', 'none'] as const) {
+      const { llm, calls } = fakeProvider(wire('2 A^{2} L = 4'));
+      const input = suggestInput({ lines: [A] });
+      input.context.lines[0]!.status = status;
+      const r = await new DirectAiService(llm, env).suggest(input, ctx());
+      assert.equal(r.state, 'GENERATED', String(status));
+      assert.equal(calls.length, 1);
+    }
   });
 
   it('B2 a model that declines gives NONE / MODEL_DECLINED', async () => {

@@ -64,6 +64,8 @@ export class DirectAiService implements AiService {
 
   async suggest(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult> {
     if (input.mode === 'BRIDGE') throw new AiError('FEATURE_DISABLED', 'bridging is not enabled');
+    // an unresolved wrong line locks completion for every mode (spec §11): the model is not asked at all
+    if (input.context.lines.some((l) => l.status === 'wrong')) return { state: 'NONE', reason: 'UNRESOLVED_WRONG', mock: this.llm.mock };
     if (input.demo?.script === DEMO_SCRIPT_ID) return scriptedSuggestion(input, ctx.signal);
     if (this.llm.mock) return { state: 'NONE', reason: 'MOCK_PROVIDER', mock: true };
     const raw = await this.llm.generateJson({

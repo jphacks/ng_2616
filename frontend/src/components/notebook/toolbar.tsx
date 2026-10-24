@@ -2,6 +2,8 @@
 
 import clsx from 'clsx';
 import { Eraser, Hand, ListPlus, PenLine, Redo2, Sparkles, Undo2 } from 'lucide-react';
+import { suggestBlockerOf } from '@/core/candidates/blocker';
+import { findLine } from '@/core/notebook/model';
 import { useNotebook, type Tool } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { IconButton } from '@/ui/button';
@@ -22,6 +24,16 @@ export function Toolbar() {
   const canRedo = useNotebook((s) => s.future.length > 0);
   const suggesting = useNotebook((s) => s.suggesting);
   const set = useNotebook((s) => s.set);
+  // an unresolved wrong line locks completion: grey the button, but a press still explains why (R27)
+  const locked = useNotebook(
+    (s) =>
+      suggestBlockerOf({
+        notebook: s.notebook,
+        casReady: s.cas.state === 'ready',
+        candidate: s.candidate?.state ?? null,
+        activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
+      }) === 'wrong',
+  );
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex justify-center px-4">
       <div className="pointer-events-auto flex items-center gap-1 rounded-2xl bg-sheet/95 p-1.5 shadow-float backdrop-blur">
@@ -44,7 +56,11 @@ export function Toolbar() {
         <button
           type="button"
           onClick={() => void engine.requestSuggestion(true)}
-          className={clsx('ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-[15px] font-medium text-white hover:bg-accent-strong')}
+          aria-disabled={locked}
+          className={clsx(
+            'ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-[15px] font-medium',
+            locked ? 'bg-none-soft text-none' : 'bg-accent text-white hover:bg-accent-strong',
+          )}
         >
           {suggesting ? <Spinner size={18} /> : <Sparkles size={18} />}
           <span className="hidden sm:inline">{t('tool.suggest')}</span>
