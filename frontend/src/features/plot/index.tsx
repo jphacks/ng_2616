@@ -1,5 +1,6 @@
 'use client';
 
+// S-04: Plot graph feature plugin
 import type { Line } from '@mn/contracts';
 import { LineChart } from 'lucide-react';
 import { useState } from 'react';
