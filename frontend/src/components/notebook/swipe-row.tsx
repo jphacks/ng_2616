@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { animate, motion, useMotionValue } from 'motion/react';
+import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { enter } from '@/ui/motion';
@@ -31,6 +31,9 @@ const TONE: Record<NonNullable<SwipeAction['tone']>, string> = {
  */
 export function SwipeRow({ id, actions, className, children }: { id: string; actions: SwipeAction[]; className?: string; children: ReactNode }) {
   const x = useMotionValue(0);
+  // the row is see-through (the page's graph paper shows behind it), so the actions open only
+  // as far as the row has slid
+  const reveal = useTransform(x, (v) => Math.max(0, -v));
   const openId = useOpenRow((s) => s.id);
   const setOpen = useOpenRow((s) => s.setOpen);
   const wrap = useRef<HTMLDivElement>(null);
@@ -62,7 +65,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
 
   return (
     <div ref={wrap} data-line-id={id} className="relative overflow-hidden">
-      <div aria-hidden className="absolute inset-y-0 right-0 flex" style={{ width }}>
+      <motion.div aria-hidden className="absolute inset-y-0 right-0 flex overflow-hidden" style={{ width: reveal }}>
         {actions.map((a) => (
           <button
             key={a.label}
@@ -78,7 +81,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
             {a.label}
           </button>
         ))}
-      </div>
+      </motion.div>
       <motion.div
         style={{ x, touchAction: 'pan-y' }}
         drag="x"
@@ -107,7 +110,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
             setOpen(null);
           }
         }}
-        className={clsx('relative bg-sheet', className)}
+        className={clsx('relative', className)}
       >
         {children}
       </motion.div>

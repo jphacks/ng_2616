@@ -1,5 +1,6 @@
 import type { Line, Notebook } from '@mn/contracts';
-import { anyPending, canContinueFrom, hasUnresolvedWrong, lastSettledMath, proofOf } from '@/core/notebook/model';
+import { isProofNotebook, lastProofLine, leanContinuable, leanEnabled } from '@/core/lean/route';
+import { anyPending, canContinueFrom, hasMath, hasUnresolvedWrong, isGiven, lastSettledMath, proofOf } from '@/core/notebook/model';
 
 export type CandidateStateName = 'GENERATING' | 'VERIFYING' | 'READY' | 'HELD' | 'NONE' | 'ADOPTED' | 'REJECTED' | 'STALE';
 
@@ -24,21 +25,43 @@ export interface BlockerInput {
   activeLine: Line | undefined;
   /** S-02 assist mode; 'hint' hides completion. Absent or 'complete': completion as usual (spec §14.2) */
   assistMode?: AssistMode;
+  /** a Lean check is still running for some line (ADR 0008) */
+  leanPending?: boolean;
 }
 
 const BUSY: ReadonlySet<CandidateStateName> = new Set(['GENERATING', 'VERIFYING', 'READY', 'HELD']);
 
-export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, assistMode }: BlockerInput): SuggestBlocker | null {
+/**
+ * The line a suggestion continues from: the last settled formula, or in a proof (ADR 0008) the last
+ * proof line, which may be words only.
+ */
+export function suggestBaseLine(nb: Notebook): Line | undefined {
+  if (leanEnabled() && isProofNotebook(nb)) return lastProofLine(nb) ?? lastSettledMath(nb);
+  return lastSettledMath(nb);
+}
+
+/** The student has written a line of their own (a template's given lines alone do not count). */
+export function hasOwnLine(nb: Notebook): boolean {
+  const proof = leanEnabled() && isProofNotebook(nb);
+  return nb.lines.some((l) => l.state === 'SETTLED' && !isGiven(l) && (hasMath(l) || (proof && l.segments.length > 0)));
+}
+
+/** Lean's verdict decides for a line Lean checked; otherwise the CAS rules of spec §11. */
+export function continuable(last: Line): boolean {
+  return leanContinuable(last) ?? canContinueFrom(last);
+}
+
+export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, assistMode, leanPending }: BlockerInput): SuggestBlocker | null {
   if (!nb) return 'none';
   if (assistMode === 'hint') return 'hint-mode';
   if (assistMode === 'off') return 'assist-off';
   if (!casReady) return 'cas';
-  if (anyPending(nb)) return 'pending';
+  if (anyPending(nb) || leanPending) return 'pending';
   if (hasUnresolvedWrong(nb)) return 'wrong';
-  const last = lastSettledMath(nb);
+  const last = suggestBaseLine(nb);
   if (!last) return 'empty';
   const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
-  if (!incomplete && !canContinueFrom(last)) return 'cannot-continue';
+  if (!incomplete && !continuable(last)) return 'cannot-continue';
   if (candidate && BUSY.has(candidate)) return 'busy';
   if (activeLine && activeLine.state === 'DRAFT' && activeLine.ink.length > 0) return 'writing';
   return null;

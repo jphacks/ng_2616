@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": [
+        "proved",
+        "incomplete",
+        "failed",
+        "invalid",
+        "timeout",
+        "unavailable"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "theorem",
+        "line"
+      ]
+    },
+    "theorem": {
+      "type": "object",
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "given_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "template",
+            "ai"
+          ]
+        }
+      },
+      "required": [
+        "statement",
+        "given_hash",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "statement": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "steps": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "tactic": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failed",
+              "unchecked",
+              "empty"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "line_id",
+          "tactic",
+          "state"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "goals": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "hint": {
+      "type": "string",
+      "maxLength": 600
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "mock": {
+      "type": "boolean"
+    },
+    "versions": {
+      "type": "object",
+      "properties": {
+        "toolchain": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "mathlib": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "toolchain",
+        "mathlib"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "state",
+    "scope",
+    "steps",
+    "attempts",
+    "mock"
+  ],
+  "additionalProperties": false
+}

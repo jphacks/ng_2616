@@ -3,7 +3,7 @@ export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 export type Part = { type: 'text'; text: string } | { type: 'image'; mime: 'image/png' | 'image/jpeg'; data: string };
 
 export interface JsonRequest {
-  task: 'recognize' | 'suggest' | 'ocr';
+  task: 'recognize' | 'suggest' | 'ocr' | 'lean';
   model: string;
   thinking: ThinkingLevel;
   /** static instructions first, so identical prefixes can be cached by the provider */

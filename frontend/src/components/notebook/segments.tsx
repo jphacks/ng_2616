@@ -26,7 +26,7 @@ export function Segments({ segments, className }: { segments: readonly Segment[]
         s.type === 'math' ? (
           <Tex key={i} latex={s.latex} className="shrink-0" />
         ) : (
-          <span key={i} className="shrink-0 text-xl text-ink-soft">
+          <span key={i} className="shrink-0 text-xl text-ink">
             {s.text}
           </span>
         ),

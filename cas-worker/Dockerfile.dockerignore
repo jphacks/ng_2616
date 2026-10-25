@@ -1,0 +1,7 @@
+# Build context is the repository root; send only what the image copies.
+*
+!cas-worker/pyproject.toml
+!cas-worker/uv.lock
+!cas-worker/cas_worker
+!packages/cas-core/cas_core
+**/__pycache__

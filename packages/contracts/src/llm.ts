@@ -10,15 +10,20 @@ export const WireSegmentSchema = z.object({
   content: z.string().max(4000),
 });
 
+/** v2.3 (ADR 0008): which checker the line needs; older outputs and scripted lines mean the CAS */
+export const RouteWireSchema = z.enum(['cas', 'lean', 'none']);
+
 export const RecognizeWireSchema = z.object({
   unreadable: z.boolean(),
   segments: z.array(WireSegmentSchema).max(16),
+  route: RouteWireSchema.optional(),
 });
 
 export const SuggestWireSchema = z.object({
   has_candidate: z.boolean(),
   role: z.enum(['step', 'definition', 'premise']),
   segments: z.array(WireSegmentSchema).max(16),
+  route: RouteWireSchema.optional(),
 });
 
 export const OcrWireSchema = z.object({ text: z.string().max(20000) });
@@ -44,8 +49,9 @@ export const RECOGNIZE_JSON_SCHEMA = {
   properties: {
     unreadable: { type: 'boolean' },
     segments: { type: 'array', items: segmentJsonSchema, maxItems: 16 },
+    route: { type: 'string', enum: ['cas', 'lean', 'none'] },
   },
-  required: ['unreadable', 'segments'],
+  required: ['unreadable', 'segments', 'route'],
   additionalProperties: false,
 } as const;
 
@@ -55,8 +61,9 @@ export const SUGGEST_JSON_SCHEMA = {
     has_candidate: { type: 'boolean' },
     role: { type: 'string', enum: ['step', 'definition', 'premise'] },
     segments: { type: 'array', items: segmentJsonSchema, maxItems: 16 },
+    route: { type: 'string', enum: ['cas', 'lean'] },
   },
-  required: ['has_candidate', 'role', 'segments'],
+  required: ['has_candidate', 'role', 'segments', 'route'],
   additionalProperties: false,
 } as const;
 

@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { ArrowDownUp, Atom, Copy, Info, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
+import { ArrowDownUp, Atom, Copy, Info, Infinity as InfinityIcon, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
@@ -24,7 +24,15 @@ import { NotebookGrid, type GridActions } from './notebook-grid';
 import { PULL_THRESHOLD, usePullToRefresh } from './use-pull-refresh';
 import { enter } from '@/ui/motion';
 
-const PRESET_ICON: Record<PresetId, ComponentType<LucideProps>> = { blank: Plus, schrodinger: Atom, integral: IntegralIcon, expansion: Variable, solutions: SquareFunction };
+const PRESET_ICON: Record<PresetId, ComponentType<LucideProps>> = {
+  blank: Plus,
+  schrodinger: Atom,
+  integral: IntegralIcon,
+  expansion: Variable,
+  solutions: SquareFunction,
+  induction: Sigma,
+  epsilon_delta: InfinityIcon,
+};
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
 // a deleted card can be restored from the toast until this passes
 const UNDO_MS = 5000;

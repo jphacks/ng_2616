@@ -12,6 +12,7 @@ import {
   TargetSchema,
   UiLangSchema,
 } from './schemas';
+import { CheckerRouteSchema, LeanStepStateSchema } from './lean';
 
 /** Scripted demo binding (the Schrödinger notebook). */
 export const DemoBindingSchema = z.object({ script: z.string().max(64) });
@@ -40,6 +41,8 @@ export const RecognizeResultSchema = z.object({
   mock: z.boolean(),
   /** the raw transcription, kept for debugging and for the "we read…" hint on failure */
   transcription: z.string().optional(),
+  /** v2.3: the checker the model chose for this line (ADR 0008) */
+  route: CheckerRouteSchema.optional(),
 });
 
 export const SuggestContextLineSchema = z.object({
@@ -48,6 +51,9 @@ export const SuggestContextLineSchema = z.object({
   source: z.enum(['user', 'ai', 'pdf', 'resource']),
   status: StatusSchema.optional(),
   segments: z.array(SegmentSchema),
+  /** v2.3: the checker this line went to, and what Lean said about it (ADR 0008) */
+  route: CheckerRouteSchema.optional(),
+  lean: LeanStepStateSchema.optional(),
 });
 
 export const ReferenceExcerptSchema = z.object({
@@ -84,7 +90,12 @@ export const SuggestInputSchema = z.object({
   demo: DemoBindingSchema.optional(),
 });
 
-export const CandidateDraftLineSchema = z.object({ target: TargetSchema, segments: z.array(SegmentSchema) });
+export const CandidateDraftLineSchema = z.object({
+  target: TargetSchema,
+  segments: z.array(SegmentSchema),
+  /** v2.3: a proof step goes to Lean, not the CAS (ADR 0008) */
+  route: CheckerRouteSchema.optional(),
+});
 
 export const CandidateDraftResultSchema = z.object({
   state: z.enum(['GENERATED', 'NONE']),
@@ -107,10 +118,11 @@ export const CapabilitiesSchema = z.object({
   schema_version: z.string(),
   build_id: z.string(),
   features: z.record(FeatureSchema, z.boolean()),
-  cas_runtime: z.literal('pyodide'),
+  // pyodide: the browser's Web Worker; azure: cas-worker on the VM through the gateway (ADR 0009)
+  cas_runtime: z.enum(['pyodide', 'azure']),
   ai_execution: z.enum(['direct', 'relay']),
   llm: z.object({ provider: z.string(), configured: z.boolean(), mock: z.boolean() }),
-  lean: z.object({ available: z.boolean() }),
+  lean: z.object({ available: z.boolean(), toolchain: z.string().optional(), mathlib: z.string().optional() }),
 });
 
 export const HealthSchema = z.object({
