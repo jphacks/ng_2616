@@ -78,7 +78,8 @@ The earlier `integral-live-validation.pdf` remains the historical intermediate-o
 ## Regression checks and demo gate
 
 - TypeScript: passed.
-- Frontend unit tests: 277 passed, one pre-existing component-render test skipped.
+- Frontend unit tests after the latest main merge (including the auto-suggestion toggle):
+  282 passed, one pre-existing component-render test skipped.
 - IR and notebook contract tests: 114 passed, including inverse-trigonometric notation.
 - Native CAS integral regression tests: two passed.
 - PDF problem-import browser tests: 11 passed, including the supplied integral worksheet.
