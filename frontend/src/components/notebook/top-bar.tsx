@@ -14,6 +14,7 @@ import { QuestionImportButton } from '@/components/resources/question-import';
 import { Spinner } from '@/ui/spinner';
 import { SegmentedTabs } from '@/ui/tabs';
 import { useEngine } from './engine-context';
+import { PdfExport } from './pdf-export';
 import { SaveStatus } from './save-status';
 
 export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser }) {
@@ -75,6 +76,7 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
         <QuestionImportButton />
+        <PdfExport />
         <SaveStatus />
         <AccountMenu user={user} unsaved={dirty} />
       </div>

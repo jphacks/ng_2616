@@ -472,4 +472,3 @@ function SortMenu({ value, onChange }: { value: LibrarySort; onChange: (v: Libra
     </Menu.Root>
   );
 }
-

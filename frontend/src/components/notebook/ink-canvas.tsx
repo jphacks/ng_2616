@@ -156,8 +156,9 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       ctx.drawImage(backingCanvas.current, 0, 0);
     }
 
-    // 2. Draw each active pointer's live stroke.
+    // 2. Draw live stroke
     for (const l of activeStrokes.current.values()) {
+      if (!l.points.length) continue;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const ink = tokenColor('--color-ink');
       ctx.fillStyle = ink;
@@ -222,11 +223,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
   useSecondFinger(() => {
     for (const [id, stroke] of activeStrokes.current) if (stroke.touch) activeStrokes.current.delete(id);
-    if (erasingByTouch.current) {
-      erasing.current = null;
-      erasingPointer.current = null;
-      backingDirty.current = true;
-    }
+    if (erasingByTouch.current) { erasing.current = null; erasingPointer.current = null; }
+    backingDirty.current = true;
     scrolling.current = null;
     rectRef.current = null;
     schedule();
@@ -346,7 +344,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
       const { editable, tool, onActivate } = propsRef.current;
       const mode = useDevicePrefs.getState().inputMode;
-      const fingerScroll = tool === 'view' || (!isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
+      const fingerScroll = tool === 'view' || (e.pointerType === 'touch' && !isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
 
       if (fingerScroll || !editable) {
         if (!editable && tool !== 'view') onActivate?.();
@@ -384,8 +382,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
 
       // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
-      if (!activeStrokes.current.has(e.pointerId) && isContact && e.target === c && e.pointerType === 'pen') {
-        onDown(e);
+      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
+        startStroke(e);
       }
 
       const l = activeStrokes.current.get(e.pointerId);
@@ -431,6 +429,10 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
+      const l = activeStrokes.current.get(e.pointerId);
+      if (!l) return;
+
+      // A delayed pointerup from another stroke must not finish the current pointer.
       commitLiveRef.current(e.pointerId);
     };
 

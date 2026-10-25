@@ -116,7 +116,24 @@ test('main scratch-to-erase still removes ink and Undo restores it', async ({ pa
   const row = rows(page).first();
   await draw(page, row, [[[100, 60], [180, 60]]]);
   const before = await inkPixels(row);
-  await draw(page, row, [[[100, 50], [180, 70], [100, 50], [180, 70], [100, 50], [180, 70], [100, 55]]]);
+  // Main distinguishes a deliberate scratch (>=250ms) from fast handwriting.
+  // Give the sampled gesture explicit timestamps so machine speed cannot change its meaning.
+  await row.locator('canvas').evaluate(canvas => {
+    const box = canvas.getBoundingClientRect(); const t0 = performance.now();
+    const send = (type: string, x: number, y: number, elapsed: number) => {
+      const event = new PointerEvent(type, { bubbles: true, cancelable: true, pointerType: 'pen', pointerId: 501, buttons: type === 'pointerup' ? 0 : 1, pressure: type === 'pointerup' ? 0 : 0.5, clientX: box.x + x, clientY: box.y + y });
+      Object.defineProperty(event, 'timeStamp', { value: t0 + elapsed });
+      (type === 'pointerdown' ? canvas : window).dispatchEvent(event);
+    };
+    const corners = [[100, 50], [180, 70], [100, 50], [180, 70], [100, 50], [180, 70], [100, 55]];
+    send('pointerdown', 100, 50, 0);
+    let elapsed = 0;
+    for (let i = 1; i < corners.length; i++) for (let j = 1; j <= 6; j++) {
+      const [ax, ay] = corners[i - 1]!; const [bx, by] = corners[i]!;
+      send('pointermove', ax! + (bx! - ax!) * j / 6, ay! + (by! - ay!) * j / 6, elapsed += 10);
+    }
+    send('pointerup', 100, 55, elapsed);
+  });
   await expect.poll(() => inkPixels(row)).toBe(0);
   await page.keyboard.press('Control+z');
   await expect.poll(() => inkPixels(row)).toBe(before);
