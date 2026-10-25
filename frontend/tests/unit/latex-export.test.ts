@@ -66,7 +66,8 @@ describe('LuaLaTeX homework report', () => {
   });
   it('sets Greek letters in text as math letters instead of the Japanese font', () => {
     assert.equal(escapeTex('ε–δ: for every ε > 0'), '$\\varepsilon$–$\\delta$: for every $\\varepsilon$ > 0');
-    assert.equal(escapeTex('ΔΣΩ αβφ ϕ'), '$\\Delta$$\\Sigma$$\\Omega$ $\\alpha$$\\beta$$\\varphi$ $\\phi$');
+    // a run of letters is one formula, so a subscript after it (ψₙ) attaches to the last letter
+    assert.equal(escapeTex('ΔΣΩ αβφ ϕ'), '$\\Delta\\Sigma\\Omega$ $\\alpha\\beta\\varphi$ $\\phi$');
     assert.equal(escapeTex('Α'), '$\\mathrm{A}$');
     assert.equal(escapeTex('|x − 2|'), '|x $-$ 2|');
     const tex = serializeLatex(serializeNotebook(buildNotebook('epsilon_delta', 'ja'), 'ja').document);
