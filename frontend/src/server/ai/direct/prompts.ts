@@ -44,6 +44,7 @@ export const OCR_SYSTEM = `Transcribe the page image faithfully as plain text in
 
 export const QUESTION_PAGE_SYSTEM = `Transcribe this ONE exercise-sheet page into the specified JSON schema, never solve it.
 Keep every question in reading order (usually row by row, left to right in two columns), its original number, instructions, formulas, wrong signs, coefficients and typos. Do not change chi to x or invent missing symbols. Do not translate.
+Preserve Latin x as x and Greek χ as \\chi; neither is a substitute for the other. If the image and extracted text disagree and the symbol cannot be distinguished confidently, use \\square instead of guessing or normalizing it to a more familiar symbol.
 lines contain short unique IDs, ordered text/math segments (math content is LaTeX without $ delimiters), and has_unreadable. Use \\square for an unreadable symbol. Keep instructions and explicit shared conditions as separate lines.
 Each numbered question must have its own content line IDs, even when two questions share a printed row or column layout. Never put formulas from different questions into the same line. A question references only its own content and genuinely shared instructions/conditions, never its neighbour's formula.
 Question numbers belong in label or text segments, never inside math content. For example, for printed "(1) 3χ²−15=0", return label "1" and math content "3\\chi^{2}-15=0" without "(1)" or \\quad.

@@ -7,6 +7,7 @@ import { QuestionPageSchema, hasUnparsed, hasUnreadable, type QuestionPage } fro
 import { ApiCallError } from '@/core/api/client';
 import { prepareQuestionLines, questionContextHash, parseStatement, statementSource, type QuestionSelection, type QuestionSource } from '@/core/resources/question-adoption';
 import { readQuestionPdf, type QuestionPdf } from '@/core/resources/question-pdf';
+import { changedQuestionMath, questionLabel } from '@/core/resources/question-reading';
 import { canvasToBase64, closePdf, renderPage, type PdfDoc } from '@/core/resources/pdf';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useEngine } from '@/components/notebook/engine-context';
@@ -40,14 +41,20 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const [pdf, setPdf] = useState<QuestionPdf | null>(null);
   const [pageNo, setPageNo] = useState(1);
   const [selection, setSelection] = useState<QuestionSelection | null>(null);
+  const [aiResults, setAiResults] = useState<Record<number, QuestionPage>>({});
+  const [reading, setReading] = useState<'text' | 'ai'>('text');
+  const [drafts, setDrafts] = useState<Record<string, QuestionSelection | null>>({});
   const [busy, setBusy] = useState<'file' | 'ai' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const openedDoc = useRef<PdfDoc | null>(null);
   const source = useRef<QuestionSource | null>(null);
   const previewHost = useRef<HTMLDivElement>(null);
-  const page = pdf?.pages.find((p) => p.page === pageNo);
+  const originalPage = pdf?.pages.find((p) => p.page === pageNo);
+  const alternative = aiResults[pageNo];
+  const page = reading === 'ai' && alternative ? alternative : originalPage;
   const question = page?.questions.find((q) => q.id === selection?.questionId);
+  const changedMath = originalPage && alternative ? changedQuestionMath(originalPage, alternative) : [];
 
   const releaseDoc = useCallback(() => {
     const doc = openedDoc.current;
@@ -80,11 +87,13 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const close = () => {
     controller.current?.abort(); controller.current = null;
     setOpen(false); setBusy(null); setPdf(null); setSelection(null); setError(null);
+    setAiResults({}); setReading('text'); setDrafts({});
     releaseDoc(); source.current = null;
   };
   const readFile = async (file: File, ctl = new AbortController()) => {
     controller.current?.abort(); controller.current = ctl;
     setBusy('file'); setError(null); setSelection(null); setPdf(null); releaseDoc();
+    setAiResults({}); setReading('text'); setDrafts({});
     try {
       const loaded = await readQuestionPdf(file, locale, ctl.signal);
       if (ctl.signal.aborted) { await closePdf(loaded.doc); return; }
@@ -116,6 +125,21 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
     setSelection(q ? { questionId: q.id, title: q.title, statement: statementSource(result, q.id), premiseIds: [] } : null);
     setError(null);
   };
+  const switchReading = (next: 'text' | 'ai') => {
+    setDrafts((current) => ({ ...current, [`${pageNo}:${reading}`]: selection }));
+    setSelection(drafts[`${pageNo}:${next}`] ?? null);
+    setReading(next); setError(null);
+  };
+  const switchPage = (next: number) => {
+    setDrafts((current) => ({ ...current, [`${pageNo}:${reading}`]: selection }));
+    setPageNo(next); setReading('text'); setSelection(drafts[`${next}:text`] ?? null); setError(null);
+  };
+  const discardAi = () => {
+    if (reading === 'ai') { setReading('text'); setSelection(drafts[`${pageNo}:text`] ?? null); }
+    setAiResults((current) => { const next = { ...current }; delete next[pageNo]; return next; });
+    setDrafts((current) => { const next = { ...current }; delete next[`${pageNo}:ai`]; return next; });
+    setError(null);
+  };
   const transcribe = async () => {
     if (!pdf || !page) return;
     const ctl = new AbortController(); controller.current?.abort(); controller.current = ctl;
@@ -132,8 +156,8 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
       ctl.signal.throwIfAborted();
       const result = QuestionPageSchema.parse(raw);
       if (result.page !== pageNo) throw new Error('QUESTION_CONTEXT_CHANGED');
-      setPdf((current) => current ? { ...current, pages: current.pages.map((p) => p.page === pageNo ? result : p) } : null);
-      setSelection(null);
+      // Keep the original reading and its edits active until the user chooses the AI result.
+      setAiResults((current) => ({ ...current, [pageNo]: result }));
     } catch (e) { if (!ctl.signal.aborted) showError(e); }
     finally { if (controller.current === ctl) setBusy(null); }
   };
@@ -147,28 +171,52 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   };
 
   return <>
-    <Button variant="secondary" size="md" icon={<FileInput size={18} />} onClick={() => void start()} title={t('question.import')}>
-      <span className="hidden lg:inline">{t('question.import')}</span><span className="sr-only lg:hidden">{t('question.import')}</span>
+    <Button variant="secondary" size="md" icon={<FileInput size={18} />} onClick={() => void start()} title={t('question.fromResource')}>
+      <span className="hidden lg:inline">{t('question.fromResource')}</span><span className="sr-only lg:hidden">{t('question.fromResource')}</span>
     </Button>
     {open && createPortal(<div className="fixed inset-0 z-overlay"><Sheet open onClose={close} title={t('question.import')}
       footer={<Button variant="primary" className="w-full" disabled={!!busy || !selection || !segments.length} onClick={adopt}>{t('question.adopt')}</Button>}>
       <div className="space-y-4 text-md">
         <p>{t('question.local')}</p>
-        <label className="block space-y-2 font-medium">{t('question.file')}
+        {!loadFile && <label className="block space-y-2 font-medium">{t('question.file')}
           <input type="file" accept="application/pdf,.pdf" disabled={!!busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void readFile(file); }} className="block w-full rounded-xl bg-paper p-3 text-sm" />
-        </label>
+        </label>}
         {busy && <p role="status" className="flex items-center gap-2"><Spinner />{t(busy === 'file' ? 'question.reading' : 'question.transcribing')}</p>}
         {error && <p role="alert" className="rounded-xl bg-wrong-soft p-3 text-wrong-strong">{t(error)}</p>}
         {pdf && page && <>
           <p className="break-all text-xs text-muted">{pdf.fileName} · {t('res.pages', { n: pdf.pages.length })}</p>
           <label className="block font-medium">{t('question.page')}
-            <select value={pageNo} disabled={!!busy} onChange={(e) => { setPageNo(Number(e.target.value)); setSelection(null); setError(null); }} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border">{pdf.pages.map((p) => <option key={p.page} value={p.page}>{t('res.page', { n: p.page })}</option>)}</select>
+            <select value={pageNo} disabled={!!busy} onChange={(e) => switchPage(Number(e.target.value))} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border">{pdf.pages.map((p) => <option key={p.page} value={p.page}>{t('res.page', { n: p.page })}</option>)}</select>
           </label>
           <details open><summary className="cursor-pointer py-2 font-medium">{t('question.original')}</summary><div ref={previewHost} className="max-h-60 overflow-auto rounded-xl border border-border bg-page" /></details>
           <p className="text-xs text-muted">{t(page.method === 'ai' ? 'question.aiRead' : 'question.textRead')}</p>
           {page.mock && <p className="text-wrong-strong">{t('question.mock')}</p>}
-          <Button icon={<ScanText size={17} />} disabled={!!busy} onClick={() => void transcribe()}>{t('question.ai')}</Button>
-          <p className="text-xs text-muted">{t('question.aiConsent')}</p>
+          {!alternative && <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-x-2">
+              <span className="text-xs text-muted">{t('question.aiOptional')}</span>
+              <Button variant="ghost" size="sm" className="min-h-11 px-1 text-sm font-normal" icon={<ScanText size={14} />} disabled={!!busy} onClick={() => void transcribe()}>{t('question.ai')}</Button>
+            </div>
+            <p className="text-xs text-muted">{t('question.aiConsent')}</p>
+          </div>}
+          {alternative && originalPage && <section aria-label={t('question.compare')} className="space-y-3 rounded-xl border border-border p-3">
+            <p role="status" className="text-sm text-muted">{t('question.aiReady')}</p>
+            {!!changedMath.length && <p role="alert" className="rounded-lg bg-unknown-soft p-2 text-sm">{t('question.mathChanged', { questions: changedMath.join(', ') })}</p>}
+            <details open>
+              <summary className="cursor-pointer py-2 text-sm font-medium">{t('question.compare')}</summary>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ReadingPreview page={originalPage} label={question?.label} title={t('question.readingText')} />
+                <ReadingPreview page={alternative} label={question?.label} title={t('question.readingAi')} />
+              </div>
+            </details>
+            <fieldset className="space-y-1 text-sm">
+              <legend className="font-medium">{t('question.readingSource')}</legend>
+              {(['text', 'ai'] as const).map((method) => <label key={method} className="flex min-h-11 cursor-pointer items-center gap-2">
+                <input type="radio" name={`question-reading-${pageNo}`} checked={reading === method} disabled={!!busy} onChange={() => switchReading(method)} />
+                {t(method === 'text' ? 'question.readingText' : 'question.readingAi')}
+              </label>)}
+            </fieldset>
+            <Button variant="ghost" size="sm" className="min-h-11 text-sm font-normal" disabled={!!busy} onClick={discardAi}>{t('question.discardAi')}</Button>
+          </section>}
           <label className="block font-medium">{t('question.choose')}
             <select value={selection?.questionId ?? ''} disabled={!!busy} onChange={(e) => selectQuestion(e.target.value)} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border">
               <option value="">{t('question.choosePlaceholder', { n: page.questions.length })}</option>
@@ -197,4 +245,13 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
       </div>
     </Sheet></div>, document.body)}
   </>;
+}
+
+function ReadingPreview({ page, label, title }: { page: QuestionPage; label?: string; title: string }) {
+  const question = label === undefined ? undefined : page.questions.find((q) => questionLabel(q.label) === questionLabel(label));
+  const lines = question ? page.lines.filter((line) => question.line_ids.includes(line.id)) : page.lines;
+  return <div className="min-w-0">
+    <p className="mb-1 text-xs font-medium text-muted">{title}</p>
+    <div className="max-h-48 space-y-2 overflow-auto rounded-lg bg-paper p-2 text-sm">{lines.map((line) => <div key={line.id}><InlineSegments segments={line.segments} /></div>)}</div>
+  </div>;
 }

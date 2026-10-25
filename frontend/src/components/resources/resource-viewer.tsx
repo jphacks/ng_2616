@@ -23,6 +23,8 @@ export function ResourceViewer({ ownerId, resource, onChanged }: { ownerId: stri
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [ocr, setOcr] = useState<'idle' | 'running' | 'failed'>('idle');
+  const [previewWidth, setPreviewWidth] = useState(0);
+  const [previewState, setPreviewState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const host = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,37 +36,53 @@ export function ResourceViewer({ ownerId, resource, onChanged }: { ownerId: stri
     let url: string | null = null;
     let opened: PdfDoc | null = null;
     void getFile(ownerId, resource.id).then(async (blob) => {
-      if (!blob || !alive) return;
+      if (!alive) return;
+      if (!blob) throw new Error('RESOURCE_FILE_MISSING');
       if (resource.mime === 'application/pdf') {
-        opened = await openPdf(await blob.arrayBuffer());
-        if (alive) setDoc(opened);
+        const loaded = await openPdf(await blob.arrayBuffer());
+        if (!alive) { await closePdf(loaded); return; }
+        opened = loaded;
+        setDoc(loaded);
       } else {
         url = URL.createObjectURL(blob);
         setImageUrl(url);
       }
-    });
+    }).catch(() => { if (alive) setPreviewState('failed'); });
     return () => {
       alive = false;
       if (url) URL.revokeObjectURL(url);
-      void closePdf(opened);
+      void closePdf(opened).catch(() => undefined);
     };
   }, [ownerId, resource.id, resource.mime]);
 
-  // render the PDF page at the container width × zoom
+  // A restored resource can mount while its tab is hidden. Wait for a visible width,
+  // and repaint when showing the tab or resizing the window changes that width.
   useEffect(() => {
-    if (!doc || !host.current) return;
+    const el = host.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setPreviewWidth(el.clientWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!doc || !host.current || previewWidth <= 0) return;
     let alive = true;
-    const width = Math.min(1100, host.current.clientWidth - 48) * zoom * (window.devicePixelRatio || 1);
+    setPreviewState('loading');
+    const width = Math.min(1100, previewWidth) * zoom * (window.devicePixelRatio || 1);
     void renderPage(doc, page, width).then((canvas) => {
-      if (!alive || !host.current) return;
+      if (!alive || !host.current) { canvas.width = 0; canvas.height = 0; return; }
       canvas.style.width = `${canvas.width / (window.devicePixelRatio || 1)}px`;
       canvas.className = 'mx-auto rounded-lg shadow-card bg-page';
+      const previous = host.current.querySelector('canvas');
       host.current.replaceChildren(canvas);
-    });
+      if (previous) { previous.width = 0; previous.height = 0; }
+      setPreviewState('ready');
+    }).catch(() => { if (alive) setPreviewState('failed'); });
     return () => {
       alive = false;
     };
-  }, [doc, page, zoom]);
+  }, [doc, page, zoom, previewWidth]);
 
   const current = pages.find((p) => p.page === page);
 
@@ -158,10 +176,10 @@ export function ResourceViewer({ ownerId, resource, onChanged }: { ownerId: stri
               <RichText text={current?.text ?? ''} />
             </article>
           ) : resource.mime === 'application/pdf' ? (
-            <div ref={host} className="min-h-full">
-              <div className="flex h-64 items-center justify-center text-muted">
-                <Spinner />
-              </div>
+            <div className="relative min-h-full">
+              <div ref={host} className="min-h-full" />
+              {previewState === 'loading' && <div role="status" className="absolute inset-x-0 top-0 flex h-64 items-center justify-center text-muted"><Spinner /></div>}
+              {previewState === 'failed' && <p role="alert" className="p-6 text-center text-wrong-strong">{t('res.previewFailed')}</p>}
             </div>
           ) : imageUrl ? (
             <img src={imageUrl} alt={resource.name} className="mx-auto rounded-lg bg-page shadow-card" style={{ width: `${zoom * 100}%`, maxWidth: 'none' }} />
