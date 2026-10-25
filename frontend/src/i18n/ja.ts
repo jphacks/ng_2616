@@ -144,6 +144,9 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'tool.undo': '元に戻す',
   'tool.redo': 'やり直す',
   'tool.suggest': '次の一歩を提案',
+  'tool.autoSuggest': '自動',
+  'tool.autoSuggestOn': '自動補完オン：手を止めると提案が出ます。押すとオフ。',
+  'tool.autoSuggestOff': '自動補完オフ：提案ボタンで呼び出します。押すとオン。',
   'tool.newLine': '新しい行',
   'tool.clear': '行を消去',
 
