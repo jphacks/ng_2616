@@ -11,6 +11,24 @@ hackerserver.japaneast.cloudapp.azure.com {
             }
         }
     }
+    # lean-worker serves /health and /check; the gateway calls them as /lean/health, /lean/check.
+    handle_path /lean/* {
+        reverse_proxy lean-worker:8100 {
+            transport http {
+                # above the worker's 20 s per check
+                response_header_timeout 45s
+            }
+        }
+    }
+    # cas-worker serves /health and /verify; the gateway calls them as /cas/health, /cas/verify.
+    handle_path /cas/* {
+        reverse_proxy cas-worker:8200 {
+            transport http {
+                # above the worker's 5 s per check plus its 3 s queue wait
+                response_header_timeout 15s
+            }
+        }
+    }
     handle {
         respond "Not found" 404
     }

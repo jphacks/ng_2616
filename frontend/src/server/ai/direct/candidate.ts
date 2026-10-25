@@ -1,7 +1,7 @@
 import 'server-only';
-import { toInputSegments, type CandidateDraftResult, type MathJSON, type Role, type Segment, type SuggestInput } from '@mn/contracts';
+import { toInputSegments, type CandidateDraftResult, type CheckerRoute, type MathJSON, type Role, type Segment, type SuggestInput } from '@mn/contracts';
 import { printSegmentLatex } from '@mn/contracts/ir';
-import { candidateHash, lineHash } from '@/core/candidates/hash';
+import { candidateHash, lineHash, proofCandidateHash, proofLineHash } from '@/core/candidates/hash';
 
 const none = (reason: string, mock: boolean): CandidateDraftResult => ({ state: 'NONE', reason, mock });
 
@@ -15,8 +15,10 @@ function sameIr(a: unknown, b: unknown): boolean {
  * notation, in order); prose never makes a candidate new, and CAS-equivalence is not a repeat.
  * The result is still unverified; the browser CAS decides what may be shown.
  */
-export function finalizeCandidate(input: SuggestInput, segments: Segment[], role: Role, mock: boolean): CandidateDraftResult {
-  if (!segments.some((s) => s.type === 'math')) return none('PROSE_ONLY', mock);
+export function finalizeCandidate(input: SuggestInput, segments: Segment[], role: Role, mock: boolean, route?: CheckerRoute): CandidateDraftResult {
+  // a proof step may be words only: Lean, not the CAS, checks it (ADR 0008)
+  if (route !== 'lean' && !segments.some((s) => s.type === 'math')) return none('PROSE_ONLY', mock);
+  if (!segments.length) return none('PROSE_ONLY', mock);
   let segs = segments;
   if (input.mode === 'COMPLETE_RHS') {
     const m = segs.find((s) => s.type === 'math');
@@ -30,9 +32,10 @@ export function finalizeCandidate(input: SuggestInput, segments: Segment[], role
     segs = [{ type: 'math', expr, notation: 'plain', latex: printSegmentLatex(expr, 'plain') }];
   }
   const inputSegs = toInputSegments(segs);
-  const candidateLineHash = lineHash(inputSegs);
-  if (input.context.lines.some((l) => lineHash(l.segments) === candidateLineHash)) return none('DUPLICATE', mock);
-  const contentHash = candidateHash(input.mode, [inputSegs]);
+  const sameLine = route === 'lean' ? proofLineHash : lineHash;
+  const candidateLineHash = sameLine(inputSegs);
+  if (input.context.lines.some((l) => sameLine(l.segments) === candidateLineHash)) return none('DUPLICATE', mock);
+  const contentHash = route === 'lean' ? proofCandidateHash(input.mode, [inputSegs]) : candidateHash(input.mode, [inputSegs]);
   if (input.rejected_hashes.includes(contentHash)) return none('REJECTED_BEFORE', mock);
   return {
     state: 'GENERATED',
@@ -41,7 +44,7 @@ export function finalizeCandidate(input: SuggestInput, segments: Segment[], role
       id: crypto.randomUUID(),
       mode: input.mode,
       content_hash: contentHash,
-      lines: [{ target: { id: input.target_line_id, role, segments: inputSegs }, segments: segs }],
+      lines: [{ target: { id: input.target_line_id, role, segments: inputSegs }, segments: segs, ...(route ? { route } : {}) }],
     },
   };
 }

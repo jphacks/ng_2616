@@ -2,6 +2,7 @@ import 'server-only';
 import {
   CapabilitiesSchema,
   FeatureSchema,
+  LeanCheckInputSchema,
   MetaSchema,
   OcrPageInputSchema,
   QuestionPageInputSchema,
@@ -17,6 +18,7 @@ import {
 import { z } from 'zod';
 import { AiError } from '@/server/ai/errors';
 import { getAiService, getDocumentAiService } from '@/server/ai/service';
+import { getLeanService, leanConfigured } from '@/server/lean';
 import { serverEnv } from '@/server/env';
 import { authenticate, type AuthedUser } from '@/server/supabase';
 import { fail, GatewayError, ok, readJson } from './http';
@@ -24,7 +26,7 @@ import { lookup, remember } from './idempotency';
 import { withLimits } from './limits';
 
 type JobRoute = {
-  kind: 'recognize' | 'suggest' | 'resources_page' | 'resources_questions';
+  kind: 'recognize' | 'suggest' | 'resources_page' | 'resources_questions' | 'lean_check';
   input: z.ZodType;
   deadlineMs: number;
   run: (input: never, user: AuthedUser, signal: AbortSignal) => Promise<unknown>;
@@ -53,6 +55,16 @@ const JOB_ROUTES: Record<string, JobRoute> = {
     deadlineMs: 45_000,
     run: (input, user, signal) => getAiService().ocrPage(input, { userId: user.id, signal }),
   },
+  // ADR 0008: up to three translations plus their Lean checks. Longer than spec §14.4's 90 s:
+  // one translation of a hard step took 110 s in testing (thinking tokens), see LeanService
+  'lean/check': {
+    kind: 'lean_check',
+    input: LeanCheckInputSchema,
+    // below the route's maxDuration (app/api/v1/lean/check), so the job ends with UPSTREAM_TIMEOUT
+    // instead of the platform killing the function
+    deadlineMs: 280_000,
+    run: (input, user, signal) => getLeanService().check(input, { userId: user.id, signal }),
+  },
 };
 
 function enabledFeatures(): Record<Feature, boolean> {
@@ -67,10 +79,10 @@ function capabilities(): Capabilities {
     schema_version: SCHEMA_VERSION,
     build_id: env.buildId,
     features: enabledFeatures(),
-    cas_runtime: 'pyodide',
+    cas_runtime: env.NEXT_PUBLIC_CAS_RUNTIME,
     ai_execution: env.AI_EXECUTION,
     llm: status,
-    lean: { available: false },
+    lean: { available: leanConfigured() },
   });
 }
 
@@ -80,7 +92,7 @@ export async function dispatch(request: Request, method: string, path: string[])
   try {
     if (method === 'GET' && route === 'health') {
       const status = getAiService().status();
-      return ok(requestId, { status: 'ok', build_id: serverEnv().buildId, llm_configured: status.configured, lean_ready: false });
+      return ok(requestId, { status: 'ok', build_id: serverEnv().buildId, llm_configured: status.configured, lean_ready: leanConfigured() });
     }
     const user = await authenticate(request);
     if (!user) throw new GatewayError(401, 'AUTH_REQUIRED', 'sign in required');

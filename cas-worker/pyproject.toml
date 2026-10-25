@@ -1,0 +1,36 @@
+[project]
+name = "math-notebook-cas-worker"
+version = "0.1.0"
+description = "Runs Math Notebook's CAS rules (packages/cas-core) on the server. No LLM, no secrets."
+requires-python = ">=3.12"
+# sympy/mpmath match packages/cas-core, which mirrors the versions Pyodide v314.0.7 bundles
+dependencies = [
+  "fastapi==0.162.0",
+  "pydantic==2.14.1",
+  "pydantic-settings==2.16.1",
+  "uvicorn==0.54.0",
+  "sympy==1.14.0",
+  "mpmath==1.4.1",
+]
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "httpx==0.28.1", "ruff==0.17.2"]
+
+[tool.uv]
+package = false
+# SymPy 1.14 declares mpmath<1.4, but Pyodide v314.0.7 ships mpmath 1.4.1; mirror the browser runtime.
+override-dependencies = ["mpmath==1.4.1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# the rules are imported from their single source, not copied
+pythonpath = [".", "../packages/cas-core"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# FastAPI's dependency injection uses Depends() in argument defaults by design
+ignore = ["B008"]

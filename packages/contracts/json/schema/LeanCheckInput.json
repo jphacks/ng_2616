@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "theorem": {
+      "type": "object",
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "given_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "template",
+            "ai"
+          ]
+        }
+      },
+      "required": [
+        "statement",
+        "given_hash",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "given": {
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "segments": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "text"
+                    },
+                    "text": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "math"
+                    },
+                    "expr": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "notation": {
+                      "type": "string",
+                      "enum": [
+                        "plain",
+                        "continuation"
+                      ]
+                    },
+                    "latex": {
+                      "type": "string"
+                    },
+                    "source_latex": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "expr",
+                    "notation",
+                    "latex"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "segments"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "given_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "lines": {
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "route": {
+            "type": "string",
+            "enum": [
+              "cas",
+              "lean",
+              "none"
+            ]
+          },
+          "segments": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "text"
+                    },
+                    "text": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "math"
+                    },
+                    "expr": {
+                      "$ref": "#/$defs/__schema0"
+                    },
+                    "notation": {
+                      "type": "string",
+                      "enum": [
+                        "plain",
+                        "continuation"
+                      ]
+                    },
+                    "latex": {
+                      "type": "string"
+                    },
+                    "source_latex": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "expr",
+                    "notation",
+                    "latex"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "tactic": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "id",
+          "route",
+          "segments"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "target_line_id": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "functions": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "args"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "candidate": {
+      "type": "boolean"
+    },
+    "ui_lang": {
+      "type": "string",
+      "enum": [
+        "en",
+        "ja"
+      ]
+    }
+  },
+  "required": [
+    "given",
+    "given_hash",
+    "lines",
+    "target_line_id",
+    "ui_lang"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "minItems": 1
+        }
+      ]
+    }
+  }
+}
