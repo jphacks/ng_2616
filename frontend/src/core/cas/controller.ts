@@ -1,6 +1,7 @@
 'use client';
 
 import type { CasPayload, CasRawProof } from './payload';
+import { RemoteCasController } from './remote';
 
 export type CasState = 'idle' | 'loading' | 'ready' | 'failed';
 
@@ -163,11 +164,15 @@ export class CasController {
   }
 }
 
-let shared: CasController | null = null;
+let shared: CasController | RemoteCasController | null = null;
 
-export function getCas(): CasController {
+/** NEXT_PUBLIC_CAS_RUNTIME=azure checks on the VM through the gateway (ADR 0009); otherwise Pyodide here. */
+export function getCas(): CasController | RemoteCasController {
   if (!shared) {
-    shared = new CasController(process.env.NEXT_PUBLIC_PYODIDE_INDEX_URL ?? 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/');
+    shared =
+      process.env.NEXT_PUBLIC_CAS_RUNTIME === 'azure'
+        ? new RemoteCasController()
+        : new CasController(process.env.NEXT_PUBLIC_PYODIDE_INDEX_URL ?? 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/');
   }
   return shared;
 }

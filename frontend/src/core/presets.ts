@@ -1,9 +1,10 @@
-import { SCHEMA_VERSION, declaredFunctions, segmentsFromSource, type Line, type Notebook, type Role, type UiLang } from '@mn/contracts';
+import { SCHEMA_VERSION, declaredFunctions, segmentsFromSource, withTheorem, type Line, type Notebook, type Role, type UiLang } from '@mn/contracts';
 import { TDSE_LATEX } from '@mn/contracts/fixtures';
 import { uuid } from '@/core/ids';
+import { givenHash } from '@/core/lean/route';
 import { newDraftLine } from '@/core/notebook/model';
 
-export type PresetId = 'blank' | 'schrodinger' | 'integral' | 'expansion' | 'solutions';
+export type PresetId = 'blank' | 'schrodinger' | 'integral' | 'expansion' | 'solutions' | 'induction' | 'epsilon_delta';
 
 interface PresetText {
   title: string;
@@ -39,9 +40,39 @@ const TEXT: Record<PresetId, Record<UiLang, PresetText>> = {
     en: { title: 'Solving an equation', statement: 'Solve $x^2 = 4$ over the real numbers.' },
     ja: { title: '方程式を解く', statement: '実数の範囲で $x^2 = 4$ を解きなさい。' },
   },
+  // Proof templates (ADR 0008). The claim is prose on purpose: a formula on a given line is a fact
+  // the CAS may use, and the statement to prove must not prove itself. Lean gets the exact theorem.
+  induction: {
+    en: {
+      title: 'Sum of odd numbers',
+      statement: 'Prove by induction that for every natural number $n$, 1 + 3 + 5 + ⋯ + (2n − 1) = n².',
+    },
+    ja: {
+      title: '奇数の和',
+      statement: '数学的帰納法により、すべての自然数 $n$ について 1 + 3 + 5 + ⋯ + (2n − 1) = n² が成り立つことを証明しなさい。',
+    },
+  },
+  epsilon_delta: {
+    en: {
+      title: 'ε–δ: the limit of x² at 2',
+      statement:
+        'Prove from the ε–δ definition that x² → 4 as x → 2: for every ε > 0 there is a δ > 0 such that every real $x$ with |x − 2| < δ satisfies |x² − 4| < ε.',
+    },
+    ja: {
+      title: 'ε–δ論法：x → 2 での x² の極限',
+      statement:
+        'ε–δ論法により、x → 2 のとき x² → 4 であることを証明しなさい。すなわち、任意の ε > 0 に対してある δ > 0 が存在し、|x − 2| < δ を満たすすべての実数 $x$ について |x² − 4| < ε となることを示しなさい。',
+    },
+  },
 };
 
-export const PRESET_IDS: PresetId[] = ['blank', 'schrodinger', 'integral', 'expansion', 'solutions'];
+/** The theorem a proof template proves, as Lean states it (checked in lean-worker/tests/test_lean.py). */
+export const PRESET_THEOREMS: Partial<Record<PresetId, string>> = {
+  induction: '∀ n : ℕ, ∑ k ∈ Finset.range n, (2 * k + 1) = n ^ 2',
+  epsilon_delta: '∀ ε : ℝ, ε > 0 → ∃ δ : ℝ, δ > 0 ∧ ∀ x : ℝ, |x - 2| < δ → |x ^ 2 - 4| < ε',
+};
+
+export const PRESET_IDS: PresetId[] = ['blank', 'schrodinger', 'integral', 'expansion', 'solutions', 'induction', 'epsilon_delta'];
 
 export function presetText(id: PresetId, lang: UiLang): PresetText {
   return TEXT[id][lang];
@@ -77,6 +108,8 @@ const OPENING: Record<PresetId, Record<UiLang, OpeningLine[]>> = {
   },
   expansion: { en: [], ja: [] },
   solutions: { en: [], ja: [] },
+  induction: { en: [], ja: [] },
+  epsilon_delta: { en: [], ja: [] },
 };
 
 function openingLines(id: PresetId, lang: UiLang): Line[] {
@@ -88,16 +121,20 @@ function openingLines(id: PresetId, lang: UiLang): Line[] {
 }
 
 export function buildNotebook(id: PresetId, lang: UiLang): Notebook {
-  return {
+  const lines = [...openingLines(id, lang), newDraftLine()];
+  const nb: Notebook = {
     schema_version: SCHEMA_VERSION,
     id: uuid(),
     title: TEXT[id][lang].title,
     mode: 'live',
     domain: 'Reals',
-    lines: [...openingLines(id, lang), newDraftLine()],
+    lines,
     recoveries: [],
     extensions: id === 'schrodinger' ? { demo: { script: 'schrodinger-v1' } } : {},
   };
+  const theorem = PRESET_THEOREMS[id];
+  // tied to these given lines: marking another line as given formalizes the problem again
+  return theorem ? withTheorem(nb, { statement: theorem, given_hash: givenHash(lines), source: 'template' }) : nb;
 }
 
 export function demoBinding(nb: Notebook): { script: string } | undefined {

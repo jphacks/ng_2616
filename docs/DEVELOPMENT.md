@@ -25,8 +25,62 @@ set `LLM_PROVIDER=mock`: the demo notebook maps any ink to its scripted lines.
 | `pnpm --filter frontend test` | history, autosave scheduler, ink split (Node test runner) |
 | `pnpm contracts:emit && pnpm cas:test` | CAS oracle fixtures through SymPy (pytest) |
 | `pnpm backend:test` | FastAPI template |
+| `pnpm lean:test` | lean-worker: source screening, message mapping; real Lean once built |
 | `pnpm --filter frontend test:e2e` | Playwright: demo end to end with mock AI + real Pyodide CAS |
 | `pnpm typecheck`, `pnpm lint` | TypeScript and ESLint |
+
+## Lean proof checking (optional)
+Proof lines are checked by `lean-worker`, a separate service holding Lean 4, Mathlib and the
+Lean REPL ([ADR 0008](adr/0008-lean-proof-checking.md)). The toolchain, Mathlib and REPL are
+pinned together in `lean-worker/lean/` (`lean-toolchain`, `lakefile.toml`, `lake-manifest.json`).
+
+1. Install [elan](https://github.com/leanprover/elan) (it picks the toolchain from
+   `lean-toolchain`).
+2. `pnpm lean:setup` downloads Mathlib's prebuilt cache and builds the REPL. That's about 5 GB in
+   `lean-worker/lean/.lake` (git-ignored). On Windows with a small system drive, point `.lake` at
+   another disk first: `mklink /J lean-worker\lean\.lake D:\somewhere\lake`, and set
+   `MATHLIB_CACHE_DIR` to a folder there too.
+3. `pnpm lean:dev` starts the worker on `http://127.0.0.1:8100`. At startup it loads the part of
+   Mathlib that proofs use (about 15 s; `LEAN_IMPORTS` in `lean-worker/.env` changes the list,
+   `Mathlib` for all of it if the machine has the memory). `GET /health` reports `lean_ready`.
+4. In `frontend/.env.local`, set `NEXT_PUBLIC_ENABLED_FEATURES=lean` and
+   `LEAN_WORKER_URL=http://127.0.0.1:8100`. Lean needs a real model (`LLM_PROVIDER=gemini`); with
+   the mock provider, proof lines show "Lean unavailable".
+
+`pnpm lean:test` runs the worker's tests. The real-Lean ones, which prove both proof templates and
+check that false statements and `sorry` never pass, skip until step 2 is done. For a container
+instead: `cd lean-worker && docker compose up --build`. The image includes the Mathlib cache.
+
+### On the Azure VM
+`backend/compose.azure.yaml` runs `lean-worker` on `compiler-private` next to the PDF compiler
+(read-only root, no capabilities, 8 GB, 2 CPUs). The worker needs no internet at run time; the
+build downloads Mathlib's cache (an image of about 16 GB; about 6 minutes on the VM).
+- `backend/scripts/start-report-service.sh` creates `backend/.env.lean` once (`APP_ENV=production`
+  and a random `LEAN_WORKER_KEY`, mode 600, not in git). Without a key, `/check` answers 503
+  outside `APP_ENV=local`.
+- `Caddyfile.azure` routes `/lean/*` to the worker with the prefix stripped, so the worker's
+  `/health` and `/check` are `https://<vm-host>/lean/health` and `/lean/check`.
+- Vercel: `NEXT_PUBLIC_ENABLED_FEATURES` gains `lean`, plus
+  `LEAN_WORKER_URL=https://<vm-host>/lean` and the key from `backend/.env.lean` as
+  `LEAN_WORKER_KEY`. `POST /api/v1/lean/check` has its own route with `maxDuration = 300` (one
+  hard step took 110 s of model time).
+- Checked in the container on the VM: the REPL runs through `lake env` on the read-only root, the
+  default imports load in about 6 s using about 1 GB, and all 37 worker tests pass.
+
+## CAS on the Azure VM (optional)
+By default the browser runs the CAS in Pyodide. With `NEXT_PUBLIC_CAS_RUNTIME=azure` it sends each
+check to `cas-worker` on the VM through `POST /api/v1/cas/verify` instead; same rules
+(`packages/cas-core`), same payload, same 5 s budget ([ADR 0009](adr/0009-cas-on-azure.md)).
+
+Locally: `pnpm cas:dev` (port 8200), then in `frontend/.env.local` set
+`NEXT_PUBLIC_CAS_RUNTIME=azure` and `CAS_WORKER_URL=http://127.0.0.1:8200`. `pnpm cas:worker-test`
+sends every shared oracle case through the worker's HTTP API.
+
+On the VM, `backend/compose.azure.yaml` runs `cas-worker` on `compiler-private` (read-only root,
+no capabilities, 1 GB, 1.5 CPUs). `start-report-service.sh` creates `backend/.env.cas` once (a
+random `CAS_WORKER_KEY`), and `Caddyfile.azure` serves it at `https://<vm-host>/cas/health` and
+`/cas/verify`. On Vercel set `NEXT_PUBLIC_CAS_RUNTIME=azure`, `CAS_WORKER_URL=https://<vm-host>/cas`
+and `CAS_WORKER_KEY` from `backend/.env.cas`, then redeploy: `NEXT_PUBLIC_` values are fixed at build.
 
 ## Supabase setup
 1. Run the migrations in order (SQL editor or `npx supabase db push`):

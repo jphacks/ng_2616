@@ -1,0 +1,14 @@
+# Pinned Lean project the worker checks proofs in: the toolchain, Mathlib and REPL move together.
+# Proofs run in the REPL on `import Mathlib`; there is no library of our own to build.
+name = "mn_lean"
+defaultTargets = ["repl"]
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.35.0"
+
+[[require]]
+name = "REPL"
+git = "https://github.com/leanprover-community/repl"
+rev = "v4.35.0"

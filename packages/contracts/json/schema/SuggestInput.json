@@ -122,6 +122,23 @@
                     }
                   ]
                 }
+              },
+              "route": {
+                "type": "string",
+                "enum": [
+                  "cas",
+                  "lean",
+                  "none"
+                ]
+              },
+              "lean": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "failed",
+                  "unchecked",
+                  "empty"
+                ]
               }
             },
             "required": [

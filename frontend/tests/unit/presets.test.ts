@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { NotebookSchema, declaredFunctions } from '@mn/contracts';
+import { NotebookSchema, declaredFunctions, theoremOf } from '@mn/contracts';
+import { givenHash } from '../../src/core/lean/route';
 import { withDeclarations } from '../../src/core/notebook/model';
-import { PRESET_IDS, buildNotebook } from '../../src/core/presets';
+import { PRESET_IDS, PRESET_THEOREMS, buildNotebook } from '../../src/core/presets';
 
 const shown = (nb: ReturnType<typeof buildNotebook>) =>
   nb.lines.map((l) => [l.role, l.segments.map((s) => (s.type === 'math' ? s.latex : s.text)).join(' ')]);
@@ -45,6 +46,23 @@ describe('templates open with lines, not a problem card', () => {
     const lines = shown(buildNotebook('integral', 'en')).slice(0, -1);
     assert.deepEqual(lines.map(([role]) => role), ['premise', 'definition', 'premise']);
     assert.equal(lines[2]![1], 'Given I\\left(a\\right) where a > 0');
+  });
+
+  it('proof templates carry their Lean theorem, tied to their given lines, and state the claim in prose', () => {
+    for (const id of ['induction', 'epsilon_delta'] as const) {
+      for (const lang of ['en', 'ja'] as const) {
+        const nb = buildNotebook(id, lang);
+        const theorem = theoremOf(nb);
+        assert.equal(theorem?.statement, PRESET_THEOREMS[id]);
+        assert.equal(theorem?.source, 'template');
+        assert.equal(theorem?.given_hash, givenHash(nb.lines));
+        // a formula on a given line is a fact the CAS may use: the claim to prove must not be one
+        const given = nb.lines.filter((l) => l.role === 'premise');
+        assert.equal(given.length, 1);
+        assert.ok(given[0]!.segments.every((s) => s.type === 'text' || (typeof s.expr === 'string' && s.expr.length === 1)), `${id}/${lang}`);
+      }
+    }
+    assert.equal(theoremOf(buildNotebook('integral', 'en')), undefined);
   });
 
   it('the title is the notebook title only', () => {
