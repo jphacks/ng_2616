@@ -74,7 +74,7 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
         />
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
-        <PdfExport user={user} />
+        <PdfExport />
         <SaveStatus />
         <AccountMenu user={user} unsaved={dirty} />
       </div>

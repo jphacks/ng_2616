@@ -87,34 +87,8 @@ function unitsFor(doc: Document, data: PdfDocument): HTMLElement[] {
     for (const [index, block] of section.blocks.entries()) {
       const blockStart = index === 0 ? sectionStart : units.length;
       if (block.label) add(block.label, 'pdf-label', true);
-      if (block.fragments.some((f) => f.kind === 'text') && block.fragments.some((f) => f.kind === 'math')) {
-        // A problem statement is a paragraph with inline formulas, not a stack of app rows.
-        let para = doc.createElement('div'); para.className = 'pdf-unit';
-        const flush = () => { if (para.childNodes.length) units.push(para); para = doc.createElement('div'); para.className = 'pdf-unit'; };
-        let length = 0;
-        for (const [n, fragment] of block.fragments.entries()) {
-          // two formulas side by side; text already carries its spaces (document.ts)
-          if (fragment.kind === 'math' && block.fragments[n - 1]?.kind === 'math') para.append(doc.createTextNode(' '));
-          if (fragment.kind === 'text') {
-            const chunks = textChunks(fragment.value);
-            for (const [i, chunk] of chunks.entries()) {
-              if (length + chunk.length > 600 || i) { flush(); length = 0; }
-              para.append(doc.createTextNode(chunk)); length += chunk.length;
-            }
-          } else {
-            const math = doc.createElement('span');
-            try { math.innerHTML = katex.renderToString(fragment.value, { output: 'html', throwOnError: true, trust: false, strict: 'ignore' }); }
-            catch { math.textContent = fragment.value; }
-            para.append(math); length += 40;
-          }
-        }
-        flush();
-        for (const note of block.notes) add(note, 'pdf-note');
-        finishBlock(blockStart);
-        continue;
-      }
       for (const fragment of block.fragments) {
-        if (fragment.kind === 'text') { add(fragment.value); continue; }
+        if (fragment.kind === 'text') { add(fragment.value.trim()); continue; }
         const outer = doc.createElement('div');
         outer.className = 'pdf-unit pdf-math';
         const inner = doc.createElement('span');

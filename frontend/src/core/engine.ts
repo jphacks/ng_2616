@@ -18,13 +18,14 @@ import {
   type Meta,
   type Notebook,
   type Proof,
+  type QuestionPageInput,
   type Recovery,
   type Stroke,
   type SuggestInput,
   type UiLang,
 } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, continuable, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, canStartPdfQuestion, continuable, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
@@ -53,6 +54,7 @@ import { clearPending, openOutbox, putPending, putPendingNow } from '@/core/pers
 import { getRepository } from '@/core/persistence/repo';
 import { demoBinding } from '@/core/presets';
 import { buildReferences } from '@/core/resources/references';
+import { canAdoptQuestion, questionImportSnapshot, type QuestionSource } from '@/core/resources/question-adoption';
 import { copyNotebookResources } from '@/core/resources/service';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
 import { SUGGEST_ATTEMPTS, checkerFeedback, runAttempts, type Attempt } from '@/core/suggest/attempts';
@@ -565,6 +567,8 @@ export class NotebookEngine {
       const out = await this.cas.verify(payload);
       line = findLine(this.nb, lineId);
       if (!line || line.version !== version || this.disposed) return null;
+      // Undo/import can restore the same line version under a different given context.
+      if (this.nb.id !== nb.id || this.cas.versionString !== casVersion || inputHash(this.nb, payloadForLine(this.nb, lineId), casVersion) !== hash) return null;
       if (out.kind === 'unavailable') {
         this.failLine(lineId, version, 'verify', 'CAS_UNAVAILABLE');
         return null;
@@ -765,7 +769,7 @@ export class NotebookEngine {
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 
-  private suggestBlocker(): SuggestBlocker | null {
+  private suggestBlocker(manual = false): SuggestBlocker | null {
     const s = store.getState();
     const nb = s.notebook;
     if (!nb) return 'none';
@@ -775,8 +779,8 @@ export class NotebookEngine {
     if (anyPending(nb) || Object.keys(s.leanPending).length > 0) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';
     const last = suggestBaseLine(nb);
-    // a template's given lines alone do not start suggestions: the student writes first
-    if (!last || !hasOwnLine(nb)) return 'empty';
+    // Templates do not start automatically; a reviewed PDF question can start on an explicit press.
+    if (!last || (!hasOwnLine(nb) && !(manual && canStartPdfQuestion(last)))) return 'empty';
     const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
     if (!incomplete && !continuable(last)) return 'cannot-continue';
     if (s.candidate && ['GENERATING', 'VERIFYING', 'READY', 'HELD'].includes(s.candidate.state)) return 'busy';
@@ -785,13 +789,13 @@ export class NotebookEngine {
     return null;
   }
 
-  /** True when pressing the suggest button would start a request (the same rules as the automatic start). */
-  canSuggest(_manual = false): boolean {
-    return this.suggestBlocker() === null;
+  /** A reviewed PDF question can start manually before the student's first written line. */
+  canSuggest(manual = false): boolean {
+    return this.suggestBlocker(manual) === null;
   }
 
   async requestSuggestion(manual: boolean) {
-    const blocker = this.suggestBlocker();
+    const blocker = this.suggestBlocker(manual);
     if (blocker) {
       if (manual) {
         const key = blockerToastKey(blocker, store.getState().candidate?.state ?? null);
@@ -1241,6 +1245,29 @@ export class NotebookEngine {
   }
 
   // ------------------------------------------------------------------ resources
+
+  transcribeQuestionPage(input: QuestionPageInput, signal: AbortSignal) {
+    return api.questionPage(this.meta(), input, signal);
+  }
+
+  adoptPdfQuestion(lines: Line[], source: QuestionSource): boolean {
+    const nb = this.nb;
+    if (!nb || !canAdoptQuestion(nb, source)) throw new Error('QUESTION_CONTEXT_CHANGED');
+    if (lines.some((l) => (l.extensions?.pdf_question as { mock?: boolean } | undefined)?.mock) && nb.mode !== 'mock') throw new Error('QUESTION_MOCK_MISMATCH');
+    if (anyPending(nb)) throw new Error('QUESTION_CHECKS_PENDING');
+    this.abortAll();
+    this.cancelSuggestion();
+    const s = store.getState();
+    s.commit('IMPORT_PDF', (snapshot) => questionImportSnapshot(snapshot, lines));
+    s.bumpEpoch();
+    s.set('candidate', null);
+    s.set('rejection', null);
+    s.set('ghostConfirm', false);
+    s.set('rejections', {});
+    s.set('tab', 'canvas');
+    void this.recheckStale();
+    return true;
+  }
 
   /** Lazy OCR for a resource page without a text layer (spec §15.2: only when opened). */
   async ocrPage(image: { mime: 'image/jpeg' | 'image/png'; data: string }): Promise<string | null> {

@@ -60,6 +60,24 @@ describe('R13: writing on any draft line hides a ready suggestion', () => {
 });
 
 describe('when a suggestion may start (R4, R10)', () => {
+  it('an adopted PDF question starts manually without inventing a first handwritten line', async () => {
+    r = rig({ lines: [settled('P1', '$\\int_1^2 x\\,dx$', 'none', 'PREMISE', { source: 'pdf', role: 'premise', document_origin: { name: 'integral-worksheet.pdf', page: 1, has_unreadable: false } }), line('D1', 'DRAFT')] });
+    assert.equal(r.engine.canSuggest(false), false);
+    assert.equal(r.engine.canSuggest(true), true);
+    await r.engine.requestSuggestion(false);
+    assert.equal(r.api.suggestCalls.length, 0);
+    await suggestAndSettle(r);
+    assert.equal(r.api.suggestCalls.length, 1);
+    assert.equal(r.api.suggestCalls[0]!.input.based_on_line_id, 'P1');
+  });
+
+  it('a template or manually marked given still waits for the student to write', async () => {
+    r = rig({ lines: [settled('P1', '$x=1$', 'none', 'PREMISE', { role: 'premise' }), line('D1', 'DRAFT')] });
+    assert.equal(r.engine.canSuggest(true), false);
+    await r.engine.requestSuggestion(true);
+    assert.equal(r.api.suggestCalls.length, 0);
+  });
+
   const none = (name: string, setup: () => Rig, toast?: string) =>
     it(`G1 ${name}: no request is sent`, async () => {
       r = setup();
