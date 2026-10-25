@@ -2,7 +2,7 @@
 
 **PR マージ済み**：PR #41 は main にマージ済み（マージコミット `47ae591`、2026-10-24）。この NOTES は main の `4f46b73`（PR #54 取り込み時点）から作った `Riku_feature2` で更新している。以下は、マージ後に ③ の Must 部分に残っている作業の整理（詳細は各節）。
 
-1. **S-01 の live 確認**：人手で実施済み（下の「live（本物の Gemini）での確認記録」）。S-01 の完了条件は満たした。残りは、採用後の行2が「未検証」になった原因の調査と、自動の live E2E（未実施）。
+1. **kanban S-01 の live 確認**：人手で実施済み（下の「live（本物の Gemini）での確認記録」）。kanban S-01 の完了条件は満たした。残りは、採用後の行2が「未検証」になった原因の調査と、自動の live E2E（未実施）。
 2. **②の回答待ち**：R3（`CONTINUABLE_UNKNOWN` の `DOMAIN_CHANGED`）、R10（修正行 unknown の直接判定）、R30（`Proof.mock` の意味。回答後に ③ が `verifyCandidate` と ghost-line の mock 表示を直す）。
 3. **⑤の作業待ち**：R16 の `Job.meta`、R28（BRIDGE の 403）、`test` script、MT-10／GT-7 の読み替えの承認、I2（描画テスト基盤）。
 
@@ -44,7 +44,7 @@
 | `tests/unit/suggest/*.test.ts` ＋ `history.test.ts` | 150 件：149 通過／0 失敗／1 skip | 2026-10-24 | ローカル、`22ee644`（main の PR #39 `7257c04` を取り込み済み、衝突なし） |
 | `tsc --noEmit`（frontend） | エラー 0 | 2026-10-24 | 同上 |
 | `eslint`（src、tests） | エラー 0（警告 7 件は今回触っていない既存ファイル） | 2026-10-24 | 同上 |
-| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分）。1 回目は 9 通過／1 失敗（下の S-04 の注意を参照） | 2026-10-24 | mock＋実 CAS、ローカル、`22ee644`（`checking.spec.ts` の 1 箇所の修正を含む） |
+| E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件 | 10 通過／0 失敗（2.1 分）。1 回目は 9 通過／1 失敗（下の kanban S-04 の注意を参照） | 2026-10-24 | mock＋実 CAS、ローカル、`22ee644`（`checking.spec.ts` の 1 箇所の修正を含む） |
 
 `tests/unit/suggest/` の内訳（件数／通過／skip）：candidate 11／11／0、pure 37／37／0、model 10／10／0、service 16／16／0、client 9／9／0、epoch 5／5／0、engine-suggest 36／36／0、engine-held 8／8／0、engine-adopt 14／14／0、pending-fixes 1／0／1（`GhostLine` の描画テスト I2。jsdom と React Testing Library が無い）。`history.test.ts` は 3／3／0。
 過去の試験記録（段階1、コミット `0548c91`）は末尾の「履歴」にある。
@@ -67,7 +67,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 ### push 前の確認結果
 
 - **main の取り込み**：段階2の前後とも取り込んでいなかった（`Riku_feature` は `f691e79`＝PR #38 のマージ地点から分岐したまま）。push 前に `origin/main` の `b1622c5`（`fix(frontend): eliminate ink drawing latency…`、変更は `ink-canvas.tsx` のみ、作者は他の担当）を取り込んだ。**衝突なし**。取り込み後に単体テスト・`tsc`・E2E を流し直して上の表に反映した。
-- **`canSuggest` と補完ボタン**（段階2 時点の確認。**現在は下の S-04 で変わった**）：`toolbar.tsx` のボタンは `disabled` を持たず、`canSuggest` も使っていない（`onClick` は `engine.requestSuggestion(true)` を呼ぶだけ）。`canSuggest` を呼ぶのは `scheduleSuggestion`（自動起動）だけ。したがって R27 の案内（pending／cannot-continue／busy／HELD）は表示される。
+- **`canSuggest` と補完ボタン**（段階2 時点の確認。**現在は下の kanban S-04 で変わった**）：`toolbar.tsx` のボタンは `disabled` を持たず、`canSuggest` も使っていない（`onClick` は `engine.requestSuggestion(true)` を呼ぶだけ）。`canSuggest` を呼ぶのは `scheduleSuggestion`（自動起動）だけ。したがって R27 の案内（pending／cannot-continue／busy／HELD）は表示される。
 - **`context_fingerprint` を `suggestFingerprint` に変えた影響**：この値を読むコードは、`packages/contracts` のスキーマ（`MetaSchema`、`HashSchema` の形式チェックのみ）と `engine.ts` だけ。gateway は値を読まず（検証は形式のみ）、FastAPI は未実装（`/suggest` は 501）、`recognize`／`ocrPage` は従来どおり `contextFingerprint`（`cas/payload.ts`）を送る。**サーバー側・ほかの機能への影響なし**。ただし将来 `Job.meta` を照合する側（`client.ts`、⑤）は、補完の `context_fingerprint` が `suggestFingerprint` であることを知っておく必要がある（依頼事項に記載）。
 
 ### ③が決めたこと／決めること
@@ -95,7 +95,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 ### 次にやること
 
-上の「PR マージ済み」の 3 つ（S-01 の live 確認、②の回答待ち、⑤の作業待ち）。①のレビュー（R14 の 1.2 秒など）は PR #41 のマージで済んでいるが、結論の記録は無いので、あれば「①のレビューが必要な変更」の節に追記する。
+上の「PR マージ済み」の 3 つ（kanban S-01 の live 確認、②の回答待ち、⑤の作業待ち）。①のレビュー（R14 の 1.2 秒など）は PR #41 のマージで済んでいるが、結論の記録は無いので、あれば「①のレビューが必要な変更」の節に追記する。
 
 ## 依頼事項（縦割りの役割ごと・現在有効）
 
@@ -164,21 +164,21 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 **取り込み後のテスト**（`Riku_feature2` ＝ main `98fa5f8` を取り込み、2026-10-25、ローカル、mock＋実 CAS）：単体テスト全体 192 件：191 通過／0 失敗／1 skip（`pnpm --filter frontend test` と、`tests/unit/suggest/*.test.ts` ＋ `tests/unit/*.test.ts` の直接実行で同じ）、`tsc --noEmit` エラー 0、`eslint src tests` エラー 0（警告 11 件）、E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件など計 12 件通過（1.7 分。「a failed recognition…」も通過）。
 
-## Should：S-02 補助モード（実装）と S-03 BRIDGE（見積もりのみ）
+## Should：補助モード（assist_modes、実装）と行間補完（bridge、見積もりのみ）
 
-ブランチ `Riku_should`（main `f7fed90` から）。基準：`docs/design/v2.0-en.md` §2.2、§14.2、§17、ST-00／ST-02／ST-03。v2.1-deltas に S-02／S-03 の変更は無い。ADR にも無い。
+ブランチ `Riku_should`（main `f7fed90` から）。基準：`docs/design/v2.0-en.md` §2.2、§14.2、§17、ST-00／ST-02／ST-03。v2.1-deltas に補助モード・行間補完の変更は無い。ADR にも無い。
 
 ### 仕様の抜き出し
 
 | 項目 | 内容（v2.0） |
 | --- | --- |
-| S-02 | ヒント／完全補完の補助モード。フラグ `assist_modes`。依存：Must の補完と履歴 |
+| 補助モード（assist_modes） | ヒント／完全補完の補助モード。フラグ `assist_modes`。依存：Must の補完と履歴 |
 | 既定 | 完全補完（complete） |
 | ヒントモード | 補完を **隠す**。完全補完は Must の補完と（あれば）BRIDGE を有効にする |
 | 切り替え | `CHANGE_AI_MODE` を記録し、**epoch を進め、既存の候補を捨てる**。自動提案は実装しない |
 | フラグ OFF | 保存されたモードの制限は無視し、Must の補完を使える |
 | 受け入れ | ST-02：モード切り替え、古い候補の除去、Undo、オプションのモード無しでも Must の補完が動く。ST-00：すべての Should を OFF にして Must が通る |
-| S-03 | BRIDGE：隣り合う 2 つの確定した数式行の間に 1〜3 行を提案。フラグ `bridge`。依存：S-02 と Must CAS |
+| 行間補完（bridge） | BRIDGE：隣り合う 2 つの確定した数式行の間に 1〜3 行を提案。フラグ `bridge`。依存：補助モードと Must CAS |
 | BRIDGE 条件 | 両端は読み取り不能・wrong・未解決の修正を含まない。全体のロック（未解決 wrong）も適用。上の行から順に局所 CAS で検証し、下の行は最後の候補に対して検証。全部 ok の鎖だけ READY。直接検証できる組にも説明用の中間行を出してよい |
 | BRIDGE 採用 | 挿入は **1 コマンド**。下の行以降の親リンクと検証を更新し、再検証が終わるまで補完をロック。Undo 1 回で挿入行・親リンク・以前の判定を戻す |
 | bridge が OFF | Must の suggest に `mode=BRIDGE` が来たら `FEATURE_DISABLED` |
@@ -191,7 +191,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - `FeaturePlugin`（`src/features/types.ts`）の `toolbar` スロットは**定義だけで、どこにも描画されていなかった**。今回 `toolbar.tsx` に 1 か所足した（下）。
 - `plot`（PR #55）だけが先に実装されている。
 
-### S-02 の実装（フラグ OFF では今と全く同じ）
+### 補助モード（assist_modes）の実装（フラグ OFF では今と全く同じ）
 - `core/candidates/blocker.ts`：`AssistMode = 'hint' | 'complete'`、`SuggestBlocker` に `'hint-mode'`、`suggestBlockerOf` が `assistMode === 'hint'` なら最優先で `'hint-mode'`（省略は complete と同じ）、`blockerToastKey` が `toast.suggestHintMode`。
 - `notebook-store.ts`：`assistMode`（既定 `'complete'`）。**変えられるのは `assist_modes` の機能だけ**なので、OFF のときは常に `'complete'`＝今と同じ（コアはフラグを読まない）。
 - `engine.ts`：`setAssistMode(mode)`（③の補完まわりに追加）。同じモードなら何もしない。変えると、モードを設定 → epoch を進める → タイマー解除 → 進行中の要求を中断 → スロットと候補を捨てる → `suggesting` と `ghostConfirm` を戻す。`suggestBlocker()` も `'hint-mode'` を返す（自動のタイマーも手動ボタンも止まる）。
@@ -203,7 +203,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 **仮決め**
 - **`CHANGE_AI_MODE` を元に戻せるコマンド（履歴）にはしていない**。`history.ts` の `CommandType`（編集の履歴）は①の領域なので触っていない。モードの切り替えは Undo に入らない。仕様の「記録する」は、必要なら①に `CommandType` 追加を頼む。
 - モードは **保存しない**（再読み込みで complete に戻る）。保存はユーザー設定（⑤・共有）の領域。
-- ヒントモードの間、**ヒントそのもの（S-01）は出ない**。S-01 は別機能（`hints`）。
+- ヒントモードの間、**ヒントそのもの（`hints` 機能）は出ない**。`hints` は別機能。
 - `toolbar.tsx` の変更は補完ボタンの外（スロット描画）に 3 行出ている。**①／共有 UI のレビューをお願いしたい**。
 
 **ほかの担当への依頼・報告**
@@ -212,12 +212,12 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - ①：`CHANGE_AI_MODE` を履歴に入れるか。
 
 ### 既知の差分と今回の扱い
-- **S-03 BRIDGE は今回見送り**（v2.0 §17「時間が足りなければ、ブリッジを先に切る」に従う）。実装しないので、`bridge` フラグも使わない。下の見積もりは、あとで着手するときのため。
+- **行間補完（bridge）は今回見送り**（v2.0 §17「時間が足りなければ、ブリッジを先に切る」に従う）。実装しないので、`bridge` フラグも使わない。下の見積もりは、あとで着手するときのため。
 - **ST-02 との既知の差分**：ST-02 は「モード切り替え、古い候補の除去、Undo」を見るが、**モード切り替えを Undo の対象にしていない**（`CHANGE_AI_MODE` を履歴に入れていない。`history.ts` が①の領域のため）。候補の除去と epoch の移動は実装済みでテストしている。
-- **S-02 のフラグ ON の確認は、ユーザーがブラウザで行う**（`NEXT_PUBLIC_ENABLED_FEATURES=assist_modes` で起動）。③は、ON の登録簿が型として通ることと、単体テスト（9 件）までしか確認していない。ON の E2E は無い。
+- **補助モード（assist_modes）のフラグ ON の確認は、ユーザーがブラウザで行う**（`NEXT_PUBLIC_ENABLED_FEATURES=assist_modes` で起動）。③は、ON の登録簿が型として通ることと、単体テスト（9 件）までしか確認していない。ON の E2E は無い。
 - **`toolbar` スロットを使う既存の機能は無い**：`features/` で `toolbar` を登録しているのは `assist-modes` だけ。`plot`（PR #55）は `lineActions` だけを登録するので、`plot` を ON にしても ツールバーの表示は変わらない（確認済み）。今後 `toolbar` を使う機能が増えたら、ボタンが補完ボタンの前に並ぶ。
 
-### S-03 BRIDGE：作業量の見積もり（実装しない）
+### 行間補完（bridge）：作業量の見積もり（実装しない）
 
 **見積もり：大**（補完の約半分に当たる新規。③だけでは終わらず、①②⑤の領域にもかかる）。
 
@@ -229,7 +229,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 5. **候補の表示（③、`ghost-line.tsx`）**：複数行の破線表示、2 つの行の間に差し込む位置。
 6. **採用（③＋①）**：**1 コマンド**で複数行を挿入、下の行の親リンクと検証を更新、再検証が終わるまでロック、Undo 1 回で戻す。`adopt` を複数行対応に（いまは `c.lines[0]` 固定）。`history.ts` の `CommandType` 追加（①）。
 7. **②**：下の行の親が変わる再検証（`recheckStale` と `parent_id` の扱い）、`markRecovery` との関係。
-8. **フラグ**：`bridge` を有効にする `features/bridge/`、S-02 が前提。
+8. **フラグ**：`bridge` を有効にする `features/bridge/`、補助モードが前提。
 9. **テスト**：ST-03（検証済みブリッジ、下流の再検証、まとめた Undo）、BRIDGE が OFF のとき拒否。
 
 目安：単体で動く最小版（選択 UI 無し、サーバーと検証と採用だけ）でも、③の作業は 1 日規模。UI まで含めると、①との調整込みで 1.5〜2 日。時間が足りなければ、仕様 §17 の「時間が足りなければ BRIDGE から切る」に従う。
@@ -263,7 +263,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 | 項目 | 操作 | 結果 |
 | --- | --- | --- |
-| S-01 右辺補完 | 行1「A^2 L/2 = 1」、行2「A =」で補完（COMPLETE_RHS） | 候補「A = √(2/L)」が返り、採用できた。採用後の行2の判定は **「未検証」**。S-01 の完了条件（`A =` に対して `A = √(2/L)` が返る）は **満たした** |
+| kanban S-01 右辺補完 | 行1「A^2 L/2 = 1」、行2「A =」で補完（COMPLETE_RHS） | 候補「A = √(2/L)」が返り、採用できた。採用後の行2の判定は **「未検証」**。kanban S-01 の完了条件（`A =` に対して `A = √(2/L)` が返る）は **満たした** |
 | 次の一手 | 「1 + 1 = 2」の次で補完（NEXT_STEP） | 「ここで ψ(x) = √(2/L) sin(nπx/L)」という **仮定の提案**が出た。直前の行から離れた提案で、問題カードか参考資料（`reference`）に引っぱられた可能性がある |
 
 - **観察として記録するだけ**：次の一手のプロンプトの調整は今はしない。
@@ -272,7 +272,7 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - **採用後の行2が「未検証」になった原因**：調査済み。上の「問題カードの廃止（PR #52）と、補完の前提」の節。推測の結論：`A > 0`、`L > 0` の前提の行が無く、`SUBSET_OF_SOLUTIONS` で unknown。
 - **E2E の注意**：ここでの live は人手の確認で、自動の E2E ではない。自動 E2E は引き続き mock＋実 CAS のみ。
 
-## S-04：wrong の行があるあいだのロック（完了）
+## kanban S-04：wrong の行があるあいだのロック（完了）
 
 wrong の行が残っているあいだは補完しない（v2.0 §11、P-06）。ブラウザとサーバーの二重のガード。コミット `b671464`。
 
@@ -331,7 +331,7 @@ wrong の行が残っているあいだは補完しない（v2.0 §11、P-06）�
 
 ### 5. E2E の修正 — 本 PR 内
 
-`tests/e2e/checking.spec.ts` の 1 テスト（補完ロックの確認）で、グレー表示のボタンを `click({ force: true })` で押すように変更した（上の S-04 の節を参照）。
+`tests/e2e/checking.spec.ts` の 1 テスト（補完ロックの確認）で、グレー表示のボタンを `click({ force: true })` で押すように変更した（上の kanban S-04 の節を参照）。
 
 ### 6. 同じ作業で直した③側の不具合 — `d4ffffa`
 
