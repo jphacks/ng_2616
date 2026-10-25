@@ -65,6 +65,9 @@ export const en = {
   'home.doneSelecting': 'Done selecting',
   'home.deletedMany': 'Deleted {n} notebooks',
   'home.actionFailed': 'That did not work: {msg}',
+  'home.showMore': 'Show {n} more notebooks',
+  'home.showOneMore': 'Show 1 more notebook',
+  'home.shownOf': '{shown} of {total} notebooks shown',
 
   'progress.title': 'Your progress',
   'progress.subjects': 'Subjects',

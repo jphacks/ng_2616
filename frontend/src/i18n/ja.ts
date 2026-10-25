@@ -67,6 +67,9 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'home.doneSelecting': '選択を終了',
   'home.deletedMany': '{n}件のノートを削除しました',
   'home.actionFailed': '操作できませんでした：{msg}',
+  'home.showMore': 'さらに{n}冊表示',
+  'home.showOneMore': 'さらに1冊表示',
+  'home.shownOf': '{total}冊中{shown}冊を表示',
 
   'progress.title': 'あなたの学習',
   'progress.subjects': '分野',
