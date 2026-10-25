@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { ArrowDownUp, Atom, Copy, Info, Infinity as InfinityIcon, Palette, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
+import { ArrowDownUp, Atom, ChevronDown, Copy, Info, Infinity as InfinityIcon, Palette, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
@@ -38,6 +38,8 @@ const PRESET_ICON: Record<PresetId, ComponentType<LucideProps>> = {
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
 // a deleted card can be restored from the toast until this passes
 const UNDO_MS = 5000;
+// the list shows this many notebooks at first and per "show more", so the sections below stay close
+const PAGE = 12;
 
 export function NotebookHome() {
   const t = useT();
@@ -50,6 +52,7 @@ export function NotebookHome() {
   const [creating, setCreating] = useState<PresetId | null>(null);
   const [local, setLocal] = useState(false);
   const [query, setQuery] = useState('');
+  const [limit, setLimit] = useState(PAGE);
   const [deleted, setDeleted] = useState<NotebookSummary[]>([]);
   // selection mode: which cards are picked, or null when not selecting
   const [selected, setSelected] = useState<Set<string> | null>(null);
@@ -135,6 +138,8 @@ export function NotebookHome() {
     const shown = items.filter((n) => !hidden.has(n.id) && (!q || n.title.toLocaleLowerCase(locale).includes(q)));
     return arrange(shown, prefs, locale);
   }, [items, deleted, query, prefs, locale]);
+  // every notebook is loaded; only the first `limit` are drawn
+  const page = useMemo(() => visible?.slice(0, limit) ?? null, [visible, limit]);
 
   const create = async (id: PresetId) => {
     if (!user) return;
@@ -166,8 +171,9 @@ export function NotebookHome() {
     },
     duplicate: (id) => void duplicateMany([id]),
     remove: (nb) => removeMany([nb]),
+    // the grid reorders the cards it shows; the ones not shown yet keep their place after them
     reorder: (ids) => {
-      prefs.setOrder(ids);
+      prefs.setOrder([...ids, ...(visible?.slice(ids.length).map((n) => n.id) ?? [])]);
       if (prefs.sort !== 'custom') prefs.setSort('custom');
     },
     select: (id) => setSelected(new Set([id])),
@@ -291,7 +297,13 @@ export function NotebookHome() {
           <section className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="flex-1 text-3xl font-semibold text-balance">{t('home.title')}</h2>
-              <SearchField value={query} onChange={setQuery} />
+              <SearchField
+                value={query}
+                onChange={(q) => {
+                  setQuery(q);
+                  setLimit(PAGE);
+                }}
+              />
               <SortMenu value={prefs.sort} onChange={prefs.setSort} />
             </div>
             {visible === null ? (
@@ -320,7 +332,17 @@ export function NotebookHome() {
                 </div>
               )
             ) : (
-              <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} selected={selected} actions={actions} />
+              <>
+                <NotebookGrid items={page!} reorderable={!query.trim()} stagger={firstLoad} selected={selected} actions={actions} />
+                {visible.length > limit && (
+                  <div className="flex flex-col items-center gap-2 pt-2">
+                    <Button variant="secondary" icon={<ChevronDown size={16} aria-hidden />} onClick={() => setLimit((n) => n + PAGE)}>
+                      {visible.length - limit === 1 ? t('home.showOneMore') : t('home.showMore', { n: Math.min(PAGE, visible.length - limit) })}
+                    </Button>
+                    <p className="text-sm text-muted tabular-nums">{t('home.shownOf', { shown: limit, total: visible.length })}</p>
+                  </div>
+                )}
+              </>
             )}
           </section>
 
@@ -343,7 +365,7 @@ export function NotebookHome() {
                 <X size={18} aria-hidden />
               </button>
               <span className="min-w-24 px-1 text-base font-medium tabular-nums">{t('home.selected', { n: picked.length })}</span>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(visible?.map((n) => n.id)))}>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(page?.map((n) => n.id)))}>
                 {t('home.selectAll')}
               </Button>
               <Button
