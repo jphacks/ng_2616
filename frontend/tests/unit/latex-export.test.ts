@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { PdfDocument } from '@mn/contracts';
+import type { Notebook, PdfDocument } from '@mn/contracts';
 import { serializeLatex, escapeTex } from '../../src/core/export/latex';
+import { safeRawMath } from '../../src/core/export/raw-math';
 import { serializeNotebook } from '../../src/core/export/document';
 import { buildNotebook } from '../../src/core/presets';
 
@@ -37,6 +38,28 @@ describe('LuaLaTeX homework report', () => {
     assert.ok(!serializeLatex(doc).includes('\\input{secret}'));
     doc.sections[0]!.blocks[0]!.fragments = [{ kind: 'math', value: '\\directlua{os.execute("bad")}' }];
     assert.throws(() => serializeLatex(doc), /IR_INVALID/);
+  });
+  it('typesets proof notation outside the IR (\\min, \\forall, \\Rightarrow) instead of printing its source', () => {
+    const nb = buildNotebook('epsilon_delta', 'en');
+    const raw = (latex: string) => ({ type: 'math' as const, expr: ['Unparsed', latex] as ['Unparsed', string], notation: 'plain' as const, latex });
+    const line = (id: string, segments: Notebook['lines'][number]['segments']) => ({ ...nb.lines[0]!, id, role: 'step' as const, segments });
+    nb.lines.splice(nb.lines.length - 1, 0,
+      line('l1', [{ type: 'text', text: 'Choose ' }, raw('\\delta = \\min \\left( 1, \\frac{\\varepsilon}{5} \\right)')]),
+      line('l2', [raw('\\forall \\varepsilon > 0 \\, \\exists \\delta > 0')]),
+      line('l3', [raw('|x - 2| < 1 \\Rightarrow |x + 2| < 5')]));
+    const tex = serializeLatex(serializeNotebook(nb, 'en').document);
+    assert.ok(tex.includes('Choose $\\delta = \\min \\left( 1, \\frac{\\varepsilon}{5} \\right)$'), tex);
+    assert.ok(tex.includes('\\ReportEquation{\\forall \\varepsilon > 0 \\, \\exists \\delta > 0}'));
+    assert.ok(tex.includes('\\ReportEquation{|x - 2| < 1 \\Rightarrow |x + 2| < 5}'));
+    assert.ok(!tex.includes('\\textbackslash{}delta'));
+  });
+  it('keeps raw notation as escaped text unless every token is plain math', () => {
+    for (const attack of ['\\input{/etc/passwd}', '\\min ^^5cinput{x}', '\\def\\x{1} x', '\\catcode`\\@=11', 'x % comment', 'a & b', '\\frac{1}{2', '\\left( x', '\\text{a^b}', '\\directlua{os.exit()}', 'x \\\\ y']) {
+      assert.equal(safeRawMath(attack), null, attack);
+    }
+    assert.equal(safeRawMath('δ = min(1, ε/5)'), '\\delta = min(1, \\varepsilon /5)');
+    assert.equal(safeRawMath('x \\lt 2'), 'x < 2');
+    assert.equal(safeRawMath('\\forall x \\text{ with } x > 0'), '\\forall x \\text{ with } x > 0');
   });
   it('supports the existing notebook presets without changing the notebook', () => {
     for (const preset of ['expansion', 'integral', 'schrodinger'] as const) {

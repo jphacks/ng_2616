@@ -1,7 +1,8 @@
 import { PdfDocumentSchema, type PdfDocument } from '@mn/contracts';
 import { parseMathLatex, printSegmentLatex, validateExpr } from '@mn/contracts/ir';
+import { safeRawMath } from './raw-math';
 
-/** Only text is escaped; math is parsed and reprinted through the shared IR. */
+/** Only text is escaped; math is parsed and reprinted through the shared IR, or rebuilt from allowed tokens. */
 export function escapeTex(text: string): string {
   const escapes: Record<string, string> = { '\\': '\\textbackslash{}', '{': '\\{', '}': '\\}', '$': '\\$', '&': '\\&', '#': '\\#', '%': '\\%', '_': '\\_', '^': '\\textasciicircum{}', '~': '\\textasciitilde{}' };
   return text.replace(/[\\{}$&#%_^~]/g, c => escapes[c]!).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\r\n?/g, '\n');
@@ -9,8 +10,11 @@ export function escapeTex(text: string): string {
 
 function mathTex(value: string): string {
   const parsed = parseMathLatex(value);
-  if (!parsed.ok || validateExpr(parsed.expr)) throw new Error('IR_INVALID');
-  return printSegmentLatex(parsed.expr, parsed.notation);
+  if (parsed.ok && !validateExpr(parsed.expr)) return printSegmentLatex(parsed.expr, parsed.notation);
+  // notation outside the IR (\min, \forall, …) typesets only if every token is on the allow-list
+  const raw = safeRawMath(value);
+  if (raw === null) throw new Error('IR_INVALID');
+  return raw;
 }
 
 /** A fixed, self-contained adaptation of homework_example.tex; sample answers are excluded. */

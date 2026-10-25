@@ -1,6 +1,7 @@
 import { NotebookSchema, PdfDocumentSchema, hashOf, type Line, type Notebook, type PdfBlock, type PdfDocument, type PdfFragment, type Segment, type UiLang } from '@mn/contracts';
 import { printSegmentLatex, validateExpr, type MathJSON } from '@mn/contracts/ir';
 import { inputHash, payloadForLine } from '@/core/cas/payload';
+import { safeRawMath } from './raw-math';
 
 const MAX_LINES = 500;
 
@@ -21,6 +22,9 @@ function contains(expr: MathJSON, operator: string): boolean {
 function formula(expr: MathJSON, notation: 'plain' | 'continuation' = 'plain'): PdfFragment {
   if (validateExpr(expr)) throw new Error('IR_INVALID');
   if (contains(expr, 'Unparsed')) {
+    // A whole formula outside the IR grammar typesets when every token is plain notation (raw-math.ts)
+    const safe = Array.isArray(expr) && expr[0] === 'Unparsed' ? safeRawMath(String(expr[1])) : null;
+    if (safe !== null) return { kind: 'math', value: safe };
     // Never let raw recognition strings become executable TeX, including nested Unparsed nodes.
     const raw = (e: MathJSON): string => Array.isArray(e) ? e[0] === 'Unparsed' ? String(e[1]) : `${e[0]}(${e.slice(1).map(raw).join(', ')})` : String(e ?? '');
     return text(raw(expr));
