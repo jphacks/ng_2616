@@ -84,6 +84,12 @@ export class GeminiProvider implements LlmProvider {
   }
 }
 
+const LATEX_N_CMDS = /^(?:notag|nu|nabla|neq|ne|newline)(?![a-zA-Z])/;
+const LATEX_T_CMDS = /^(?:tau|theta|times|to|tan|text|tilde|top|triangle|tint|tfrac)(?![a-zA-Z])/;
+const LATEX_R_CMDS = /^(?:right|rho|rangle|rightarrow|Re)(?![a-zA-Z])/;
+const LATEX_F_CMDS = /^(?:frac|flat|forall|varphi)(?![a-zA-Z])/;
+const LATEX_B_CMDS = /^(?:beta|bar|binom|mathbf|bm|bullet)(?![a-zA-Z])/;
+
 /**
  * Repairs raw JSON from LLMs when LaTeX formulas contain single backslashes.
  * In JSON strings, single-backslash LaTeX commands like \frac, \tau, \notag, \int, \sqrt
@@ -136,14 +142,30 @@ export function repairJsonLatex(jsonStr: string): string {
         i += 6;
         continue;
       }
-      // If JSON whitespace escape (\n, \r, \t) NOT followed by a letter, preserve it
-      if ((next === 'n' || next === 'r' || next === 't') && !/[a-zA-Z]/.test(jsonStr[i + 2] ?? '')) {
+
+      const rest = jsonStr.slice(i + 1);
+      const isLatex =
+        (next === 'n' && LATEX_N_CMDS.test(rest)) ||
+        (next === 't' && LATEX_T_CMDS.test(rest)) ||
+        (next === 'r' && LATEX_R_CMDS.test(rest)) ||
+        (next === 'f' && LATEX_F_CMDS.test(rest)) ||
+        (next === 'b' && LATEX_B_CMDS.test(rest));
+
+      if (isLatex) {
+        result += '\\\\';
+        i++;
+        continue;
+      }
+
+      // If valid JSON control escape (\n, \r, \t, \b, \f) not matching a LaTeX command, preserve it
+      if (next === 'n' || next === 'r' || next === 't' || next === 'b' || next === 'f') {
         result += '\\' + next;
         i += 2;
         continue;
       }
+
       // Any other backslash in JSON string is a LaTeX command:
-      // \frac, \tint, \notag, \tau, \theta, \int, \sqrt, \,
+      // \int, \sqrt, \,
       result += '\\\\';
       i++;
       continue;
