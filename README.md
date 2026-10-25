@@ -4,7 +4,7 @@
 
 学習支援 × Tech: MathIDEは、大学数学の学習を支援する手書きノートアプリです。途中式の検証やAIによる数式補完を通して、自分で考えることと、学習の効率化を両立します。
 
-[![MathIDE デモ動画（60秒）：手書き、途中式の検証、誤りのヒント、AIの補完、PDFの入出力、学習の振り返り。クリックで再生](docs/images/showreel.png)](docs/images/showreel.mp4)
+https://github.com/user-attachments/assets/8e911532-a6e5-47a5-88d1-2320b7d7adfd
 
 ## 1. 背景と課題
 
