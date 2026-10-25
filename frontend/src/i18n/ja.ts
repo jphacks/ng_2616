@@ -466,7 +466,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'pdf.homework': '課題レポートのテンプレート',
   'pdf.templateHelp': '提供されたテンプレートを基に、左に授業名・所属、右に氏名・日付、中央に課題名、区切り線の下に設問と解答を配置します。',
   'pdf.course': '授業名',
-  'pdf.defaultCourse': '実解析入門',
+  'pdf.defaultCourse': '解析学',
   'pdf.institution': '所属・プログラム・クラス',
   'pdf.date': '提出日',
   'pdf.exercise': '設問番号',

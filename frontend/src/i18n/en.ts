@@ -464,7 +464,7 @@ export const en = {
   'pdf.homework': 'Homework report template',
   'pdf.templateHelp': 'Based on the supplied homework template: course and affiliation on the left, author and date on the right, a centered title, rule, and exercise body.',
   'pdf.course': 'Course',
-  'pdf.defaultCourse': 'Introduction to Real Analysis',
+  'pdf.defaultCourse': 'Analysis',
   'pdf.institution': 'Institution / program / class',
   'pdf.date': 'Submission date',
   'pdf.exercise': 'Exercise number',
