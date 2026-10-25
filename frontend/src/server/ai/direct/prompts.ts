@@ -5,11 +5,12 @@ import type { Part } from './providers/types';
 
 const LATEX_CONVENTIONS = `LaTeX conventions (the output is read by a strict parser):
 - Fractions \\frac{a}{b}; roots \\sqrt{x}; powers x^{2}; subscripts E_{n}.
-- Greek letters as commands (\\psi, \\Psi, \\phi, \\pi); ħ as \\hbar; the imaginary unit as i; exponentials as e^{...}; \\sin, \\cos, \\tan, \\ln.
+- Greek letters as commands (\\psi, \\Psi, \\phi, \\pi); ħ as \\hbar; the imaginary unit as i; exponentials as e^{...}; \\sin, \\cos, \\tan, \\arctan, \\arcsin, \\arccos, \\ln.
 - Derivatives in Leibniz form exactly as written: \\frac{d\\phi}{dt}, \\frac{d^{2}\\psi}{dx^{2}}, \\frac{\\partial \\Psi}{\\partial t}, \\frac{\\partial^{2} \\Psi}{\\partial x^{2}}; primes as f'(x).
 - Integrals \\int_{a}^{b} f(x) \\, dx; evaluation brackets \\left[ F(x) \\right]_{a}^{b}; sums \\sum_{n=1}^{\\infty}.
 - ± as \\pm. Write \\cdot only where a multiplication dot is drawn.
-- Never use \\text, $ signs, environments, \\\\ or &. Enumerations such as "n = 1, 2, 3, …" belong in a text segment.`;
+- Never use \\text, $ signs, environments, \\\\ or &. Enumerations such as "n = 1, 2, 3, …" belong in a text segment.
+- Formatting: in your JSON response, backslashes in LaTeX strings MUST be escaped (e.g. "\\\\frac{a}{b}", "\\\\int_{a}^{b}"). The integral command is strictly \\\\int (never \\\\tint). Do not output equation tags (such as \\\\notag).`;
 
 export const RECOGNIZE_SYSTEM = `You transcribe ONE line of handwritten mathematics from an image into JSON. You are a faithful transcriber, never a solver.
 

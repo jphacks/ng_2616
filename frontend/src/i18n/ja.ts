@@ -144,6 +144,9 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'tool.undo': '元に戻す',
   'tool.redo': 'やり直す',
   'tool.suggest': '次の一歩を提案',
+  'tool.autoSuggest': '自動',
+  'tool.autoSuggestOn': '自動補完オン：手を止めると提案が出ます。押すとオフ。',
+  'tool.autoSuggestOff': '自動補完オフ：提案ボタンで呼び出します。押すとオン。',
   'tool.newLine': '新しい行',
   'tool.clear': '行を消去',
 
@@ -357,6 +360,12 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.suggestPending': '行の確認が終わってから、もう一度押してください。',
   'toast.suggestCannotContinue': 'この行からはまだ続けられません。先に確認するか、直してください。',
   'toast.suggestBusy': '提案を作成中か、採用待ちの提案があります。',
+  'toast.suggestHintMode': 'ヒントモードなので補完は出ません。補完を使うには「完全補完」に切り替えてください。',
+  'toast.suggestAssistOff': '補助がオフなので補完は出ません。補完を使うには補助モードを切り替えてください。',
+  'assist.off': 'オフ',
+  'assist.hint': 'ヒント',
+  'assist.complete': '完全補完',
+  'assist.label': '補助モード',
   'toast.suggestHeld': '提案の準備ができています。書き終えると表示されます。',
   'toast.waitForChecks': '現在の検証が終わるまでお待ちください。',
 

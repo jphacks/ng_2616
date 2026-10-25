@@ -25,7 +25,7 @@ import {
   type UiLang,
 } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, continuable, graphAsk, hasOwnLine, suggestBaseLine, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, continuable, graphAsk, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
@@ -610,9 +610,39 @@ export class NotebookEngine {
     this.suggestTimer = null;
   }
 
+  /**
+   * S-02 (spec §14.2): "hint" hides completion, "complete" is the normal completion. A change drops
+   * the candidate on show and any request on its way, and moves the epoch so a late result is stale.
+   * The change is not an undoable command (the history types belong to the editing code).
+   */
+  setAssistMode(mode: AssistMode) {
+    const s = store.getState();
+    if (s.assistMode === mode) return;
+    s.set('assistMode', mode);
+    s.bumpEpoch();
+    this.cancelSuggestion();
+    this.abortSlot('suggest');
+    this.suggestSlot = null;
+    s.set('candidate', null);
+    s.set('suggesting', false);
+    s.set('ghostConfirm', false);
+  }
+
+  /**
+   * Switches suggestions that start by themselves after a pause (on by default). Off stops the timer and
+   * leaves them to the suggest button; a suggestion already shown or on its way is kept.
+   */
+  setAutoSuggest(on: boolean) {
+    const s = store.getState();
+    if (s.autoSuggest === on) return;
+    s.set('autoSuggest', on);
+    if (on) this.scheduleSuggestion();
+    else this.cancelSuggestion();
+  }
+
   scheduleSuggestion(delay = SUGGEST_IDLE_MS) {
     this.cancelSuggestion();
-    if (!this.canSuggest(false)) return;
+    if (!store.getState().autoSuggest || !this.canSuggest(false)) return;
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 
@@ -620,6 +650,8 @@ export class NotebookEngine {
     const s = store.getState();
     const nb = s.notebook;
     if (!nb) return 'none';
+    if (s.assistMode === 'hint') return 'hint-mode';
+    if (s.assistMode === 'off') return 'assist-off';
     if (this.cas.status !== 'ready') return 'cas';
     if (anyPending(nb) || Object.keys(s.leanPending).length > 0) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';

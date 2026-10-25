@@ -170,6 +170,12 @@ def to_sympy(e: Any, env: Env, subst: bool = True, dvars: tuple[str, ...] = (), 
         return sp.cos(c(args[0]))
     if h == "Tan":
         return sp.tan(c(args[0]))
+    if h == "ArcTan":
+        return sp.atan(c(args[0]))
+    if h == "ArcSin":
+        return sp.asin(c(args[0]))
+    if h == "ArcCos":
+        return sp.acos(c(args[0]))
     if h == "Exp":
         return sp.exp(c(args[0]))
     if h == "Ln":

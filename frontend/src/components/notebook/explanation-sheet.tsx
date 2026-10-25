@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { CornerUpLeft, Flag, Lightbulb, Search, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { FEATURES } from '@/features/registry.generated';
+import { hintsAllowedIn } from '@/core/candidates/blocker';
 import { findLine, isGiven, lineNumber } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -75,6 +76,7 @@ function hintText(t: ReturnType<typeof useT>, nb: Notebook, h: Proof['hints'][nu
 function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
   const t = useT();
   const engine = useEngine();
+  const hintsAllowed = useNotebook((s) => hintsAllowedIn(s.assistMode));
   const [shown, setShown] = useState<{ evidence: boolean; hint1: boolean; hint2: boolean }>({ evidence: false, hint1: false, hint2: false });
   const root = line.recovery_root_id ?? line.id;
   const open = (k: 'evidence' | 'hint1' | 'hint2') => {
@@ -89,12 +91,16 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
         <Button variant={shown.evidence ? 'secondary' : 'accent-soft'} icon={<Search size={17} />} onClick={() => open('evidence')}>
           {t('sheet.showEvidence')}
         </Button>
-        <Button variant={shown.hint1 ? 'secondary' : 'accent-soft'} icon={<Lightbulb size={17} />} onClick={() => open('hint1')}>
-          {t('sheet.hint1')}
-        </Button>
-        <Button variant={shown.hint2 ? 'secondary' : 'accent-soft'} icon={<Lightbulb size={17} />} onClick={() => open('hint2')} disabled={!shown.hint1}>
-          {t('sheet.hint2')}
-        </Button>
+        {hintsAllowed && (
+          <>
+            <Button variant={shown.hint1 ? 'secondary' : 'accent-soft'} icon={<Lightbulb size={17} />} onClick={() => open('hint1')}>
+              {t('sheet.hint1')}
+            </Button>
+            <Button variant={shown.hint2 ? 'secondary' : 'accent-soft'} icon={<Lightbulb size={17} />} onClick={() => open('hint2')} disabled={!shown.hint1}>
+              {t('sheet.hint2')}
+            </Button>
+          </>
+        )}
       </div>
       {shown.evidence && (
         <section className="animate-rise space-y-2">
@@ -104,8 +110,8 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
           ))}
         </section>
       )}
-      {shown.hint1 && h1 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-base text-ink">{hintText(t, nb, h1)}</p>}
-      {shown.hint2 && h2 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-base text-ink">{hintText(t, nb, h2)}</p>}
+      {hintsAllowed && shown.hint1 && h1 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-base text-ink">{hintText(t, nb, h1)}</p>}
+      {hintsAllowed && shown.hint2 && h2 && <p className="animate-rise rounded-2xl bg-accent-soft/60 p-4 text-base text-ink">{hintText(t, nb, h2)}</p>}
     </div>
   );
 }
