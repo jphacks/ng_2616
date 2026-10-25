@@ -28,14 +28,12 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
 
   const lines = preview?.lines.length ? preview.lines : [null];
   return (
-    <div ref={box} aria-hidden className="absolute inset-0 overflow-hidden bg-paper">
+    <div ref={box} aria-hidden className="graph-paper absolute inset-0 overflow-hidden">
       {scale !== null && (
         <div className="absolute top-0 left-0 origin-top-left p-4" style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})` }}>
-          <div className="rounded-2xl bg-sheet shadow-card">
-            {lines.map((line, i) => (
-              <PreviewRow key={i} number={i + 1} line={line} />
-            ))}
-          </div>
+          {lines.map((line, i) => (
+            <PreviewRow key={i} number={i + 1} line={line} />
+          ))}
         </div>
       )}
     </div>
@@ -44,8 +42,8 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
 
 function PreviewRow({ number, line }: { number: number; line: PreviewLine | null }) {
   return (
-    <div className="ruled flex h-[84px] items-center gap-3 overflow-hidden pr-5">
-      <span className="w-10 shrink-0 self-start pt-3 text-right text-xs text-faint tabular-nums">{number}</span>
+    <div className="flex h-[84px] items-center gap-3 overflow-hidden pr-5">
+      <span className="w-10 shrink-0 text-right text-2xs font-medium text-faint tabular-nums">{number}</span>
       <div className="min-w-0 flex-1 overflow-hidden">
         {line?.segments.length ? (
           <div className="flex items-center gap-x-4 whitespace-nowrap">

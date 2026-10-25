@@ -73,7 +73,7 @@ export function NotebookPage() {
     >
       <div style={zoomed ? { width: size.width * zoom, height: size.height * zoom } : undefined}>
       <div ref={content} className="pb-40" style={zoomed ? { width: size.width, transform: `scale(${zoom})`, transformOrigin: '0 0' } : undefined}>
-      <div className="mx-4 mt-4 rounded-2xl bg-sheet shadow-card">
+      <div className="mx-4 mt-4 border-t border-rule">
         {nb.lines.map((line, i) => {
           const ancestor = line.verified?.proof.unverified_ancestors[0];
           return (

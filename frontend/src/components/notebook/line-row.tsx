@@ -201,7 +201,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
 function Gutter({ n, line }: { n: number; line: Line }) {
   const t = useT();
   return (
-    <div className="flex w-12 shrink-0 flex-col items-end gap-1 pt-4 text-right text-sm tabular-nums text-faint">
+    <div className="flex w-10 shrink-0 flex-col items-end gap-1 self-center text-right text-2xs font-medium tabular-nums text-faint">
       <span>{n}</span>
       {line.role === 'premise' && (
         <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>

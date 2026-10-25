@@ -107,7 +107,7 @@ export function SwipeRow({ id, actions, className, children }: { id: string; act
             setOpen(null);
           }
         }}
-        className={clsx('relative bg-sheet', className)}
+        className={clsx('relative bg-canvas', className)}
       >
         {children}
       </motion.div>
