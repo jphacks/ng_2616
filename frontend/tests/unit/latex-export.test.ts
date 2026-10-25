@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { PdfDocument } from '@mn/contracts';
+import { segmentsFromSource, type Notebook, type PdfDocument } from '@mn/contracts';
 import { serializeLatex, escapeTex } from '../../src/core/export/latex';
+import { safeRawMath } from '../../src/core/export/raw-math';
 import { serializeNotebook } from '../../src/core/export/document';
 import { buildNotebook } from '../../src/core/presets';
 
@@ -37,6 +38,48 @@ describe('LuaLaTeX homework report', () => {
     assert.ok(!serializeLatex(doc).includes('\\input{secret}'));
     doc.sections[0]!.blocks[0]!.fragments = [{ kind: 'math', value: '\\directlua{os.execute("bad")}' }];
     assert.throws(() => serializeLatex(doc), /IR_INVALID/);
+  });
+  it('typesets proof notation outside the IR (\\min, \\forall, \\Rightarrow) instead of printing its source', () => {
+    const nb = buildNotebook('epsilon_delta', 'en');
+    const raw = (latex: string) => ({ type: 'math' as const, expr: ['Unparsed', latex] as ['Unparsed', string], notation: 'plain' as const, latex });
+    const line = (id: string, segments: Notebook['lines'][number]['segments']) => ({ ...nb.lines[0]!, id, role: 'step' as const, segments });
+    nb.lines.splice(nb.lines.length - 1, 0,
+      line('l1', [{ type: 'text', text: 'Choose ' }, raw('\\delta = \\min \\left( 1, \\frac{\\varepsilon}{5} \\right)')]),
+      line('l2', [raw('\\forall \\varepsilon > 0 \\, \\exists \\delta > 0')]),
+      line('l3', [raw('|x - 2| < 1 \\Rightarrow |x + 2| < 5')]));
+    const tex = serializeLatex(serializeNotebook(nb, 'en').document);
+    assert.ok(tex.includes('Choose $\\delta = \\min \\left( 1, \\frac{\\varepsilon}{5} \\right)$'), tex);
+    assert.ok(tex.includes('\\ReportEquation{\\forall \\varepsilon > 0 \\, \\exists \\delta > 0}'));
+    assert.ok(tex.includes('\\ReportEquation{|x - 2| < 1 \\Rightarrow |x + 2| < 5}'));
+    assert.ok(!tex.includes('\\textbackslash{}delta'));
+  });
+  it('spaces inline formulas in a sentence like the screen, except before punctuation and next to Japanese', () => {
+    const en = serializeLatex(serializeNotebook(buildNotebook('epsilon_delta', 'en'), 'en').document);
+    assert.ok(en.includes('every real $x$ with'), en);
+    const integral = serializeLatex(serializeNotebook(buildNotebook('integral', 'en'), 'en').document);
+    assert.ok(/Evaluate \$I.*\$ for \$a > 0\$\.\\par/.test(integral), integral);
+    const ja = serializeLatex(serializeNotebook(buildNotebook('integral', 'ja'), 'ja').document);
+    assert.ok(ja.includes('$a > 0$のとき$I') && ja.includes('$を求めなさい。'), ja);
+    const nb = buildNotebook('blank', 'en');
+    nb.lines.splice(0, 0, { ...nb.lines[0]!, id: 'two', role: 'step', state: 'SETTLED', segments: segmentsFromSource('so $x = 1$ $y = 2$') });
+    assert.ok(serializeLatex(serializeNotebook(nb, 'en').document).includes('so $x = 1$ $y = 2$\\par'));
+  });
+  it('sets Greek letters in text as math letters instead of the Japanese font', () => {
+    assert.equal(escapeTex('ε–δ: for every ε > 0'), '$\\varepsilon$–$\\delta$: for every $\\varepsilon$ > 0');
+    assert.equal(escapeTex('ΔΣΩ αβφ ϕ'), '$\\Delta$$\\Sigma$$\\Omega$ $\\alpha$$\\beta$$\\varphi$ $\\phi$');
+    assert.equal(escapeTex('Α'), '$\\mathrm{A}$');
+    assert.equal(escapeTex('|x − 2|'), '|x $-$ 2|');
+    const tex = serializeLatex(serializeNotebook(buildNotebook('epsilon_delta', 'ja'), 'ja').document);
+    assert.ok(tex.includes('$\\varepsilon$–$\\delta$論法'), tex);
+    assert.ok(!/[α-ωΑ-Ω]/.test(tex));
+  });
+  it('keeps raw notation as escaped text unless every token is plain math', () => {
+    for (const attack of ['\\input{/etc/passwd}', '\\min ^^5cinput{x}', '\\def\\x{1} x', '\\catcode`\\@=11', 'x % comment', 'a & b', '\\frac{1}{2', '\\left( x', '\\text{a^b}', '\\directlua{os.exit()}', 'x \\\\ y']) {
+      assert.equal(safeRawMath(attack), null, attack);
+    }
+    assert.equal(safeRawMath('δ = min(1, ε/5)'), '\\delta = min(1, \\varepsilon /5)');
+    assert.equal(safeRawMath('x \\lt 2'), 'x < 2');
+    assert.equal(safeRawMath('\\forall x \\text{ with } x > 0'), '\\forall x \\text{ with } x > 0');
   });
   it('supports the existing notebook presets without changing the notebook', () => {
     for (const preset of ['expansion', 'integral', 'schrodinger'] as const) {
