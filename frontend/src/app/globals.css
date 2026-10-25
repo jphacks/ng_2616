@@ -221,14 +221,22 @@ body {
   background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--color-rule) calc(100% - 1px));
 }
 
-/* Graph paper behind the notebook miniatures on the home grid */
+/* Graph paper behind the notebook page and its miniatures on the home grid */
 .graph-paper {
   --graph-line: color-mix(in oklch, var(--color-accent) 10%, white);
+  --graph-cell: 20px;
   background-color: var(--color-canvas);
   background-image:
     linear-gradient(var(--graph-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--graph-line) 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-size: var(--graph-cell) var(--graph-cell);
+}
+
+/* the notebook page itself: fainter squares, so handwriting stays in front, sized to keep the
+   miniatures' proportion of text to squares */
+.graph-paper-page {
+  --graph-line: color-mix(in oklch, var(--color-accent) 6%, white);
+  --graph-cell: 18px;
 }
 
 .shimmer {

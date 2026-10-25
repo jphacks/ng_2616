@@ -68,7 +68,7 @@ export function NotebookPage() {
     <div
       ref={scroller}
       data-scroll-container="1"
-      className={clsx('scrollbar-thin h-full overscroll-contain', zoomed ? 'overflow-auto' : 'overflow-x-hidden overflow-y-auto')}
+      className={clsx('scrollbar-thin graph-paper graph-paper-page h-full overscroll-contain bg-local', zoomed ? 'overflow-auto' : 'overflow-x-hidden overflow-y-auto')}
       style={{ touchAction: 'pan-x pan-y' }}
     >
       <div style={zoomed ? { width: size.width * zoom, height: size.height * zoom } : undefined}>
