@@ -7,3 +7,4 @@ export * from './exports';
 export * from './declarations';
 export * from './lean';
 export type { MathJSON } from './ir/ops';
+export * from './graph';
