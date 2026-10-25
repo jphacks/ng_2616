@@ -1572,6 +1572,67 @@
     }
   },
   {
+    "id": "CF-12c",
+    "note": "± of a symbolic square root: the same solutions written two ways",
+    "expect": {
+      "status": "ok"
+    },
+    "payload": {
+      "lines": [
+        {
+          "id": "L1",
+          "role": "step",
+          "segments": [
+            {
+              "type": "math",
+              "expr": [
+                "Equal",
+                [
+                  "Power",
+                  "x",
+                  2
+                ],
+                "y"
+              ],
+              "notation": "plain"
+            }
+          ],
+          "status": "none",
+          "unverified_ancestors": [],
+          "segment_results": [
+            {
+              "segment_index": 0,
+              "status": "none",
+              "reason": "NO_PARENT"
+            }
+          ]
+        }
+      ],
+      "target": {
+        "id": "T",
+        "role": "step",
+        "segments": [
+          {
+            "type": "math",
+            "expr": [
+              "Equal",
+              "x",
+              [
+                "PlusMinus",
+                [
+                  "Sqrt",
+                  "y"
+                ]
+              ]
+            ],
+            "notation": "plain"
+          }
+        ]
+      },
+      "parent_id": "L1"
+    }
+  },
+  {
     "id": "CF-13",
     "note": "exact fractions",
     "expect": {
