@@ -2,7 +2,7 @@
 
 import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
-import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
+import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, StickyNote, Trash2, TriangleAlert } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { FEATURES } from '@/features/registry.generated';
 import { useNotebook } from '@/core/store/notebook-store';
@@ -86,15 +86,24 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   const swipe: SwipeAction[] =
     line.state === 'SETTLED'
       ? [
-          ...(line.verified?.proof.status === 'wrong'
-            ? [{ label: t('line.revise'), icon: <CornerUpLeft size={18} />, onClick: () => engine.startRevision(line.id), tone: 'warn' as const }]
-            : []),
-          { label: t('line.details'), icon: <Info size={18} />, onClick: openDetails, tone: 'accent' },
+          ...(line.is_memo
+            ? [
+                { label: t('line.memoToMath'), icon: <PenLine size={18} />, onClick: () => void engine.toggleMemo(line.id), tone: 'accent' as const },
+                ...(line.ink.length > 0 ? [{ label: t('line.backToInk'), icon: <PenLine size={18} />, onClick: () => engine.backToInk(line.id) }] : []),
+              ]
+            : [
+                { label: t('line.mathToMemo'), icon: <StickyNote size={18} />, onClick: () => void engine.toggleMemo(line.id) },
+                ...(line.verified?.proof.status === 'wrong'
+                  ? [{ label: t('line.revise'), icon: <CornerUpLeft size={18} />, onClick: () => engine.startRevision(line.id), tone: 'warn' as const }]
+                  : []),
+                { label: t('line.details'), icon: <Info size={18} />, onClick: openDetails, tone: 'accent' as const },
+              ]),
         ]
       : line.state === 'RECOGNIZE_FAILED'
         ? [
+            { label: t('line.mathToMemo'), icon: <StickyNote size={18} />, onClick: () => void engine.toggleMemo(line.id) },
             ...(line.ink.length > 0 ? [{ label: t('line.backToInk'), icon: <PenLine size={18} />, onClick: () => engine.backToInk(line.id) }] : []),
-            { label: t('line.retry'), icon: <RotateCcw size={18} />, onClick: () => void engine.retry(line.id), tone: 'accent' },
+            { label: t('line.retry'), icon: <RotateCcw size={18} />, onClick: () => void engine.retry(line.id), tone: 'accent' as const },
           ]
         : [];
 
@@ -102,11 +111,17 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
     <SwipeRow
       id={line.id}
       actions={swipe}
-      className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
+      className={clsx(
+        'ruled relative flex gap-3 pr-4 transition-colors',
+        active && line.state === 'DRAFT' && (line.is_memo ? 'bg-amber-500/10' : 'bg-accent-soft/25'),
+        line.is_memo && line.state === 'SETTLED' && 'bg-amber-500/[0.04]',
+      )}
       onClick={() => {
         if (isPenDown()) return;
         if (line.state === 'DRAFT' && !active) {
           engine.activate(line.id);
+        } else if (line.state === 'SETTLED' && line.is_memo) {
+          engine.backToInk(line.id);
         }
       }}
     >
@@ -128,7 +143,11 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             ) : (
               active &&
               line.ink.length === 0 &&
-              tool === 'pen' && <div className="pointer-events-none absolute left-2 top-12 text-base text-faint">{t('line.writeHere')}</div>
+              tool === 'pen' && (
+                <div className="pointer-events-none absolute left-2 top-12 text-base text-faint">
+                  {t(line.is_memo ? 'line.memoWriteHere' : 'line.writeHere')}
+                </div>
+              )
             )}
             <InkCanvas
               strokes={line.ink}
@@ -168,7 +187,24 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             </div>
           </div>
         )}
-        {(line.state === 'SETTLED' || line.state === 'VERIFYING') && (
+        {line.state === 'SETTLED' && line.is_memo && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => engine.backToInk(line.id)}
+            onKeyDown={(e) => e.key === 'Enter' && engine.backToInk(line.id)}
+            className="flex min-h-16 w-full min-w-0 cursor-text items-center text-left"
+            title={t('line.backToInk')}
+          >
+            <InkCanvas strokes={line.ink} editable={false} tool={tool} />
+          </div>
+        )}
+        {line.state === 'SETTLED' && !line.is_memo && (
+          <button type="button" onClick={openDetails} className="flex min-h-16 w-full min-w-0 items-center text-left">
+            <Segments segments={line.segments} className="w-full" />
+          </button>
+        )}
+        {line.state === 'VERIFYING' && (
           <button type="button" onClick={openDetails} className="flex min-h-16 w-full min-w-0 items-center text-left">
             <Segments segments={line.segments} className="w-full" />
           </button>
@@ -182,6 +218,14 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       <div className="flex w-[11.5rem] shrink-0 flex-col items-end justify-center gap-2 py-2">
         {line.state === 'DRAFT' && active && (
           <div className="flex items-center gap-1">
+            <IconButton
+              label={t(line.is_memo ? 'line.memoActive' : 'line.memoToggle')}
+              active={line.is_memo}
+              className={clsx(line.is_memo && '!text-amber-600 !bg-amber-500/15 hover:!bg-amber-500/25')}
+              onClick={() => void engine.toggleMemo(line.id)}
+            >
+              <StickyNote size={19} />
+            </IconButton>
             <IconButton
               label={line.ink.length > 0 ? t('tool.clear') : t('tool.deleteDraft')}
               onClick={() => {
@@ -220,15 +264,31 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </span>
         )}
         {/* the verdict first, then what can be done with the line, then the Lean check in progress */}
-        {line.state === 'SETTLED' && <StatusBadge line={line} ancestor={ancestor} onClick={openDetails} />}
-        {line.state === 'SETTLED' && line.verified?.proof.status === 'wrong' && (
+        {line.state === 'SETTLED' && line.is_memo && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void engine.toggleMemo(line.id)}
+              title={t('line.memoToMath')}
+              className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 transition-colors"
+            >
+              <StickyNote size={13} />
+              <span>{t('line.memoBadge')}</span>
+            </button>
+            <Button size="sm" variant="ghost" onClick={() => void engine.toggleMemo(line.id)}>
+              {t('line.memoToMathShort')}
+            </Button>
+          </div>
+        )}
+        {line.state === 'SETTLED' && !line.is_memo && <StatusBadge line={line} ancestor={ancestor} onClick={openDetails} />}
+        {line.state === 'SETTLED' && !line.is_memo && line.verified?.proof.status === 'wrong' && (
           <Button size="sm" variant="ghost" icon={<CornerUpLeft size={15} />} onClick={() => engine.startRevision(line.id)}>
             {t('line.revise')}
           </Button>
         )}
-        {line.state === 'SETTLED' &&
+        {line.state === 'SETTLED' && !line.is_memo &&
           FEATURES.flatMap((f) => f.lineActions ?? []).map((Action, i) => <Action key={i} line={line} />)}
-        {line.state === 'SETTLED' && leanChecking && (
+        {line.state === 'SETTLED' && !line.is_memo && leanChecking && (
           <span className="inline-flex items-center gap-2 text-sm text-muted" data-lean="checking">
             <Spinner size={14} /> {t('line.leanChecking')}
           </span>
@@ -243,6 +303,9 @@ function Gutter({ n, line }: { n: number; line: Line }) {
   return (
     <div className="flex w-10 shrink-0 flex-col items-end gap-1 self-center text-right text-2xs font-medium tabular-nums text-faint">
       <span>{n}</span>
+      {line.is_memo && (
+        <span className="rounded-md bg-amber-500/15 px-1 text-2xs font-medium text-amber-700 dark:text-amber-300">{t('line.memo')}</span>
+      )}
       {line.role === 'premise' && (
         <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>
       )}

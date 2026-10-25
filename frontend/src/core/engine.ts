@@ -305,6 +305,25 @@ export class NotebookEngine {
     s.bumpEpoch();
     const next = this.nb.lines[lineIndex(this.nb, lineId) + 1];
     const draft = next && emptyDraft(next) ? next : newDraftLine();
+
+    // A scratch note (memo line) is settled as-is: no LaTeX recognition or CAS verification.
+    if (line.is_memo) {
+      s.commit(
+        'CONFIRM_LINE',
+        (snap) => {
+          const lines = snap.lines.map((l) =>
+            l.id === lineId
+              ? { ...l, version: l.version + 1, state: 'SETTLED' as const, segments: [], failure: undefined, verified: undefined }
+              : l,
+          );
+          if (draft !== next) lines.splice(lines.findIndex((l) => l.id === lineId) + 1, 0, draft);
+          return { ...snap, lines, activeLineId: draft.id };
+        },
+        lineId,
+      );
+      return;
+    }
+
     s.commit(
       'CONFIRM_LINE',
       (snap) => {
@@ -315,6 +334,102 @@ export class NotebookEngine {
       lineId,
     );
     await this.recognize(lineId);
+  }
+
+  /**
+   * Toggles whether a line is a scratch note (memo) or a standard math line.
+   * Memo lines are never LaTeX-converted or verified by CAS/Lean.
+   * Toggling a settled memo line off immediately kicks recognition & verification if it has ink.
+   */
+  async toggleMemo(lineId: string) {
+    const s = store.getState();
+    const line = findLine(this.nb, lineId);
+    if (!line) return;
+
+    const nextIsMemo = !line.is_memo;
+
+    if (line.state === 'DRAFT') {
+      s.commit(
+        'CONFIRM_LINE',
+        (snap) => ({
+          ...snap,
+          lines: snap.lines.map((l) => (l.id === lineId ? { ...l, version: l.version + 1, is_memo: nextIsMemo } : l)),
+        }),
+        lineId,
+      );
+      s.showToast(this.deps.t(nextIsMemo ? 'toast.memoOn' : 'toast.memoOff'), 'info');
+      return;
+    }
+
+    if (line.state === 'SETTLED' || line.state === 'RECOGNIZE_FAILED') {
+      if (nextIsMemo) {
+        // Math / Failed -> Memo
+        this.abortSlot(`line:${lineId}`);
+        this.abortSlot(`lean:${lineId}`);
+        s.commit(
+          'CONFIRM_LINE',
+          (snap) => ({
+            ...snap,
+            lines: snap.lines.map((l) =>
+              l.id === lineId
+                ? {
+                    ...l,
+                    version: l.version + 1,
+                    is_memo: true,
+                    state: 'SETTLED' as const,
+                    segments: [],
+                    verified: undefined,
+                    failure: undefined,
+                  }
+                : l,
+            ),
+          }),
+          lineId,
+        );
+        s.showToast(this.deps.t('toast.memoOn'), 'info');
+        if (this.syncDeclarations()) void this.recheckStale();
+      } else {
+        // Memo -> Math: toggle off and start recognition/verification
+        if (line.ink.length > 0) {
+          s.commit(
+            'CONFIRM_LINE',
+            (snap) => ({
+              ...snap,
+              lines: snap.lines.map((l) =>
+                l.id === lineId
+                  ? {
+                      ...l,
+                      version: l.version + 1,
+                      is_memo: false,
+                      state: 'RECOGNIZING' as const,
+                      failure: undefined,
+                    }
+                  : l,
+              ),
+            }),
+            lineId,
+          );
+          s.showToast(this.deps.t('toast.memoOff'), 'info');
+          await this.recognize(lineId);
+        } else {
+          // No ink: revert to draft
+          s.commit(
+            'CONFIRM_LINE',
+            (snap) => ({
+              ...snap,
+              activeLineId: lineId,
+              lines: snap.lines.map((l) =>
+                l.id === lineId
+                  ? { ...l, version: l.version + 1, is_memo: false, state: 'DRAFT' as const, failure: undefined }
+                  : l,
+              ),
+            }),
+            lineId,
+          );
+          s.showToast(this.deps.t('toast.memoOff'), 'info');
+        }
+      }
+    }
   }
 
   private async recognize(lineId: string) {

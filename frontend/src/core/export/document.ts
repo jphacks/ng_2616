@@ -73,7 +73,7 @@ function pdfQuestion(line: Line) {
 export function exportSnapshot(nb: Notebook): Notebook {
   return {
     ...nb, extensions: nb.extensions?.demo ? { demo: true } : undefined, recoveries: [],
-    lines: nb.lines.map((l) => ({ ...l, ink: [], extensions: pdfQuestion(l) ? { pdf_question: pdfQuestion(l) } : undefined, failure: l.failure ? { stage: l.failure.stage, code: l.failure.code } : undefined,
+    lines: nb.lines.map((l) => ({ ...l, ink: [], is_memo: l.is_memo, extensions: pdfQuestion(l) ? { pdf_question: pdfQuestion(l) } : undefined, failure: l.failure ? { stage: l.failure.stage, code: l.failure.code } : undefined,
       verified: l.verified ? { ...l.verified, proof: { ...l.verified.proof, evidence: [], hints: [] } } : undefined })),
   };
 }
@@ -104,6 +104,14 @@ export function serializeNotebook(nb: Notebook, language: UiLang, report?: Repor
   const numbers = new Map(nb.lines.filter((l) => l.state !== 'SUPERSEDED').map((l, i) => [l.id, String(i + 1)]));
   const renderLine = (l: Line, historical = false): PdfBlock => {
     const notes: string[] = [];
+    if (l.is_memo) {
+      notes.push(language === 'ja' ? 'メモ（検証対象外）' : 'Memo (not verified)');
+      return {
+        label: historical ? l.id : numbers.get(l.id) ?? l.id,
+        fragments: l.segments.length ? fragments(l.segments) : [text(language === 'ja' ? '［手書きメモ］' : '[Handwritten memo]')],
+        notes,
+      };
+    }
     const proof = l.verified?.proof;
     let current = historical;
     if (!historical && l.state === 'SETTLED' && proof) {
