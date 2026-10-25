@@ -128,8 +128,9 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             )}
             <InkCanvas
               strokes={line.ink}
-              editable={active}
+              editable
               tool={tool}
+              onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
               onScratchOut={(ids) => {
