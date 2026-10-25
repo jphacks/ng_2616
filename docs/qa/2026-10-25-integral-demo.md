@@ -92,3 +92,27 @@ to finish, then explicitly request the first next step. Adopt each displayed che
 subsequent requests can start automatically. The exact wording/number of intermediate AI
 steps can vary; compare the final answer to the reference rather than expecting fixed text.
 The completed PDF above is evidence of this scoped live run, not of every reviewed edge case.
+
+## Preview CAS deployment correction
+
+The user subsequently reproduced `DOMAIN_CHANGED` on the first partial-fraction proposal in
+the Vercel preview. The web build already included PR #67, but the separate Azure CAS container
+still ran rules digest `32f61ef20a726a55`. Replaying the saved notebook's checks there returned
+`DOMAIN_CHANGED` for the first step and `UNSUPPORTED` for the later inverse-trigonometric steps.
+The earlier local live run had used the newer rules and therefore missed this deployment drift.
+
+The Azure checkout was fast-forwarded from `5fd1ed6` to main (`5642c60`), and only `cas-worker`
+was replaced with an image built from the tested branch sources. Its rules digest is now
+`cdf290f4949bf87e`, matching both the tested sources and the VM checkout. The former image was
+retained as `ng2616-cas:rollback-20261025`; PDF and Lean services were not restarted.
+
+The authenticated public `/cas/verify` route was tested after replacement: all four saved
+derivation checks and the screenshot's split partial-fraction form returned `ok`, with no
+unverified ancestors. A deliberately incorrect coefficient returned `wrong`. The public health
+route also reports the new digest. This is a deployed CAS/API check, not a signed-in browser
+acceptance test. Existing pages need a reload to load the new CAS version and recheck saved
+lines; an unadopted proposal can be rejected and requested again.
+
+Vercel deployment alone does not deploy `packages/cas-core` to Azure. Future CAS rule changes
+must also rebuild/restart the Azure CAS service and compare its health digest with the tested
+rules before reporting the demo environment as ready.
