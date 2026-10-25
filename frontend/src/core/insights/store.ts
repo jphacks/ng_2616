@@ -111,6 +111,7 @@ class Recorder {
   /** one tag call at a time: the gateway allows only a few unfinished requests per student */
   private tagging: Promise<unknown> = Promise.resolve();
   private tagFailedAt = new Map<string, number>();
+  private model: Promise<boolean> | null = null;
   private listeners = new Set<() => void>();
 
   constructor(private backend: Backend) {}
@@ -193,6 +194,7 @@ class Recorder {
     const lines = tagLines(nb);
     const now = Date.now();
     if (!shouldRetag(counted, key, lines, now) || now - (this.tagFailedAt.get(nb.id) ?? 0) < TAG_RETRY_MS) return;
+    if (!(await this.hasModel())) return;
     const tags = await this.readTags(nb, rows, key);
     if (!tags) {
       this.tagFailedAt.set(nb.id, Date.now());
@@ -208,6 +210,19 @@ class Recorder {
     await this.backend.put(row);
     rows.set(row.notebook_id, row);
     for (const fn of this.listeners) fn();
+  }
+
+  /** Whether the server has a real model: a mock one reads no tags, so none are asked for. */
+  private hasModel(): Promise<boolean> {
+    this.model ??= api.capabilities().then(
+      (c) => !c.llm.mock,
+      () => {
+        // unknown (offline): ask again on a later save
+        this.model = null;
+        return false;
+      },
+    );
+    return this.model;
   }
 
   private readTags(nb: Notebook, rows: Map<string, Row>, key: string): Promise<string[] | null> {
