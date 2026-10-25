@@ -6,6 +6,8 @@ import type {
   RecognizeInput,
   RecognizeResult,
   SuggestInput,
+  TagInput,
+  TagResult,
 } from '@mn/contracts';
 import { serverEnv } from '@/server/env';
 import { DirectAiService } from './direct';
@@ -23,6 +25,7 @@ export interface AiService {
   recognize(input: RecognizeInput, ctx: CallCtx): Promise<RecognizeResult>;
   suggest(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult>;
   ocrPage(input: OcrPageInput, ctx: CallCtx): Promise<OcrPageResult>;
+  tag(input: TagInput, ctx: CallCtx): Promise<TagResult>;
   status(): { provider: string; configured: boolean; mock: boolean };
 }
 

@@ -7,4 +7,5 @@ export * from './question-card';
 export * from './exports';
 export * from './declarations';
 export * from './lean';
+export * from './insights';
 export type { MathJSON } from './ir/ops';

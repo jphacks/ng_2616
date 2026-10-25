@@ -6,6 +6,9 @@ import {
   RecognizeWireSchema,
   SUGGEST_JSON_SCHEMA,
   SuggestWireSchema,
+  TAG_JSON_SCHEMA,
+  TagWireSchema,
+  normalizeTags,
   wireToSegments,
   normalizeQuestionPage,
   QUESTION_PAGE_JSON_SCHEMA,
@@ -17,13 +20,15 @@ import {
   type RecognizeInput,
   type RecognizeResult,
   type SuggestInput,
+  type TagInput,
+  type TagResult,
 } from '@mn/contracts';
 import type { ServerEnv } from '@/server/env';
 import { AiError } from '../errors';
 import type { AiService, CallCtx } from '../service';
 import { finalizeCandidate } from './candidate';
 import { DEMO_SCRIPT_ID, scriptedRecognition, scriptedSuggestion } from './demo';
-import { OCR_SYSTEM, QUESTION_PAGE_SYSTEM, RECOGNIZE_SYSTEM, SUGGEST_SYSTEM, recognizeParts, suggestParts } from './prompts';
+import { OCR_SYSTEM, QUESTION_PAGE_SYSTEM, RECOGNIZE_SYSTEM, SUGGEST_SYSTEM, TAG_SYSTEM, recognizeParts, suggestParts, tagParts } from './prompts';
 import type { LlmProvider } from './providers/types';
 
 /** Stage 1: the Next.js server calls the LLM itself. Relay mode swaps this for the FastAPI backend. */
@@ -129,5 +134,23 @@ export class DirectAiService implements AiService {
     const wire = OcrWireSchema.safeParse(raw);
     if (!wire.success) throw new AiError('SCHEMA_INVALID', 'OCR output did not match the schema');
     return { text: wire.data.text, mock: false };
+  }
+
+  async tag(input: TagInput, ctx: CallCtx): Promise<TagResult> {
+    if (this.llm.mock) return { tags: [], mock: true };
+    const raw = await this.llm.generateJson({
+      task: 'tag',
+      model: this.env.LLM_MODEL_TAG,
+      thinking: this.env.LLM_THINKING_TAG,
+      system: TAG_SYSTEM,
+      parts: tagParts(input),
+      schema: TAG_JSON_SCHEMA,
+      maxOutputTokens: 1024,
+      timeoutMs: 20_000,
+      signal: ctx.signal,
+    });
+    const wire = TagWireSchema.safeParse(raw);
+    if (!wire.success) throw new AiError('SCHEMA_INVALID', 'tag output did not match the schema');
+    return { tags: normalizeTags(wire.data.tags), mock: false };
   }
 }
