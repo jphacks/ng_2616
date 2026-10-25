@@ -6,7 +6,7 @@ import {
 } from '@mn/contracts/ir';
 import { declaredFunctions, type Line, type Meta, type Notebook, type Proof, type Recovery, type Stroke, type SuggestInput, type UiLang } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, suggestBlockerOf, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, suggestBlockerOf, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
@@ -478,6 +478,24 @@ export class NotebookEngine {
     this.suggestTimer = null;
   }
 
+  /**
+   * S-02 (spec §14.2): "hint" hides completion, "complete" is the normal completion. A change drops
+   * the candidate on show and any request on its way, and moves the epoch so a late result is stale.
+   * The change is not an undoable command (the history types belong to the editing code).
+   */
+  setAssistMode(mode: AssistMode) {
+    const s = store.getState();
+    if (s.assistMode === mode) return;
+    s.set('assistMode', mode);
+    s.bumpEpoch();
+    this.cancelSuggestion();
+    this.abortSlot('suggest');
+    this.suggestSlot = null;
+    s.set('candidate', null);
+    s.set('suggesting', false);
+    s.set('ghostConfirm', false);
+  }
+
   scheduleSuggestion(delay = SUGGEST_IDLE_MS) {
     this.cancelSuggestion();
     if (!this.canSuggest(false)) return;
@@ -488,6 +506,7 @@ export class NotebookEngine {
     const s = store.getState();
     const nb = s.notebook;
     if (!nb) return 'none';
+    if (s.assistMode === 'hint') return 'hint-mode';
     if (this.cas.status !== 'ready') return 'cas';
     if (anyPending(nb)) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';

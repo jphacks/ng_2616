@@ -164,6 +164,70 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 **取り込み後のテスト**（`Riku_feature2` ＝ main `98fa5f8` を取り込み、2026-10-25、ローカル、mock＋実 CAS）：単体テスト全体 192 件：191 通過／0 失敗／1 skip（`pnpm --filter frontend test` と、`tests/unit/suggest/*.test.ts` ＋ `tests/unit/*.test.ts` の直接実行で同じ）、`tsc --noEmit` エラー 0、`eslint src tests` エラー 0（警告 11 件）、E2E `checking.spec.ts` 8 件＋`demo.spec.ts` 2 件など計 12 件通過（1.7 分。「a failed recognition…」も通過）。
 
+## Should：S-02 補助モード（実装）と S-03 BRIDGE（見積もりのみ）
+
+ブランチ `Riku_should`（main `f7fed90` から）。基準：`docs/design/v2.0-en.md` §2.2、§14.2、§17、ST-00／ST-02／ST-03。v2.1-deltas に S-02／S-03 の変更は無い。ADR にも無い。
+
+### 仕様の抜き出し
+
+| 項目 | 内容（v2.0） |
+| --- | --- |
+| S-02 | ヒント／完全補完の補助モード。フラグ `assist_modes`。依存：Must の補完と履歴 |
+| 既定 | 完全補完（complete） |
+| ヒントモード | 補完を **隠す**。完全補完は Must の補完と（あれば）BRIDGE を有効にする |
+| 切り替え | `CHANGE_AI_MODE` を記録し、**epoch を進め、既存の候補を捨てる**。自動提案は実装しない |
+| フラグ OFF | 保存されたモードの制限は無視し、Must の補完を使える |
+| 受け入れ | ST-02：モード切り替え、古い候補の除去、Undo、オプションのモード無しでも Must の補完が動く。ST-00：すべての Should を OFF にして Must が通る |
+| S-03 | BRIDGE：隣り合う 2 つの確定した数式行の間に 1〜3 行を提案。フラグ `bridge`。依存：S-02 と Must CAS |
+| BRIDGE 条件 | 両端は読み取り不能・wrong・未解決の修正を含まない。全体のロック（未解決 wrong）も適用。上の行から順に局所 CAS で検証し、下の行は最後の候補に対して検証。全部 ok の鎖だけ READY。直接検証できる組にも説明用の中間行を出してよい |
+| BRIDGE 採用 | 挿入は **1 コマンド**。下の行以降の親リンクと検証を更新し、再検証が終わるまで補完をロック。Undo 1 回で挿入行・親リンク・以前の判定を戻す |
+| bridge が OFF | Must の suggest に `mode=BRIDGE` が来たら `FEATURE_DISABLED` |
+| ST-03 | 1〜3 行の検証済みブリッジ、下流の再検証、まとめた Undo |
+
+### 機能フラグの仕組み（リポジトリにある）
+- フラグは `packages/contracts` の `FeatureSchema`（`hints`、`assist_modes`、`bridge`、`plot`、`lean`、`autosave`、`auto_submit`、`resources`）。
+- フロント：環境変数 `NEXT_PUBLIC_ENABLED_FEATURES`（カンマ区切り、既定は空＝すべて OFF）。`frontend/scripts/gen-feature-registry.mjs`（`pnpm prepare-assets`／`predev`／`prebuild`）が、有効なものだけ import する `src/features/registry.generated.ts`（`FEATURES`）を作る。フラグ名 `assist_modes` はディレクトリ `src/features/assist-modes/` に対応（`_` を `-` に）。`core` は `features` を import しない。
+- サーバー：`ENABLED_FEATURES`（backend）と、ゲートウェイの `NEXT_PUBLIC_ENABLED_FEATURES`。実効フラグは両者の積（`/api/v1/health` 系が返す）。
+- `FeaturePlugin`（`src/features/types.ts`）の `toolbar` スロットは**定義だけで、どこにも描画されていなかった**。今回 `toolbar.tsx` に 1 か所足した（下）。
+- `plot`（PR #55）だけが先に実装されている。
+
+### S-02 の実装（フラグ OFF では今と全く同じ）
+- `core/candidates/blocker.ts`：`AssistMode = 'hint' | 'complete'`、`SuggestBlocker` に `'hint-mode'`、`suggestBlockerOf` が `assistMode === 'hint'` なら最優先で `'hint-mode'`（省略は complete と同じ）、`blockerToastKey` が `toast.suggestHintMode`。
+- `notebook-store.ts`：`assistMode`（既定 `'complete'`）。**変えられるのは `assist_modes` の機能だけ**なので、OFF のときは常に `'complete'`＝今と同じ（コアはフラグを読まない）。
+- `engine.ts`：`setAssistMode(mode)`（③の補完まわりに追加）。同じモードなら何もしない。変えると、モードを設定 → epoch を進める → タイマー解除 → 進行中の要求を中断 → スロットと候補を捨てる → `suggesting` と `ghostConfirm` を戻す。`suggestBlocker()` も `'hint-mode'` を返す（自動のタイマーも手動ボタンも止まる）。
+- `features/assist-modes/index.tsx`：`FeaturePlugin`。ツールバーの切り替えボタン（ヒント時は電球、完全補完時は Sparkles）。
+- `toolbar.tsx`：①補完ボタンの前に `FEATURES` の `toolbar` スロットを描画（**3 行**。`FEATURES` の import を含む）、②`locked` を `wrong` または `hint-mode` のときに灰色にする。補完ボタンの `aria-disabled` 方式は同じ（押すと理由を案内）。
+- i18n：新しいキーの追加のみ（`toast.suggestHintMode`、`assist.hint`、`assist.complete`、`assist.label`、en／ja）。
+- テスト：`tests/unit/suggest/assist-mode.test.ts` 9 件（既定、ヒントで要求が出ない、案内、候補の除去、epoch と中断、同モードで無変化、履歴を触らない、純関数）。
+
+**仮決め**
+- **`CHANGE_AI_MODE` を元に戻せるコマンド（履歴）にはしていない**。`history.ts` の `CommandType`（編集の履歴）は①の領域なので触っていない。モードの切り替えは Undo に入らない。仕様の「記録する」は、必要なら①に `CommandType` 追加を頼む。
+- モードは **保存しない**（再読み込みで complete に戻る）。保存はユーザー設定（⑤・共有）の領域。
+- ヒントモードの間、**ヒントそのもの（S-01）は出ない**。S-01 は別機能（`hints`）。
+- `toolbar.tsx` の変更は補完ボタンの外（スロット描画）に 3 行出ている。**①／共有 UI のレビューをお願いしたい**。
+
+**ほかの担当への依頼・報告**
+- ⑤：`frontend/package.json` の `test` に `tests/unit/suggest/assist-mode.test.ts` を足してほしい（列挙なので足さないと CI で走らない）。足していない。
+- ⑤：`NEXT_PUBLIC_ENABLED_FEATURES=assist_modes` を設定した build／E2E での確認（ST-02）。③は単体テストと、フラグ OFF の E2E（既存）までしか確認していない。
+- ①：`CHANGE_AI_MODE` を履歴に入れるか。
+
+### S-03 BRIDGE：作業量の見積もり（実装しない）
+
+**見積もり：大**（補完の約半分に当たる新規。③だけでは終わらず、①②⑤の領域にもかかる）。
+
+必要な変更：
+1. **契約（⑤、`packages/contracts`）**：`SuggestInput` に `bridge_to`（下の行 ID。`§13` の `POST /suggest` にある）、`CandidateDraftResult` を **複数行**（1〜3）に。いまの候補は `lines` が配列なので型は近いが、`mode='BRIDGE'` の検証ルールと fixtures を足す。
+2. **サーバー（③、`server/ai/direct`）**：BRIDGE の入力検査（隣り合う 2 つの確定した数式行、両端に読み取り不能・wrong・未解決の修正が無い）、プロンプト（1〜3 行、両端の間をつなぐ）、出力の検査、デモ台本、`FEATURE_DISABLED` をフラグの結果に（R28、⑤のゲートウェイとも）。トークン上限は仕様で BRIDGE 1400。
+3. **クライアントの検証（③、`engine.ts`）**：上の行から 1 行ずつ局所 CAS（`verifyCandidate` を複数行に。いまも `chain` で似た鎖を作っているので一部流用可）、**最後に下の行を最後の候補に対して**検証（新しい `payload`）。全部 ok の鎖だけ READY（`unknown` を許すかは ADR 0003 の読み替えが要る）。
+4. **選択の UI（③・①）**：2 つの行を選ぶ操作が無い（行のメニュー／選択状態）。`toolbar.tsx` か行のアクション。①の領域にもかかる。
+5. **候補の表示（③、`ghost-line.tsx`）**：複数行の破線表示、2 つの行の間に差し込む位置。
+6. **採用（③＋①）**：**1 コマンド**で複数行を挿入、下の行の親リンクと検証を更新、再検証が終わるまでロック、Undo 1 回で戻す。`adopt` を複数行対応に（いまは `c.lines[0]` 固定）。`history.ts` の `CommandType` 追加（①）。
+7. **②**：下の行の親が変わる再検証（`recheckStale` と `parent_id` の扱い）、`markRecovery` との関係。
+8. **フラグ**：`bridge` を有効にする `features/bridge/`、S-02 が前提。
+9. **テスト**：ST-03（検証済みブリッジ、下流の再検証、まとめた Undo）、BRIDGE が OFF のとき拒否。
+
+目安：単体で動く最小版（選択 UI 無し、サーバーと検証と採用だけ）でも、③の作業は 1 日規模。UI まで含めると、①との調整込みで 1.5〜2 日。時間が足りなければ、仕様 §17 の「時間が足りなければ BRIDGE から切る」に従う。
+
 ## 問題カードの廃止（PR #52）と、補完の前提
 
 **問題カードは PR #52（`9f85a1c`、RedBlueBird「問題カードを、手書きできる given 行に置き換える」）で廃止された**（v2.2）。前提（`L > 0`、`n ∈ ℤ⁺`、`ψ(x) ≠ 0`）と関数宣言（`Ψ(x, t)`）は **ふつうの行**で、形で判別される（`packages/cas-core/cas_core/context.py` の冒頭に「there is no problem card」）。このメモの古い節（段階0〜2、部品対応表など）に残る「問題カード」は、廃止前の記述。

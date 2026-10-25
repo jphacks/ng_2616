@@ -2,6 +2,7 @@
 
 import type { Line, Notebook, Proof, Segment, SuggestMode, Target, Verified } from '@mn/contracts';
 import { create } from 'zustand';
+import type { AssistMode } from '@/core/candidates/blocker';
 import type { RejectionHistory } from '@/core/candidates/rejection';
 import type { SyncState } from '@/core/persistence/autosave';
 import { HISTORY_LIMIT, interruptPending, patchPending, type Command, type CommandType, type Snapshot } from '@/core/history/history';
@@ -78,6 +79,8 @@ export interface NotebookState {
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
   ghostConfirm: boolean;
+  /** S-02: 'hint' hides completion. Only the assist_modes feature changes it, so it stays 'complete' without it */
+  assistMode: AssistMode;
   toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
 
   load(nb: Notebook, revision: number | null): void;
@@ -126,6 +129,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
   sheet: null,
   suggesting: false,
   ghostConfirm: false,
+  assistMode: 'complete',
   toast: null,
 
   load(nb, revision) {
