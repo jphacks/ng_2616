@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { blockerToastKey, suggestBlockerOf } from '../../../src/core/candidates/blocker';
+import { blockerToastKey, hintsAllowedIn, suggestBlockerOf } from '../../../src/core/candidates/blocker';
 import { line, notebook, settled } from './fixtures';
 import { candidateOf, deferred, draftFor, fakeApi, rig, until, type Rig } from './harness';
 import type { CandidateDraftResult } from '@mn/contracts';
@@ -130,5 +130,12 @@ describe('S-02 assist modes (spec §14.2)', () => {
     r = rig({ api: fakeApi(() => assert.fail('the model must not be called')) });
     r.engine.setAssistMode('hint');
     assert.equal(r.engine.canSuggest(false), false);
+  });
+
+  it('A12 off withholds the recovery hints; hint, complete and an unset mode keep them', () => {
+    assert.equal(hintsAllowedIn('off'), false);
+    assert.equal(hintsAllowedIn('hint'), true);
+    assert.equal(hintsAllowedIn('complete'), true);
+    assert.equal(hintsAllowedIn(undefined), true);
   });
 });

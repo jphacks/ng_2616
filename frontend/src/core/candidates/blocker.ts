@@ -8,9 +8,12 @@ export type SuggestBlocker = 'none' | 'hint-mode' | 'assist-off' | 'cas' | 'pend
 
 /**
  * Assist mode (spec §14.2): in hint mode no completion is offered; the default is complete. 'off' is not in the
- * spec: no assistance at all (today the same as hint for completion; the hints feature would not show either).
+ * spec: no assistance at all, so neither completion nor the recovery hints (see hintsAllowedIn) are offered.
  */
 export type AssistMode = 'hint' | 'complete' | 'off';
+
+/** Whether the step-by-step hints (hint 1 and 2 on a wrong line) may be shown. Evidence is not a hint and stays. */
+export const hintsAllowedIn = (mode?: AssistMode): boolean => mode !== 'off';
 
 export interface BlockerInput {
   notebook: Notebook | null;
