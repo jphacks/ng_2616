@@ -8,11 +8,10 @@ acceptance test of the Vercel preview or an iPad handwriting test.
 
 ## Verdict
 
-PDF reading, explicit first-step suggestions, two adopted transformations, saving, and PDF
-generation work after the PDF-side fixes. A complete, verified solution demo is **not yet
-ready**: the existing CAS returns `DOMAIN_CHANGED` on the integral rewrite, and the next
-antiderivative proposal is rejected as `IR_INVALID` because `\\arctan` is unsupported.
-PR #67 is being revised by its author and has deliberately not been merged here.
+Retested after PR #67 was merged into main and main was merged into this branch. The supplied
+worksheet now completes in the Japanese UI: image reading, a manual first suggestion, four
+CAS-verified adopted steps, saving, and a two-page LuaLaTeX answer PDF. The final expression
+matches the reference answer exactly. This review covers this worksheet and recorded flow.
 
 ## Source and expected answer
 
@@ -49,7 +48,9 @@ math for QA, not a claim that the product has verified the complete derivation.
   given symbols and relations retain their existing semantics.
 - AI rereading stays optional after the initial reading. Separate drafts, comparisons and
   reverting to the first AI reading remain available.
-- Latest main's report-formatting fixes were merged. No code from PR #67 was included.
+- Latest main's report-formatting fixes were merged. PR #67 was initially excluded while its
+  author revised it; after its merge to main, the user authorized its integration and the
+  successful run below was performed with those changes.
 
 ## Actual live run after the fixes
 
@@ -57,29 +58,36 @@ math for QA, not a claim that the product has verified the complete derivation.
 2. Read problems with AI: the fraction, exponents and limits 1 and 2 matched the source.
 3. Adopt as given lines -> Suggest next step, without handwriting an initial line:
    a real suggestion request was sent and the partial-fraction rewrite was offered.
-4. The real CAS returned `unknown / DOMAIN_CHANGED`. The UI required explicit unverified
-   adoption. The second proposal split the integral into three terms and was also unverified.
-5. The next real AI proposal was the correct antiderivative with `\\arctan(x)`. The parser
-   rejected `\\arctan`, so no further candidate could be adopted. This remains a PR #67
-   dependency; it was not silently replaced with a different formula.
+4. The real CAS returned `ok` for the partial-fraction rewrite. The following proposals were
+   the antiderivative with `\\arctan(x)`, substitution of both bounds, and the final simplified
+   expression. All four adopted lines have `proof.status = ok` and empty unverified-ancestor
+   lists. No unverified-adoption confirmation was needed.
+5. The final expression was
+   `9/2 ln(2) - 1/2 ln(5) + 5 arctan(2) - 5 pi/4`. Evaluating the saved notebook's actual IR
+   through the native SymPy converter and subtracting the independent reference expression
+   simplified to zero; its numerical value is `3.923196128285915`. After that result the
+   real model declined to propose another step.
 6. The notebook saved, and Export PDF -> LaTeX template (Azure) produced a two-page PDF:
-   problem and adopted intermediate work, then the verification appendix. Both pages were
-   rendered and visually inspected. The appendix identifies the adopted steps as unverified.
+   problem and complete derivation, then the verification appendix. Both pages were rendered
+   and visually inspected. The appendix identifies the four adopted steps as verified and
+   retains their AI provenance. Sample author/ID/course values were cleared for this artifact.
 
-The local evidence PDF is `output/pdf/integral-live-validation.pdf` in the task workspace.
-It contains **intermediate work**, not a completed solution.
+The completed evidence PDF is `output/pdf/integral-solved-demo.pdf` in the task workspace.
+The earlier `integral-live-validation.pdf` remains the historical intermediate-only report.
 
 ## Regression checks and demo gate
 
 - TypeScript: passed.
-- Frontend unit tests: 273 passed, one pre-existing component-render test skipped.
+- Frontend unit tests: 277 passed, one pre-existing component-render test skipped.
+- IR and notebook contract tests: 114 passed, including inverse-trigonometric notation.
+- Native CAS integral regression tests: two passed.
 - PDF problem-import browser tests: 11 passed, including the supplied integral worksheet.
 - Real image transcription, real suggestions, real CAS responses and real PDF compilation:
   checked separately from the scripted browser tests.
 
-Before presenting a complete solution, integrate the completed PR #67 through the team's
-normal review process and repeat the live path. Require that the partial-fraction rewrite
-is compared to the original integral, inverse tangent can be parsed/printed/checked, the
-final exact answer matches the reference above, reopening preserves all lines and statuses,
-and the final exported PDF includes the actual final answer without claiming unverified
-steps are verified. Do not use the current intermediate PDF as evidence of a completed demo.
+For the demo, start a new notebook, add the supplied PDF in Resources, choose the problem,
+read it with AI, compare it with the original, and adopt it. Wait for the initial CAS check
+to finish, then explicitly request the first next step. Adopt each displayed checked step;
+subsequent requests can start automatically. The exact wording/number of intermediate AI
+steps can vary; compare the final answer to the reference rather than expecting fixed text.
+The completed PDF above is evidence of this scoped live run, not of every reviewed edge case.
