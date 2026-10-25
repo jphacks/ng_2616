@@ -68,3 +68,9 @@ jobs:
       - run: cd packages/cas-core && uv run ruff check cas_core tests
       - run: cd backend && uv run pytest -q
       - run: cd backend && uv run ruff check app tests
+      # without the multi-GB Lean project the real-Lean tests skip; source screening and message mapping still run
+      - run: cd lean-worker && uv run pytest -q
+      - run: cd lean-worker && uv run ruff check lean_worker tests
+      # every shared CAS oracle case through the worker's HTTP API, in real SymPy processes
+      - run: cd cas-worker && uv run pytest -q
+      - run: cd cas-worker && uv run ruff check cas_worker tests

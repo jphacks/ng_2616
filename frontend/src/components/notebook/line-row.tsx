@@ -48,6 +48,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   const draftCount = useNotebook((s) => s.notebook?.lines.filter((l) => l.state === 'DRAFT').length ?? 0);
   const candidate = useNotebook((s) => s.candidate);
   const rejection = useNotebook((s) => s.rejection);
+  const leanChecking = useNotebook((s) => !!s.leanPending[line.id]);
 
   const slowRecognizing = useSlowFeedback(line.state === 'RECOGNIZING', 8000);
   const slowVerifying = useSlowFeedback(line.state === 'VERIFYING', 8000);
@@ -215,6 +216,11 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </span>
         )}
         {line.state === 'SETTLED' && <StatusBadge line={line} ancestor={ancestor} onClick={openDetails} />}
+        {line.state === 'SETTLED' && leanChecking && (
+          <span className="inline-flex items-center gap-2 text-sm text-muted" data-lean="checking">
+            <Spinner size={14} /> {t('line.leanChecking')}
+          </span>
+        )}
         {line.state === 'SETTLED' && line.verified?.proof.status === 'wrong' && (
           <Button size="sm" variant="ghost" icon={<CornerUpLeft size={15} />} onClick={() => engine.startRevision(line.id)}>
             {t('line.revise')}

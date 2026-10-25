@@ -1,0 +1,17 @@
+services:
+  lean:
+    build: .
+    env_file: .env
+    ports:
+      # loopback only: the Next.js gateway (later the backend) is the only caller (ADR 0008)
+      - "127.0.0.1:8100:8100"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    # the imported Mathlib environment needs a few GB; a runaway proof must not take the host down
+    mem_limit: 8g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped

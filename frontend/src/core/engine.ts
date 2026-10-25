@@ -4,27 +4,44 @@ import {
   printSegmentLatex,
   type MathJSON,
 } from '@mn/contracts/ir';
-import { declaredFunctions, type Line, type Meta, type Notebook, type Proof, type Recovery, type Stroke, type SuggestInput, type UiLang } from '@mn/contracts';
+import {
+  declaredFunctions,
+  leanOf,
+  routeOf,
+  theoremOf,
+  withLineLean,
+  withTheorem,
+  type CheckerFeedback,
+  type LeanCheckResult,
+  type Line,
+  type LineLean,
+  type Meta,
+  type Notebook,
+  type Proof,
+  type Recovery,
+  type Stroke,
+  type SuggestInput,
+  type UiLang,
+} from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, suggestBlockerOf, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, continuable, hasOwnLine, suggestBaseLine, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
 import { getCas, type CasController } from '@/core/cas/controller';
 import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine, semanticHash } from '@/core/cas/payload';
+import { leanContextHash, leanEnabled, leanInput, needsLean } from '@/core/lean/route';
 import type { Snapshot } from '@/core/history/history';
 import { shortId, uuid } from '@/core/ids';
 import { rasterizeStrokes } from '@/core/ink/raster';
 import {
   anyPending,
-  canContinueFrom,
   contextLinesFor,
   emptyDraft,
   findLine,
   hasMath,
   hasUnresolvedWrong,
   isGiven,
-  lastSettledMath,
   lineIndex,
   mathLatexOf,
   newDraftLine,
@@ -54,7 +71,7 @@ export interface EngineDeps {
 
 /** The parts of the CAS controller and API client the engine uses; tests pass fakes for them. */
 export type CasPort = Pick<CasController, 'status' | 'versionString' | 'onChange' | 'start' | 'verify'>;
-export type ApiPort = Pick<typeof api, 'suggest' | 'recognize' | 'ocrPage'>;
+export type ApiPort = Pick<typeof api, 'suggest' | 'recognize' | 'ocrPage'> & Partial<Pick<typeof api, 'leanCheck'>>;
 
 /** Optional replacements for the real CAS worker and API client (omitted: the app behaves as before). */
 export interface EngineOverrides {
@@ -326,7 +343,14 @@ export class NotebookEngine {
       line = findLine(this.nb, lineId)!;
       if (!line || line.version !== version || this.disposed) return; // stale response: rejected
       if (result.segments.length === 0) return this.failLine(lineId, version, 'recognize', 'RECOGNIZE_UNREADABLE');
-      const recognized: Line = { ...line, version: version + 1, state: 'VERIFYING', segments: result.segments };
+      const recognized: Line = {
+        ...line,
+        version: version + 1,
+        state: 'VERIFYING',
+        segments: result.segments,
+        // the checker the model chose (ADR 0008); a new reading has no Lean verdict yet
+        extensions: { ...withoutReading(line.extensions), ...(result.route ? { route: result.route } : {}) },
+      };
       store.getState().settleLine(recognized);
       const reread = this.syncDeclarations();
       await this.verifyLine(lineId);
@@ -368,11 +392,14 @@ export class NotebookEngine {
       (snap) => ({
         ...snap,
         activeLineId: lineId,
-        lines: snap.lines.map((l) => (l.id === lineId ? { ...l, version: l.version + 1, state: 'DRAFT', segments: [], verified: undefined, failure: undefined } : l)),
+        lines: snap.lines.map((l) =>
+          l.id === lineId ? { ...l, version: l.version + 1, state: 'DRAFT', segments: [], verified: undefined, failure: undefined, extensions: withoutReading(l.extensions) } : l,
+        ),
       }),
       lineId,
     );
     this.abortSlot(`line:${lineId}`);
+    this.abortSlot(`lean:${lineId}`);
     if (this.syncDeclarations()) void this.recheckStale();
   }
 
@@ -447,6 +474,7 @@ export class NotebookEngine {
     };
     store.getState().settleLine(settled);
     this.afterSettled(settled, proof);
+    if (needsLean(this.nb, settled)) void this.maybeCheckLean(lineId);
     this.scheduleSuggestion();
     return proof;
   }
@@ -493,6 +521,90 @@ export class NotebookEngine {
       store.getState().patchLine(cur.id, (x) => ({ ...x, version: x.version + 1, state: 'VERIFYING' }));
       await this.verifyLine(cur.id);
     }
+    // proof lines whose context changed are checked with Lean again (unchanged ones keep their verdict)
+    for (const l of this.nb.lines) {
+      const cur = findLine(this.nb, l.id);
+      if (cur && needsLean(this.nb, cur)) await this.maybeCheckLean(cur.id);
+    }
+  }
+
+  // ------------------------------------------------------------------ Lean (ADR 0008)
+
+  private setLeanPending(lineId: string, on: boolean) {
+    const s = store.getState();
+    const next = { ...s.leanPending };
+    if (on) next[lineId] = true;
+    else delete next[lineId];
+    s.set('leanPending', next);
+  }
+
+  /** Checks a proof line with Lean unless its verdict was made in this very context. */
+  async maybeCheckLean(lineId: string) {
+    const nb = this.nb;
+    const line = findLine(nb, lineId);
+    if (!line || store.getState().leanPending[lineId] || !needsLean(nb, line)) return;
+    const lean = leanOf(line);
+    if (lean?.proof && lean.context_hash === leanContextHash(leanInput(nb, line, this.deps.lang()))) return;
+    await this.checkLean(lineId);
+  }
+
+  /** "Check again": translates this line afresh and asks Lean again. */
+  recheckLean(lineId: string) {
+    return this.checkLean(lineId, { retranslate: true });
+  }
+
+  private async checkLean(lineId: string, opts: { retranslate?: boolean } = {}) {
+    if (!this.api.leanCheck) return;
+    const nb = this.nb;
+    const line = findLine(nb, lineId);
+    if (!line || !needsLean(nb, line)) return;
+    const version = line.version;
+    const input = leanInput(nb, line, this.deps.lang(), opts);
+    const hash = leanContextHash(input);
+    const ctl = this.slot(`lean:${lineId}`);
+    this.setLeanPending(lineId, true);
+    let res: LeanCheckResult;
+    try {
+      res = await this.api.leanCheck(this.meta(lineId, version), input, ctl.signal);
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+      res = { state: 'unavailable', scope: 'theorem', steps: [], attempts: 0, mock: false, message: e instanceof ApiCallError ? e.code : 'NETWORK' };
+    } finally {
+      if (this.aborts.get(`lean:${lineId}`) === ctl) {
+        this.aborts.delete(`lean:${lineId}`);
+        this.setLeanPending(lineId, false);
+      }
+    }
+    if (this.disposed) return;
+    const cur = findLine(this.nb, lineId);
+    // stale unless the line and every proof line above it are still the ones Lean saw
+    if (!cur || cur.version !== version || leanContextHash(leanInput(this.nb, cur, this.deps.lang())) !== hash) return;
+    this.applyLean(res, lineId, hash);
+    this.scheduleSuggestion();
+  }
+
+  /** The verdict for `targetId`, plus the translations this check made for earlier lines that had none. */
+  private applyLean(res: LeanCheckResult, targetId: string, hash: string | null): LineLean | undefined {
+    const s = store.getState();
+    this.keepTranslations(res, targetId);
+    const target = findLine(this.nb, targetId);
+    const verdict = leanVerdict(res, targetId, target ? leanOf(target)?.tactic : undefined, hash);
+    if (target) s.annotateLine(withLineLean(target, verdict));
+    if (res.theorem && res.theorem.statement !== theoremOf(this.nb)?.statement) {
+      s.set('notebook', withTheorem(this.nb, res.theorem));
+      s.set('dirty', true);
+    }
+    return verdict;
+  }
+
+  /** Earlier lines keep the tactic a check used for them, so later checks run the same proof. */
+  private keepTranslations(res: LeanCheckResult, targetId: string) {
+    if (res.scope !== 'theorem') return;
+    for (const st of res.steps) {
+      if (st.line_id === targetId) continue;
+      const l = findLine(this.nb, st.line_id);
+      if (l && leanOf(l)?.tactic === undefined) store.getState().annotateLine(withLineLean(l, { tactic: st.tactic }));
+    }
   }
 
   // ------------------------------------------------------------------ suggestions
@@ -513,13 +625,13 @@ export class NotebookEngine {
     const nb = s.notebook;
     if (!nb) return 'none';
     if (this.cas.status !== 'ready') return 'cas';
-    if (anyPending(nb)) return 'pending';
+    if (anyPending(nb) || Object.keys(s.leanPending).length > 0) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';
-    const last = lastSettledMath(nb);
+    const last = suggestBaseLine(nb);
     // a template's given lines alone do not start suggestions: the student writes first
-    if (!last || !nb.lines.some((l) => l.state === 'SETTLED' && hasMath(l) && !isGiven(l))) return 'empty';
+    if (!last || !hasOwnLine(nb)) return 'empty';
     const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
-    if (!incomplete && !canContinueFrom(last)) return 'cannot-continue';
+    if (!incomplete && !continuable(last)) return 'cannot-continue';
     if (s.candidate && ['GENERATING', 'VERIFYING', 'READY', 'HELD'].includes(s.candidate.state)) return 'busy';
     const active = s.activeLineId ? findLine(nb, s.activeLineId) : undefined;
     if (active && active.state === 'DRAFT' && active.ink.length > 0) return 'writing';
@@ -542,7 +654,7 @@ export class NotebookEngine {
     }
     const s = store.getState();
     const nb = this.nb;
-    const last = lastSettledMath(nb)!;
+    const last = suggestBaseLine(nb)!;
     const lastMath = last.segments.find((seg) => seg.type === 'math');
     const mode = suggestModeOf(last);
     const draftAfter = nb.lines.slice(lineIndex(nb, last.id) + 1).find((l) => emptyDraft(l));
@@ -590,7 +702,13 @@ export class NotebookEngine {
       const base: Omit<SuggestInput, 'rejected_hashes'> = {
         context: {
           functions: declaredFunctions(nb.lines),
-          lines: ctxLines.filter((l) => l.segments.length > 0).slice(-64).map((l) => ({ id: l.id, role: l.role, source: l.source, status: proofOf(l)?.status, segments: l.segments })),
+          lines: ctxLines
+            .filter((l) => l.segments.length > 0)
+            .slice(-64)
+            .map((l) => {
+              const step = leanOf(l)?.step;
+              return { id: l.id, role: l.role, source: l.source, status: proofOf(l)?.status, segments: l.segments, ...(leanEnabled() ? { route: routeOf(l), ...(step ? { lean: step } : {}) } : {}) };
+            }),
         },
         mode,
         based_on_line_id: last.id,
@@ -619,7 +737,7 @@ export class NotebookEngine {
         if (this.isStale(slot)) return { kind: 'stale' };
         if (res.state === 'NONE' || !res.candidate) return res.reason === 'REJECTED_BEFORE' || res.reason === 'DUPLICATE' ? { kind: 'repeat' } : { kind: 'none' };
         store.getState().set('candidate', { ...pending, state: 'VERIFYING', id: res.candidate.id, contentHash: res.candidate.content_hash, mock: res.mock });
-        return this.verifyCandidate(res.candidate, pending, ctxLines, slot);
+        return this.verifyCandidate(res.candidate, pending, ctxLines, slot, ctl.signal);
       });
       if (result.kind === 'stale') {
         release();
@@ -685,6 +803,7 @@ export class NotebookEngine {
     pending: Candidate,
     ctxLines: Line[],
     slot: SlotMeta,
+    signal?: AbortSignal,
   ): Promise<Attempt<Candidate>> {
     const nb = this.nb;
     const basedOn = findLine(nb, pending.basedOnLineId)!;
@@ -714,13 +833,61 @@ export class NotebookEngine {
         this.recordCheckerRejection(draft, pending, cl.segments, proof);
         return { kind: 'wrong', hash: draft.content_hash, feedback: checkerFeedback(segmentsLatex(cl.segments), proof) };
       }
+      const verified = { verification_id: uuid(), input_hash: hash, proof };
+      const probe: Line = { id: target.id, version: 1, source: 'ai', role: target.role, state: 'SETTLED', ink: [], segments: cl.segments, verified };
+      if (cl.route === 'lean' && leanEnabled() && this.api.leanCheck) {
+        // a proof step: Lean, not the CAS, says whether the model got it right (ADR 0008)
+        const lean = await this.leanCandidate({ ...probe, extensions: { route: 'lean' } }, basedOn, slot, signal);
+        if (lean.kind === 'stale') return lean;
+        if (lean.kind === 'rejected') return { kind: 'wrong', hash: draft.content_hash, feedback: lean.feedback };
+        if (lean.verdict?.step !== 'ok' && policy === 'verified') policy = 'unverified';
+        const extensions = { route: 'lean', ...(lean.verdict ? { lean: lean.verdict } : {}) };
+        verifiedLines.push({ target, segments: cl.segments, verified, extensions });
+        chain.push({ ...probe, extensions });
+        continue;
+      }
       if (proof.status === 'unknown') policy = 'unverified';
       else if (proof.status === 'none' && policy === 'verified') policy = 'assumption';
-      const verified = { verification_id: uuid(), input_hash: hash, proof };
       verifiedLines.push({ target, segments: cl.segments, verified });
-      chain.push({ id: target.id, version: 1, source: 'ai', role: target.role, state: 'SETTLED', ink: [], segments: cl.segments, verified });
+      chain.push(probe);
     }
     return { kind: 'ready', candidate: { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy } };
+  }
+
+  /**
+   * Lean's check of a suggested proof step, as if it were written after `basedOn`. A step Lean
+   * refuses is retried with Lean's messages; an unreachable Lean leaves the step unverified.
+   */
+  private async leanCandidate(
+    probe: Line,
+    basedOn: Line,
+    slot: SlotMeta,
+    signal?: AbortSignal,
+  ): Promise<{ kind: 'stale' } | { kind: 'rejected'; feedback: CheckerFeedback } | { kind: 'checked'; verdict?: LineLean }> {
+    const nb = this.nb;
+    const lines = nb.lines.filter((l) => l.id !== probe.id);
+    lines.splice(lines.findIndex((l) => l.id === basedOn.id) + 1, 0, probe);
+    const view: Notebook = { ...nb, lines };
+    const input = leanInput(view, probe, this.deps.lang(), { candidate: true });
+    let res: LeanCheckResult;
+    try {
+      res = await this.api.leanCheck!(this.meta(basedOn.id, basedOn.version), input, signal);
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return { kind: 'stale' };
+      return { kind: 'checked' };
+    }
+    if (this.isStale(slot)) return { kind: 'stale' };
+    this.keepTranslations(res, probe.id);
+    if (res.theorem && !theoremOf(this.nb)) {
+      store.getState().set('notebook', withTheorem(this.nb, res.theorem));
+      store.getState().set('dirty', true);
+    }
+    if (res.state === 'unavailable' || res.state === 'timeout') return { kind: 'checked' };
+    const verdict = leanVerdict(res, probe.id, undefined, leanContextHash(input));
+    if (verdict.step === 'ok') return { kind: 'checked', verdict };
+    const latex = segmentsLatex(probe.segments);
+    const evidence = [verdict.message, verdict.goals && `Still to show: ${verdict.goals}`].filter((x): x is string => !!x).map((x) => x.slice(0, 500));
+    return { kind: 'rejected', feedback: { latex: latex.slice(0, 4000), reason: 'LEAN_REJECTED', evidence: evidence.slice(0, 3) } };
   }
 
   private recordCheckerRejection(draft: { id: string; content_hash: string }, pending: Candidate, segments: Line['segments'], proof: Proof) {
@@ -773,6 +940,7 @@ export class NotebookEngine {
           segments: first.segments,
           verified: first.verified,
           ai_origin: origin,
+          ...(first.extensions ? { extensions: first.extensions } : {}),
         };
         let at: number;
         if (existing >= 0) {
@@ -792,6 +960,8 @@ export class NotebookEngine {
     s.set('candidate', null);
     s.set('rejection', null);
     if (this.syncDeclarations()) void this.recheckStale();
+    // a proof step Lean could not check while it was a suggestion gets its check now
+    void this.maybeCheckLean(c.targetLineId);
     this.scheduleSuggestion(500);
     return 'adopted';
   }
@@ -960,6 +1130,34 @@ export class NotebookEngine {
     this.autosave.reset();
     return copy.id;
   }
+}
+
+/** A line's extensions without what belonged to its last reading: the route and Lean's verdict. */
+function withoutReading(extensions: Line['extensions']): NonNullable<Line['extensions']> {
+  const { route: _route, lean: _lean, ...rest } = extensions ?? {};
+  return rest;
+}
+
+/** One line's Lean verdict from a check result (the target's step, or why there was none). */
+function leanVerdict(res: LeanCheckResult, targetId: string, previousTactic: string | undefined, hash: string | null): LineLean {
+  const at = res.steps.findIndex((st) => st.line_id === targetId);
+  const step = at >= 0 ? res.steps[at]! : undefined;
+  const failedBefore = at > 0 && res.steps.slice(0, at).some((st) => st.state === 'failed');
+  const checked = res.state !== 'unavailable' && res.state !== 'timeout';
+  return {
+    tactic: step?.tactic ?? previousTactic ?? '',
+    ...(step ? { step: step.state } : {}),
+    proof: res.state,
+    scope: res.scope,
+    ...(failedBefore ? { after_failure: true } : {}),
+    ...(res.statement ? { statement: res.statement } : {}),
+    ...(step?.message || res.message ? { message: (step?.message ?? res.message)!.slice(0, 2000) } : {}),
+    ...(res.goals ? { goals: res.goals } : {}),
+    ...(res.hint && step?.state !== 'ok' ? { hint: res.hint } : {}),
+    // an unreachable Lean is asked again next time; a real verdict holds until the context changes
+    ...(checked && hash ? { context_hash: hash as LineLean['context_hash'] } : {}),
+    ...(res.versions ? { versions: res.versions } : {}),
+  };
 }
 
 /** Saves when the tab is hidden, the network returns, or the page is closed. */

@@ -68,6 +68,14 @@
     },
     "transcription": {
       "type": "string"
+    },
+    "route": {
+      "type": "string",
+      "enum": [
+        "cas",
+        "lean",
+        "none"
+      ]
     }
   },
   "required": [
