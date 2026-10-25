@@ -130,6 +130,7 @@ describe('printLatex round-trip', () => {
     ['\\Psi(x,t) = \\sum_{n=1}^{\\infty} c_n \\sin\\left(\\frac{n\\pi x}{L}\\right) e^{-iE_n t/\\hbar}', PHYS],
     ['\\frac{d}{dx}(x^2 + 1)'], ['\\lim_{x \\to 0} \\frac{\\sin x}{x}'], ['\\int_0^1 x \\, dx + 1'],
     ['\\psi\\left(a + b\\right)', PHYS], ['\\square = 2'],
+    ['|x^2 - 4| = |x - 2||x + 2| < \\frac{\\varepsilon}{5} \\cdot 5 = \\varepsilon'], ['0 < x \\le 1'], ['a = b, b < c'],
   ];
   for (const [latex, opts] of inputs) {
     it(latex, () => {
@@ -145,6 +146,12 @@ describe('printLatex round-trip', () => {
     assert.equal(printLatex(ex('\\Psi(x,t) = \\psi(x)\\phi(t)', PHYS)), '\\Psi\\left(x, t\\right) = \\psi\\left(x\\right) \\phi\\left(t\\right)');
     assert.equal(printLatex(ex('\\frac{\\partial^2 \\Psi}{\\partial x^2}', PHYS)), '\\frac{\\partial^{2} \\Psi}{\\partial x^{2}}');
     assert.equal(printLatex(ex('E_n')), 'E_{n}');
+  });
+
+  it('prints a mixed chain as written, and a list of separate relations with commas', () => {
+    assert.equal(printLatex(ex('a = b < c = d')), 'a = b < c = d');
+    assert.equal(printLatex(ex('0 < x \\le 1')), '0 < x \\le 1');
+    assert.equal(printLatex(ex('x + y = 3, x - y = 1')), 'x + y = 3, x - y = 1');
   });
 });
 
