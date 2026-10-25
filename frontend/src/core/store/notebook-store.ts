@@ -80,6 +80,8 @@ export interface NotebookState {
   suggesting: boolean;
   /** the unverified ghost is asking for its extra confirmation */
   ghostConfirm: boolean;
+  /** suggestions start by themselves after a pause; off leaves them to the suggest button */
+  autoSuggest: boolean;
   /** lines whose Lean check is still running (ADR 0008) */
   leanPending: Record<string, true>;
   toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
@@ -132,6 +134,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
   sheet: null,
   suggesting: false,
   ghostConfirm: false,
+  autoSuggest: true,
   leanPending: {},
   toast: null,
 
