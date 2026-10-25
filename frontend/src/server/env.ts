@@ -17,6 +17,9 @@ const schema = z.object({
   // ADR 0008: Lean translation needs the strongest model and real thinking
   LLM_MODEL_LEAN: z.string().default('gemini-3.8-flash'),
   LLM_THINKING_LEAN: thinking.default('high'),
+  // subject tags for the home page's progress section: short, cheap, no reasoning needed
+  LLM_MODEL_TAG: z.string().default('gemini-3.5-flash-lite'),
+  LLM_THINKING_TAG: thinking.default('minimal'),
   BACKEND_URL: z.string().optional(),
   BACKEND_API_KEY: z.string().optional(),
   /** lean-worker (ADR 0008): loopback HTTP in development, HTTPS or a private network otherwise */

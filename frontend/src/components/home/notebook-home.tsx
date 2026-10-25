@@ -21,6 +21,7 @@ import { Shelf } from '@/ui/shelf';
 import { Spinner } from '@/ui/spinner';
 import { NotebookCardSkeleton } from './notebook-card';
 import { NotebookGrid, type GridActions } from './notebook-grid';
+import { ProgressSection } from './progress/progress-section';
 import { PULL_THRESHOLD, usePullToRefresh } from './use-pull-refresh';
 import { enter } from '@/ui/motion';
 
@@ -321,6 +322,8 @@ export function NotebookHome() {
               <NotebookGrid items={visible} reorderable={!query.trim()} stagger={firstLoad} selected={selected} actions={actions} />
             )}
           </section>
+
+          {items && items.length > 0 && <ProgressSection ownerId={user.id} notebooks={items} />}
         </main>
 
         <AnimatePresence>

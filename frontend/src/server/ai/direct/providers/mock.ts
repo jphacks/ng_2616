@@ -17,6 +17,8 @@ export class MockProvider implements LlmProvider {
         return { text: '(mock transcription)' };
       case 'lean':
         return { scope: 'theorem', statement: '', steps: [], hint: '' };
+      case 'tag':
+        return { tags: [] };
     }
   }
 }
