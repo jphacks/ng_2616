@@ -4,6 +4,7 @@ import { leanOf, type Evidence, type Line, type Notebook, type Proof } from '@mn
 import clsx from 'clsx';
 import { CornerUpLeft, Flag, Lightbulb, Search, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
+import { FEATURES } from '@/features/registry.generated';
 import { findLine, isGiven, lineNumber } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -109,7 +110,7 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
   );
 }
 
-function DetailBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
+function DetailBody({ line: _line, nb, proof }: { line: Line; nb: Notebook; proof: Proof }) {
   const t = useT();
   const src = proof.segment_results.find((r) => r.source_line_id)?.source_line_id;
   const srcN = src ? lineNumber(nb, src) : null;
@@ -202,7 +203,14 @@ export function ExplanationSheet() {
       <div className="space-y-5">
         <div className="space-y-2 rounded-2xl bg-paper p-4">
           <Segments segments={line.segments} />
-          <StatusBadge line={line} ancestor={proof.unverified_ancestors[0] ? lineNumber(nb, proof.unverified_ancestors[0]) : null} />
+          <div className="flex items-center justify-between pt-1">
+            <StatusBadge line={line} ancestor={proof.unverified_ancestors[0] ? lineNumber(nb, proof.unverified_ancestors[0]) : null} />
+            <div className="flex items-center gap-2">
+              {FEATURES.flatMap((f) => f.lineActions ?? []).map((Action, i) => (
+                <Action key={i} line={line} />
+              ))}
+            </div>
+          </div>
         </div>
         {leanChecked ? (
           <LeanBody line={line} nb={nb} lean={leanChecked} />
