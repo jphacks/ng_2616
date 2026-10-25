@@ -13,6 +13,8 @@ const HEIGHT = 460;
 /** label sizes: as large as the circle allows, up to this share of its radius, and never below the floor */
 const LABEL_MAX = 0.6;
 const LABEL_MIN = 11;
+/** names are set at this share of the largest size that fits, so they do not crowd the edge */
+const LABEL_SCALE = 0.8;
 const LINE_HEIGHT = 1.15;
 /** how much of the circle's chord a line may use */
 const LABEL_ROOM = 0.92;
@@ -59,8 +61,10 @@ function fitLabel(tag: string, r: number): { lines: string[]; size: number } | n
     const lines = splitInto(words, rows);
     const w = Math.max(...lines.map(unitWidth));
     const k = 2 * LABEL_ROOM;
-    const size = Math.min(LABEL_MAX * r, (k * r) / Math.sqrt(w * w + ((k * rows * LINE_HEIGHT) / 2) ** 2));
-    if (size >= LABEL_MIN && (!best || size > best.size)) best = { lines, size: Math.floor(size) };
+    const fit = Math.min(LABEL_MAX * r, (k * r) / Math.sqrt(w * w + ((k * rows * LINE_HEIGHT) / 2) ** 2));
+    if (fit < LABEL_MIN) continue;
+    const size = Math.floor(Math.max(LABEL_MIN, fit * LABEL_SCALE));
+    if (!best || size > best.size) best = { lines, size };
   }
   labels.set(key, best);
   return best;
