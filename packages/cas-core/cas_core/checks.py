@@ -240,6 +240,13 @@ def _parent_expression(ctx: Context) -> tuple[Fact, Any] | None:
 
 def _domain_changes(c_ir: Any, written: sp.Expr, ctx: Context) -> list[str]:
     conds: list[str] = []
+    c_free_names: set[str] | None = None
+    try:
+        c_expr, _ = conv_expr(c_ir, ctx)
+        c_free_names = {s.name for s in c_expr.free_symbols}
+    except Exception:  # noqa: BLE001
+        pass
+
     for d_ir in denominators_ir(c_ir):
         try:
             d, _ = conv_expr(d_ir, ctx)
@@ -249,6 +256,10 @@ def _domain_changes(c_ir: Any, written: sp.Expr, ctx: Context) -> list[str]:
         if len(syms) != 1:
             continue
         v = syms[0]
+        # Bound variables (such as integration dummy variables) are not free in the parent
+        # expression and do not restrict the outer domain.
+        if c_free_names is not None and v.name not in c_free_names:
+            continue
         try:
             zs = sp.solveset(d, v, sp.S.Reals)
         except Exception:  # noqa: BLE001
@@ -273,6 +284,12 @@ def compare_values(
     source: str | None = None,
 ) -> SegResult:
     env = ctx.env
+    # Definite integrals with matching limits: check integrand equivalence directly
+    # (e.g. partial fraction decomposition or algebraic rewrite before evaluation).
+    if isinstance(C, sp.Integral) and isinstance(W, sp.Integral) and C.limits == W.limits:
+        if is_zero(sp.simplify(C.function - W.function)):
+            return SegResult("ok", goal=goal, method="sym", source_line_id=source)
+
     Cd, Wd = _doit(C), _doit(W)
     if is_zero(Wd - Cd):
         conds = _domain_changes(c_ir, Wd, ctx) if c_ir is not None else []
