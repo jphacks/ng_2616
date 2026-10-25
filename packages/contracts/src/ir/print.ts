@@ -35,7 +35,7 @@ const CHAIN_OPS: Record<string, string> = { Equal: '=', Less: '<', LessEqual: '\
 
 /** Relations where each right-hand side is the next left-hand side: a chain such as a = b < c. */
 function isChain(rels: MathJSON[]): boolean {
-  const ok = (r: MathJSON): r is MathJSON[] => Array.isArray(r) && r.length === 3 && r[0] as string in CHAIN_OPS && r[2] !== null;
+  const ok = (r: MathJSON): boolean => Array.isArray(r) && r.length === 3 && (r[0] as string) in CHAIN_OPS && r[2] !== null;
   return rels.length >= 2 && rels.every(ok) && rels.slice(1).every((r, i) => JSON.stringify((r as MathJSON[])[1]) === JSON.stringify((rels[i] as MathJSON[])[2]));
 }
 
