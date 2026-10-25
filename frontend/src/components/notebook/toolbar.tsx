@@ -9,6 +9,7 @@ import { suggestBlockerOf } from '@/core/candidates/blocker';
 import { findLine } from '@/core/notebook/model';
 import { INK_WEIGHTS, useDevicePrefs, type InkWeight, type ToolbarSide } from '@/core/prefs/device';
 import { useNotebook, type Tool } from '@/core/store/notebook-store';
+import { FEATURES } from '@/features/registry.generated';
 import { useT } from '@/i18n';
 import { IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
@@ -35,16 +36,17 @@ export function Toolbar() {
   const suggesting = useNotebook((s) => s.suggesting);
   const autoSuggest = useNotebook((s) => s.autoSuggest);
   const set = useNotebook((s) => s.set);
-  // an unresolved wrong line locks completion: grey the button, but a press still explains why (R27)
-  const locked = useNotebook(
-    (s) =>
-      suggestBlockerOf({
-        notebook: s.notebook,
-        casReady: s.cas.state === 'ready',
-        candidate: s.candidate?.state ?? null,
-        activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
-      }) === 'wrong',
-  );
+  // an unresolved wrong line (or the hint mode) locks completion: grey the button, but a press still explains why (R27)
+  const locked = useNotebook((s) => {
+    const blocker = suggestBlockerOf({
+      notebook: s.notebook,
+      casReady: s.cas.state === 'ready',
+      candidate: s.candidate?.state ?? null,
+      activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
+      assistMode: s.assistMode,
+    });
+    return blocker === 'wrong' || blocker === 'hint-mode' || blocker === 'assist-off';
+  });
 const side = useDevicePrefs((s) => s.toolbarSide);
   const inkWeight = useDevicePrefs((s) => s.inkWeight);
   const setPref = useDevicePrefs((s) => s.setPref);
@@ -128,6 +130,9 @@ const side = useDevicePrefs((s) => s.toolbarSide);
         <IconButton label={t('tool.newLine')} onClick={() => engine.newLine()}>
           <ListPlus size={20} />
         </IconButton>
+        {FEATURES.flatMap((f) => f.toolbar ?? []).map((Slot, i) => (
+          <Slot key={i} />
+        ))}
         <button
           type="button"
           aria-pressed={autoSuggest}

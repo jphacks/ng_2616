@@ -368,6 +368,12 @@ export const en = {
   'toast.suggestPending': 'Wait until the line is checked, then try again.',
   'toast.suggestCannotContinue': 'This line cannot be continued yet. Check it, or fix it first.',
   'toast.suggestBusy': 'A suggestion is already being prepared or waiting for you.',
+  'toast.suggestHintMode': 'Hint mode is on, so no completion is offered. Switch to Complete to get suggestions.',
+  'toast.suggestAssistOff': 'Assist is off, so no completion is offered. Switch the assist mode to get suggestions.',
+  'assist.off': 'Off',
+  'assist.hint': 'Hint',
+  'assist.complete': 'Complete',
+  'assist.label': 'Assist mode',
   'toast.suggestHeld': 'A suggestion is ready. It will appear when you stop writing.',
   'toast.waitForChecks': 'Wait for the current checks to finish.',
 
