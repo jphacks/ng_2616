@@ -67,10 +67,11 @@ export function serializeLatex(value: PdfDocument): string {
     else out.push('\\subsection*{' + escapeTex(section.title) + '}');
     for (const block of section.blocks) {
       const body: string[] = [];
-      const mixed = block.fragments.some(f => f.kind === 'text') && block.fragments.some(f => f.kind === 'math');
-      // two formulas side by side get a space: "$a$$b$" would open display math
-      if (mixed) body.push(block.fragments.map((f, i) => f.kind === 'text' ? escapeTex(f.value) : (block.fragments[i - 1]?.kind === 'math' ? ' $' : '$') + mathTex(f.value) + '$').join('') + '\\par');
-      else for (const f of block.fragments) body.push(f.kind === 'text' ? escapeTex(f.value) + '\\par' : '\\ReportEquation{' + mathTex(f.value) + '}');
+      // Explanations and equations use separate rows, including mixed notebook lines.
+      for (const f of block.fragments) {
+        if (f.kind === 'math') body.push('\\ReportEquation{' + mathTex(f.value) + '}');
+        else if (f.value.trim()) body.push(escapeTex(f.value.trim()) + '\\par');
+      }
       if (!historical) out.push(...body);
       if (h.include_records && (block.notes.length || historical)) {
         records.push('\\textbf{' + (ja ? '行 ' : 'Line ') + escapeTex(block.label) + '}\\par', ...body,

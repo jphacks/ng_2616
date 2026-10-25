@@ -48,21 +48,21 @@ describe('LuaLaTeX homework report', () => {
       line('l2', [raw('\\forall \\varepsilon > 0 \\, \\exists \\delta > 0')]),
       line('l3', [raw('|x - 2| < 1 \\Rightarrow |x + 2| < 5')]));
     const tex = serializeLatex(serializeNotebook(nb, 'en').document);
-    assert.ok(tex.includes('Choose $\\delta = \\min \\left( 1, \\frac{\\varepsilon}{5} \\right)$'), tex);
+    assert.ok(tex.includes('Choose\\par\n\\ReportEquation{\\delta = \\min \\left( 1, \\frac{\\varepsilon}{5} \\right)}'), tex);
     assert.ok(tex.includes('\\ReportEquation{\\forall \\varepsilon > 0 \\, \\exists \\delta > 0}'));
     assert.ok(tex.includes('\\ReportEquation{|x - 2| < 1 \\Rightarrow |x + 2| < 5}'));
     assert.ok(!tex.includes('\\textbackslash{}delta'));
   });
-  it('spaces inline formulas in a sentence like the screen, except before punctuation and next to Japanese', () => {
+  it('gives each formula its own display row even inside English and Japanese explanations', () => {
     const en = serializeLatex(serializeNotebook(buildNotebook('epsilon_delta', 'en'), 'en').document);
-    assert.ok(en.includes('every real $x$ with'), en);
+    assert.ok(en.includes('every real\\par\n\\ReportEquation{x}\nwith '), en);
     const integral = serializeLatex(serializeNotebook(buildNotebook('integral', 'en'), 'en').document);
-    assert.ok(/Evaluate \$I.*\$ for \$a > 0\$\.\\par/.test(integral), integral);
+    assert.ok(/Evaluate\\par\n\\ReportEquation\{I.*\}\nfor\\par\n\\ReportEquation\{a > 0\}\n\.\\par/.test(integral), integral);
     const ja = serializeLatex(serializeNotebook(buildNotebook('integral', 'ja'), 'ja').document);
-    assert.ok(ja.includes('$a > 0$のとき$I') && ja.includes('$を求めなさい。'), ja);
+    assert.ok(ja.includes('\\ReportEquation{a > 0}\nのとき\\par\n\\ReportEquation{I') && ja.includes('}\nを求めなさい。\\par'), ja);
     const nb = buildNotebook('blank', 'en');
     nb.lines.splice(0, 0, { ...nb.lines[0]!, id: 'two', role: 'step', state: 'SETTLED', segments: segmentsFromSource('so $x = 1$ $y = 2$') });
-    assert.ok(serializeLatex(serializeNotebook(nb, 'en').document).includes('so $x = 1$ $y = 2$\\par'));
+    assert.ok(serializeLatex(serializeNotebook(nb, 'en').document).includes('so\\par\n\\ReportEquation{x = 1}\n\\ReportEquation{y = 2}'));
   });
   it('sets Greek letters in text as math letters instead of the Japanese font', () => {
     assert.equal(escapeTex('ε–δ: for every ε > 0'), '$\\varepsilon$–$\\delta$: for every $\\varepsilon$ > 0');

@@ -35,9 +35,15 @@ export type CasRawProof = Omit<Proof, 'input_hash' | 'mock' | 'cas'> & { elapsed
 
 function contextLine(l: Line): CasContextLine {
   const p = proofOf(l);
+  // A PDF's bare integral is the expression to calculate, not an assumed fact. The CAS
+  // intentionally ignores bare expressions on premise lines, so expose this reviewed task
+  // as an expression context while retaining its Given mark and provenance in the notebook.
+  const math = l.segments.filter((segment) => segment.type === 'math');
+  const integralTask = l.source === 'pdf' && l.role === 'premise' && !!l.extensions?.pdf_question
+    && math.length > 0 && math.every((segment) => Array.isArray(segment.expr) && segment.expr[0] === 'Integrate');
   return {
     id: l.id,
-    role: l.role,
+    role: integralTask ? 'step' : l.role,
     segments: toInputSegments(l.segments),
     status: p?.status ?? 'unknown',
     unverified_ancestors: p?.unverified_ancestors ?? [],
