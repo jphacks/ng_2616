@@ -211,6 +211,12 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 - ⑤：`NEXT_PUBLIC_ENABLED_FEATURES=assist_modes` を設定した build／E2E での確認（ST-02）。③は単体テストと、フラグ OFF の E2E（既存）までしか確認していない。
 - ①：`CHANGE_AI_MODE` を履歴に入れるか。
 
+### 既知の差分と今回の扱い
+- **S-03 BRIDGE は今回見送り**（v2.0 §17「時間が足りなければ、ブリッジを先に切る」に従う）。実装しないので、`bridge` フラグも使わない。下の見積もりは、あとで着手するときのため。
+- **ST-02 との既知の差分**：ST-02 は「モード切り替え、古い候補の除去、Undo」を見るが、**モード切り替えを Undo の対象にしていない**（`CHANGE_AI_MODE` を履歴に入れていない。`history.ts` が①の領域のため）。候補の除去と epoch の移動は実装済みでテストしている。
+- **S-02 のフラグ ON の確認は、ユーザーがブラウザで行う**（`NEXT_PUBLIC_ENABLED_FEATURES=assist_modes` で起動）。③は、ON の登録簿が型として通ることと、単体テスト（9 件）までしか確認していない。ON の E2E は無い。
+- **`toolbar` スロットを使う既存の機能は無い**：`features/` で `toolbar` を登録しているのは `assist-modes` だけ。`plot`（PR #55）は `lineActions` だけを登録するので、`plot` を ON にしても ツールバーの表示は変わらない（確認済み）。今後 `toolbar` を使う機能が増えたら、ボタンが補完ボタンの前に並ぶ。
+
 ### S-03 BRIDGE：作業量の見積もり（実装しない）
 
 **見積もり：大**（補完の約半分に当たる新規。③だけでは終わらず、①②⑤の領域にもかかる）。
