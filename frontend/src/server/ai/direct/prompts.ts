@@ -52,7 +52,7 @@ Choosing what to draw:
 - Draw everything the request names: "ψ_n and their probability densities" needs both the ψ_n curves and the |ψ_n|^2 curves.
 - Formulas hold mathematics only, never words: join several conditions with a comma, as in x^2 + y^2 < 4, y > x (never "and").
 - A family such as "n = 1, 2, 3" becomes one series per member, each with a legend label such as "$n = 1$" and the value written into the formula.
-- Formulas may use + - · /, powers, \\sqrt, absolute value |·|, \\sin, \\cos, \\tan, e^{...}, \\ln, \\pi and i. No derivatives, integrals, sums or limits: work them out and write the result. For a complex quantity choose "part": "re", "im", "abs" or "abs2" (abs2 for a probability density |ψ|^2).
+- Formulas may use + - · /, powers, \\sqrt, absolute value |·|, \\sin, \\cos, \\tan, \\arcsin, \\arccos, \\arctan, e^{...}, \\ln, \\pi and i. No derivatives, integrals, sums or limits: work them out and write the result. For a complex quantity choose "part": "re", "im", "abs" or "abs2" (abs2 for a probability density |ψ|^2).
 
 Series types ("kind": "2d" unless stated):
 - function: y = f(x); formula in "y".

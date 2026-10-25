@@ -41,6 +41,8 @@ PSI = lambda n: ["Multiply", ["Sqrt", 2], ["Sin", ["Multiply", n, "Pi", "x"]]]  
 CASES = {
     "function_family": spec("2d", [series("function", {"y": f("", PSI(n))}, label=f"$n = {n}$") for n in (1, 2, 3)], x=(0, 1)),
     "function_pole": spec("2d", [series("function", {"y": f("", ["Tan", "x"])})], x=(-4, 4)),
+    "function_inverse_trig": spec("2d", [series("function", {"y": f("", ["ArcTan", "x"])}, label="arctan"),
+                                         series("function", {"y": f("", ["ArcSin", ["Divide", "x", 5]])}, label="arcsin")]),
     "function_constant": spec("2d", [series("function", {"y": f("", ["Multiply", "a", "x"])})], constants={"a": 0.5}),
     "complex_abs2": spec("2d", [series("function", {"y": f("", ["Exp", ["Multiply", "ImaginaryUnit", "x"]])}, part="abs2")]),
     "parametric": spec("2d", [series("parametric", {"x": f("", ["Cos", "t"]), "y": f("", ["Sin", ["Multiply", 2, "t"]])},

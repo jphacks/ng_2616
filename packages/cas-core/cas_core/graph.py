@@ -54,6 +54,9 @@ _UNARY = {
     "Tan": sp.tan,
     "Exp": sp.exp,
     "Ln": sp.log,
+    "ArcSin": sp.asin,
+    "ArcCos": sp.acos,
+    "ArcTan": sp.atan,
 }
 _CONSTANTS = {"Pi": sp.pi, "ExponentialE": sp.E, "ImaginaryUnit": sp.I}
 _RELATIONS = {"Less": sp.Lt, "LessEqual": sp.Le, "Greater": sp.Gt, "GreaterEqual": sp.Ge}
