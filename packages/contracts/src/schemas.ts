@@ -23,7 +23,8 @@ export const StatusSchema = z.enum(['ok', 'wrong', 'unknown', 'none']);
 export const MethodSchema = z.enum(['sym', 'sets', 'solve', 'eval', 'cx', 'num', 'def', 'sep', 'sub', 'scale']);
 export const RoleSchema = z.enum(['premise', 'definition', 'step', 'text']);
 export const SourceSchema = z.enum(['user', 'ai', 'pdf', 'resource']);
-export const SuggestModeSchema = z.enum(['COMPLETE_RHS', 'NEXT_STEP', 'BRIDGE']);
+/** GRAPH answers a line that asks for a graph with a graph line (rendered by matplotlib, never checked by the CAS). */
+export const SuggestModeSchema = z.enum(['COMPLETE_RHS', 'NEXT_STEP', 'BRIDGE', 'GRAPH']);
 export const FeatureSchema = z.enum(['hints', 'assist_modes', 'bridge', 'plot', 'lean', 'autosave', 'auto_submit', 'resources']);
 export const NotationSchema = z.enum(['plain', 'continuation']);
 export const UiLangSchema = z.enum(['en', 'ja']);

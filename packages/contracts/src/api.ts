@@ -13,6 +13,7 @@ import {
   UiLangSchema,
 } from './schemas';
 import { CheckerRouteSchema, LeanStepStateSchema } from './lean';
+import { GraphSpecSchema } from './graph';
 
 /** Scripted demo binding (the Schrödinger notebook). */
 export const DemoBindingSchema = z.object({ script: z.string().max(64) });
@@ -43,6 +44,8 @@ export const RecognizeResultSchema = z.object({
   transcription: z.string().optional(),
   /** v2.3: the checker the model chose for this line (ADR 0008) */
   route: CheckerRouteSchema.optional(),
+  /** the model read the line as asking for a graph */
+  graph_request: z.boolean().optional(),
 });
 
 export const SuggestContextLineSchema = z.object({
@@ -95,6 +98,8 @@ export const CandidateDraftLineSchema = z.object({
   segments: z.array(SegmentSchema),
   /** v2.3: a proof step goes to Lean, not the CAS (ADR 0008) */
   route: CheckerRouteSchema.optional(),
+  /** a GRAPH candidate's picture; its segments hold only the title */
+  graph: GraphSpecSchema.optional(),
 });
 
 export const CandidateDraftResultSchema = z.object({
