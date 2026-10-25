@@ -142,6 +142,9 @@ export const en = {
   'tool.undo': 'Undo',
   'tool.redo': 'Redo',
   'tool.suggest': 'Suggest next step',
+  'tool.autoSuggest': 'Auto',
+  'tool.autoSuggestOn': 'Auto-complete is on: suggestions appear when you pause. Press to turn off.',
+  'tool.autoSuggestOff': 'Auto-complete is off: use the suggest button. Press to turn on.',
   'tool.newLine': 'New line',
   'tool.clear': 'Clear line',
 

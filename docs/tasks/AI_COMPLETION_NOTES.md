@@ -237,6 +237,15 @@ npx playwright test tests/e2e/demo.spec.ts tests/e2e/checking.spec.ts      # 約
 
 目安：単体で動く最小版（選択 UI 無し、サーバーと検証と採用だけ）でも、③の作業は 1 日規模。UI まで含めると、①との調整込みで 1.5〜2 日。時間が足りなければ、仕様 §17 の「時間が足りなければ BRIDGE から切る」に従う。
 
+## 自動補完の切り替えボタン（`Riku_autocomplete`、main `eba1a80` から）
+
+ユーザーの依頼：「ボタンなしのオートコンプリート機能。ボタンは新しく作成し、モード切替とする」。
+- **自動の提案はもともとある**（v2.1 の R26。確定・Undo・チェッカー準備完了などのあと、1.2 秒の停止で `scheduleSuggestion` が自動で始める）。新しいのは、**自動を切り替えるボタン**。
+- ストアに `autoSuggest`（既定 `true`＝今と同じ動き。保存はしない）。`engine.setAutoSuggest(on)`：オフにするとタイマーを止め、`scheduleSuggestion` が何もしなくなる（手動の「次の一歩を提案」ボタンは今まで通り）。オンにするとすぐに待ちを始める。すでに出ている候補や、進行中の要求は消さない。
+- `toolbar.tsx`：補完ボタンの左に切り替えボタン（稲妻、「自動」。オフは斜線で灰色）。i18n は新しいキーのみ。
+- テスト：`tests/unit/suggest/auto-suggest.test.ts` 5 件。`package.json` の `test` への追加は⑤に依頼（足していない）。
+- **仮決め**：既定はオン（挙動を変えない）。端末に保存しない（`prefs/device.ts` は共有）。補助モード（`Riku_should`、PR #65）とは別のブランチで、まだ main に無い。両方が入ると、`toolbar.tsx` のボタンが並ぶ。
+
 ## 問題カードの廃止（PR #52）と、補完の前提
 
 **問題カードは PR #52（`9f85a1c`、RedBlueBird「問題カードを、手書きできる given 行に置き換える」）で廃止された**（v2.2）。前提（`L > 0`、`n ∈ ℤ⁺`、`ψ(x) ≠ 0`）と関数宣言（`Ψ(x, t)`）は **ふつうの行**で、形で判別される（`packages/cas-core/cas_core/context.py` の冒頭に「there is no problem card」）。このメモの古い節（段階0〜2、部品対応表など）に残る「問題カード」は、廃止前の記述。

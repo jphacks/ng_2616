@@ -83,6 +83,8 @@ export interface NotebookState {
   ghostConfirm: boolean;
   /** S-02: 'hint' hides completion. Only the assist_modes feature changes it, so it stays 'complete' without it */
   assistMode: AssistMode;
+  /** suggestions start by themselves after a pause; off leaves them to the suggest button */
+  autoSuggest: boolean;
   /** lines whose Lean check is still running (ADR 0008) */
   leanPending: Record<string, true>;
   toast: { id: number; text: string; tone: 'info' | 'error'; action?: ToastAction } | null;
@@ -136,6 +138,7 @@ export const useNotebook = create<NotebookState>((set, get) => ({
   suggesting: false,
   ghostConfirm: false,
   assistMode: 'complete',
+  autoSuggest: true,
   leanPending: {},
   toast: null,
 
