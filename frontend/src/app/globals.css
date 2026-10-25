@@ -235,7 +235,7 @@ body {
 /* the notebook page itself: fainter squares, so handwriting stays in front, sized to keep the
    miniatures' proportion of text to squares */
 .graph-paper-page {
-  --graph-line: color-mix(in oklch, var(--color-accent) 6%, white);
+  --graph-line: color-mix(in oklch, var(--color-accent) 4%, white);
   --graph-cell: 24px;
 }
 

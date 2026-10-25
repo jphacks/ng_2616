@@ -79,7 +79,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
     >
       <Gutter n={number} line={line} />
-      <div className="min-w-0 flex-1 py-2">
+      {/* centered, so the line stays level with the gutter when the status column is the taller one */}
+      <div className="min-w-0 flex-1 self-center py-2">
         {revisionOf !== null && (
           <div className="mb-1 inline-flex items-center gap-1 text-sm font-medium text-unknown">
             <CornerUpLeft size={14} /> {t('line.revising', { n: revisionOf })}
@@ -135,8 +136,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
           </div>
         )}
         {(line.state === 'SETTLED' || line.state === 'VERIFYING') && (
-          <button type="button" onClick={openDetails} className="block w-full min-w-0 text-left">
-            <Segments segments={line.segments} className="min-h-16" />
+          <button type="button" onClick={openDetails} className="flex min-h-16 w-full min-w-0 items-center text-left">
+            <Segments segments={line.segments} className="w-full" />
           </button>
         )}
         {line.state === 'SETTLED' && ghostHere && candidate?.mode === 'COMPLETE_RHS' && (
@@ -180,12 +181,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             <Spinner size={14} /> {t('line.checking')}
           </span>
         )}
+        {/* the verdict first, then what can be done with the line, then the Lean check in progress */}
         {line.state === 'SETTLED' && <StatusBadge line={line} ancestor={ancestor} onClick={openDetails} />}
-        {line.state === 'SETTLED' && leanChecking && (
-          <span className="inline-flex items-center gap-2 text-sm text-muted" data-lean="checking">
-            <Spinner size={14} /> {t('line.leanChecking')}
-          </span>
-        )}
         {line.state === 'SETTLED' && line.verified?.proof.status === 'wrong' && (
           <Button size="sm" variant="ghost" icon={<CornerUpLeft size={15} />} onClick={() => engine.startRevision(line.id)}>
             {t('line.revise')}
@@ -193,6 +190,11 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         )}
         {line.state === 'SETTLED' &&
           FEATURES.flatMap((f) => f.lineActions ?? []).map((Action, i) => <Action key={i} line={line} />)}
+        {line.state === 'SETTLED' && leanChecking && (
+          <span className="inline-flex items-center gap-2 text-sm text-muted" data-lean="checking">
+            <Spinner size={14} /> {t('line.leanChecking')}
+          </span>
+        )}
       </div>
     </SwipeRow>
   );
