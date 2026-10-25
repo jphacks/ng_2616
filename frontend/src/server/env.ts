@@ -16,6 +16,8 @@ const schema = z.object({
   LLM_THINKING_OCR: thinking.default('minimal'),
   BACKEND_URL: z.string().optional(),
   BACKEND_API_KEY: z.string().optional(),
+  PDF_COMPILER_URL: z.string().optional(),
+  PDF_COMPILER_API_KEY: z.string().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().default(''),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().default(''),
   NEXT_PUBLIC_AUTH_DEV_BYPASS: z.string().default('false'),

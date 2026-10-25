@@ -60,7 +60,10 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
       </div>
       <button type="button" onClick={accept} className="block w-full text-left opacity-70 transition-opacity hover:opacity-100">
         {candidate.lines.map((l, i) => (
-          <Segments key={i} segments={l.segments} />
+          // Segments scrolls sideways (overflow-x: auto), which makes overflow-y auto as well; a KaTeX fraction is a pixel
+          // taller than its line box, so a vertical scrollbar appeared and cut the formula. Extra padding holds the
+          // overhang; overflow-y stays hidden so only a long formula scrolls, and only sideways.
+          <Segments key={i} segments={l.segments} className="overflow-y-hidden py-2!" />
         ))}
       </button>
       {confirming && unverified && <p className="mt-2 text-md text-unknown">{t('ghost.confirmUnverified')}</p>}
