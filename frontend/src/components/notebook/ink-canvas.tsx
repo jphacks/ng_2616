@@ -399,8 +399,8 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         return;
       }
 
-      // Auto-start stroke or eraser if pointerdown was swallowed by iPadOS / Scribble
-      if (!activeStrokes.current.has(e.pointerId) && !erasing.current && e.target === c && isContact && propsRef.current.editable && (propsRef.current.tool === 'pen' ? e.pointerType === 'pen' : propsRef.current.tool === 'eraser')) {
+      // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
+      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
         startStroke(e);
       }
 
@@ -408,7 +408,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       if (!l) return;
 
       // Contact lost mid-move without pointerup event
-      if (!isContact && (e.pointerType === 'pen' || e.pointerType === 'touch')) {
+      if (!isContact && e.pointerType === 'pen') {
         commitLiveRef.current(e.pointerId);
         return;
       }
