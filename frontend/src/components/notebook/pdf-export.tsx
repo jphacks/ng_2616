@@ -3,8 +3,10 @@
 import { Download, FileDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import clsx from 'clsx';
 import type { Notebook } from '@mn/contracts';
 import { ApiCallError } from '@/core/api/client';
+import type { SessionUser } from '@/core/auth/browser';
 import { compileReportPdf } from '@/core/export/compile';
 import { serializeLatex } from '@/core/export/latex';
 import { exportSnapshot, serializeNotebook, validateExportSnapshot, type ReportDetails } from '@/core/export/document';
@@ -16,8 +18,12 @@ import { Spinner } from '@/ui/spinner';
 import type { PdfProgress } from '@/core/export/browser-pdf';
 
 type Result = { url: string; name: string; omitted: number };
+/** Fields that open holding a suggested value: shown gray, printed as is, made solid on first touch. */
+type Prefilled = 'author' | 'studentId' | 'course';
 
-export function PdfExport() {
+const SAMPLE_STUDENT_ID = '01234567';
+
+export function PdfExport({ user }: { user: SessionUser }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -27,6 +33,13 @@ export function PdfExport() {
   const [method, setMethod] = useState<'tex' | 'browser'>('tex');
   const [texDownload, setTexDownload] = useState<{ url: string; name: string } | null>(null);
   const [report, setReport] = useState<ReportDetails>({ title: '', author: '', studentId: '' });
+  const [prefilled, setPrefilled] = useState<ReadonlySet<Prefilled>>(new Set());
+  const touch = (key: string) => setPrefilled((p) => {
+    if (!p.has(key as Prefilled)) return p;
+    const next = new Set(p);
+    next.delete(key as Prefilled);
+    return next;
+  });
   const snapshotRef = useRef<Notebook | null>(null);
   const controller = useRef<AbortController | null>(null);
   const notebookId = useNotebook((s) => s.notebook?.id);
@@ -46,7 +59,10 @@ export function PdfExport() {
     const notebook = useNotebook.getState().notebook;
     if (!notebook) return;
     snapshotRef.current = structuredClone(exportSnapshot(notebook));
-    setReport({ title: notebook.title, author: '', studentId: '', homework: { course: '', institution: '', date: new Date().toLocaleDateString(currentLocale() === 'ja' ? 'ja-JP' : 'en-US'), exercise: '1', paper: 'letter', include_records: true } });
+    // an empty title prints the notebook's own title
+    const author = user.name?.trim() ?? '';
+    setReport({ title: '', author, studentId: SAMPLE_STUDENT_ID, homework: { course: t('pdf.defaultCourse'), institution: '', date: '', exercise: '', paper: 'letter', include_records: false } });
+    setPrefilled(new Set<Prefilled>(author ? ['author', 'studentId', 'course'] : ['studentId', 'course']));
     setMethod('tex'); setTexDownload(null);
     setOpen(true); setProgress(null); setResult(null); setError(null);
   };
@@ -104,7 +120,8 @@ export function PdfExport() {
             {(['title', 'author', 'studentId'] as const).map((key) => (
               <label key={key} className="block text-sm font-medium">
                 {t(`pdf.${key}`)}
-                <input className="mt-1 h-11 w-full rounded-xl bg-paper px-3 text-base ring-1 ring-border" value={report[key]} maxLength={key === 'title' ? 200 : 100} disabled={busy}
+                <input className={clsx('mt-1 h-11 w-full rounded-xl bg-paper px-3 text-base ring-1 ring-border', prefilled.has(key as Prefilled) && 'text-faint')} value={report[key]} maxLength={key === 'title' ? 200 : 100} disabled={busy}
+                  onFocus={() => touch(key)}
                   onChange={(e) => { setReport((r) => ({ ...r, [key]: e.target.value })); setResult(null); setTexDownload(null); setError(null); }} />
               </label>
             ))}
@@ -113,7 +130,7 @@ export function PdfExport() {
             <legend className="mb-2 text-sm font-semibold">{t('pdf.homework')}</legend>
             <p className="text-sm text-muted">{t('pdf.templateHelp')}</p>
             {(['course', 'institution', 'date', 'exercise'] as const).map(key => <label key={key} className="block text-sm font-medium">{t(`pdf.${key}`)}
-              <input value={report.homework![key]} maxLength={{ course: 120, institution: 200, date: 60, exercise: 40 }[key]} onChange={e => { setReport(r => ({ ...r, homework: { ...r.homework!, [key]: e.target.value } })); setResult(null); setTexDownload(null); setError(null); }} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 text-base ring-1 ring-border" />
+              <input value={report.homework![key]} maxLength={{ course: 120, institution: 200, date: 60, exercise: 40 }[key]} onFocus={() => touch(key)} onChange={e => { setReport(r => ({ ...r, homework: { ...r.homework!, [key]: e.target.value } })); setResult(null); setTexDownload(null); setError(null); }} className={clsx('mt-1 h-11 w-full rounded-xl bg-paper px-3 text-base ring-1 ring-border', prefilled.has(key as Prefilled) && 'text-faint')} />
             </label>)}
             <label className="block text-sm font-medium">{t('pdf.paper')}<select aria-label={t('pdf.paper')} value={report.homework.paper} onChange={e => { setReport(r => ({ ...r, homework: { ...r.homework!, paper: e.target.value as 'letter' | 'a4' } })); setResult(null); setTexDownload(null); }} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border"><option value="letter">US Letter</option><option value="a4">A4</option></select></label>
             <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={report.homework.include_records} onChange={e => { setReport(r => ({ ...r, homework: { ...r.homework!, include_records: e.target.checked } })); setResult(null); setTexDownload(null); }} />{t('pdf.records')}</label>

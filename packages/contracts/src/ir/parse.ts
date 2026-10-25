@@ -35,10 +35,11 @@ export type ParseResult =
 /** Names that read as functions when directly followed by "(" even if undeclared. */
 const DEFAULT_FUNCTION_NAMES = new Set(['f', 'g', 'h', 'F', 'G', 'H', 'y', 'u', 'psi', 'Psi', 'phi', 'Phi', 'varphi', 'chi']);
 
-const FN_CMDS = new Set(['sin', 'cos', 'tan', 'ln', 'log', 'exp']);
+const FN_CMDS = new Set(['sin', 'cos', 'tan', 'ln', 'log', 'exp', 'arctan', 'arcsin', 'arccos', 'atan', 'asin', 'acos']);
 const SKIP_CMDS = new Set([
   ',', ';', ':', '!', ' ', '>', 'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl',
   'biggr', 'Biggl', 'Biggr', 'displaystyle', 'textstyle', 'limits', 'nolimits', 'mathstrut',
+  'notag', 'tag', 'label', 'nonumber',
 ]);
 const REL_CMDS: Record<string, string> = {
   le: 'LessEqual', leq: 'LessEqual', leqslant: 'LessEqual', ge: 'GreaterEqual', geq: 'GreaterEqual',
@@ -55,14 +56,40 @@ type Tok =
   | { k: 'sym'; v: string; at: number };
 
 class ParseError extends Error {
-  constructor(public code: ParseErrorCode, message: string, public at: number) {
+  code: ParseErrorCode;
+  at: number;
+  constructor(code: ParseErrorCode, message: string, at: number) {
     super(message);
+    this.code = code;
+    this.at = at;
   }
 }
 
 function normalize(src: string): string {
+  // 1. Recover control characters corrupted by JSON decoding of single-backslash LaTeX
+  let s = src
+    // \x0c (form feed from JSON \f): \x0crac -> \frac, etc.
+    .replace(/\x0crac/g, '\\frac')
+    .replace(/\x0c([a-zA-Z])/g, '\\f$1')
+    // \x08 (backspace from JSON \b): \x08eta -> \beta, etc.
+    .replace(/\x08([a-zA-Z])/g, '\\b$1')
+    // \x09 (tab from JSON \t): \x09int -> \int, \x09([a-zA-Z]) -> \t$1
+    .replace(/\x09int/g, '\\int')
+    .replace(/\x09([a-zA-Z])/g, '\\t$1')
+    // \x0d (carriage return from JSON \r): \x0dight -> \right, \x0dho -> \rho
+    .replace(/\x0d([a-zA-Z])/g, '\\r$1')
+    // \x0a (newline from JSON \n): \x0a(notag|nu|nabla|neq) -> \$1
+    .replace(/\x0a(notag|nu|nabla|neq)\b/g, '\\$1');
+
+  // 2. Fix typos and stripped backslashes for structural commands
+  s = s
+    .replace(/\\tint\b/g, '\\int')
+    .replace(/(?<![\\a-zA-Z])rac\{/g, '\\frac{')
+    .replace(/(?<![\\a-zA-Z])int(?=[_^])/g, '\\int');
+
+  // 3. Unicode substitutions
   let out = '';
-  for (const ch of src) out += UNICODE_TO_LATEX[ch] ?? ch;
+  for (const ch of s) out += UNICODE_TO_LATEX[ch] ?? ch;
   return out;
 }
 
@@ -157,7 +184,13 @@ class Parser {
   absDepth = 0;
   stopAtDiff = false;
 
-  constructor(private toks: Tok[], private opts: Resolved) {}
+  private toks: Tok[];
+  private opts: Resolved;
+
+  constructor(toks: Tok[], opts: Resolved) {
+    this.toks = toks;
+    this.opts = opts;
+  }
 
   // ---- token helpers ----
   peek(o = 0): Tok | undefined { return this.toks[this.pos + o]; }
@@ -412,7 +445,13 @@ class Parser {
       if (t.v === 'infty') return 'Infinity';
       if (t.v === 'hbar') return 'Hbar';
     }
-    if (t.k === 'sym' && (t.v === '+' || t.v === '-')) return t.v; // only meaningful for limit directions
+    if (t.k === 'sym' && (t.v === '+' || t.v === '-')) {
+      if (t.v === '-' && this.peek()?.k === 'num') {
+        const numTok = this.next();
+        return ['Negate', this.numberValue(numTok)];
+      }
+      return t.v; // only meaningful for limit directions
+    }
     this.pos--;
     return this.fail('unsupported script');
   }
@@ -556,8 +595,10 @@ class Parser {
       case 'square': case 'Box': case 'blacksquare': return ['Unreadable'];
       case 'frac': return this.parseFrac();
       case 'sqrt': return this.parseSqrt();
-      case 'sin': case 'cos': case 'tan': case 'ln': case 'log': case 'exp': return this.parseFn(v);
-      case 'int': return this.parseIntegral();
+      case 'sin': case 'cos': case 'tan': case 'ln': case 'log': case 'exp':
+      case 'arctan': case 'arcsin': case 'arccos': case 'atan': case 'asin': case 'acos':
+        return this.parseFn(v);
+      case 'int': case 'tint': return this.parseIntegral();
       case 'sum': return this.parseSum();
       case 'lim': return this.parseLimit();
       case 'partial': return this.parsePartialPrefix();
@@ -682,7 +723,13 @@ class Parser {
     if (this.isSym('^')) {
       this.next();
       power = this.parseScript();
-      if (power === -1 || (Array.isArray(power) && power[0] === 'Negate')) {
+      const isMinusOne = power === -1 || (Array.isArray(power) && power[0] === 'Negate' && power[1] === 1);
+      if (isMinusOne) {
+        if (name === 'tan') { name = 'arctan'; power = undefined; }
+        else if (name === 'sin') { name = 'arcsin'; power = undefined; }
+        else if (name === 'cos') { name = 'arccos'; power = undefined; }
+        else { this.fail('inverse-function notation is not supported', 'UNSUPPORTED_NOTATION'); }
+      } else if (power === -1 || (Array.isArray(power) && power[0] === 'Negate')) {
         this.fail('inverse-function notation is not supported', 'UNSUPPORTED_NOTATION');
       }
     }
@@ -704,8 +751,13 @@ class Parser {
       if (factors.length === 0) this.fail(`\\${name} needs an argument`);
       arg = factors.length === 1 ? factors[0]! : ['Multiply', ...factors];
     }
-    const op = { sin: 'Sin', cos: 'Cos', tan: 'Tan', exp: 'Exp', ln: 'Ln', log: 'Ln' }[name]!;
-    const node: MathJSON = [op, arg];
+    const op: Record<string, string> = {
+      sin: 'Sin', cos: 'Cos', tan: 'Tan', exp: 'Exp', ln: 'Ln', log: 'Ln',
+      arctan: 'ArcTan', atan: 'ArcTan',
+      arcsin: 'ArcSin', asin: 'ArcSin',
+      arccos: 'ArcCos', acos: 'ArcCos',
+    };
+    const node: MathJSON = [op[name]!, arg];
     return power === undefined ? node : ['Power', node, power];
   }
 

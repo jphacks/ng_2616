@@ -101,8 +101,11 @@ function render(e: MathJSON): Out {
     case 'Divide':
       return [`\\frac{${p(a0, 0)}}{${p(a1, 0)}}`, ATOM];
     case 'Power': {
-      if (Array.isArray(a0) && ['Sin', 'Cos', 'Tan', 'Ln'].includes(a0[0])) {
-        const fn = { Sin: 'sin', Cos: 'cos', Tan: 'tan', Ln: 'ln' }[a0[0] as 'Sin']!;
+      if (Array.isArray(a0) && ['Sin', 'Cos', 'Tan', 'Ln', 'ArcTan', 'ArcSin', 'ArcCos'].includes(a0[0])) {
+        const fn = {
+          Sin: 'sin', Cos: 'cos', Tan: 'tan', Ln: 'ln',
+          ArcTan: 'arctan', ArcSin: 'arcsin', ArcCos: 'arccos',
+        }[a0[0] as string]!;
         return [`\\${fn}^{${p(a1, 0)}}${fnArg(a0[1] as MathJSON)}`, ATOM];
       }
       const base = Array.isArray(a0) && a0[0] === 'Divide' ? wrap(p(a0, 0)) : p(a0, ATOM);
@@ -117,6 +120,9 @@ function render(e: MathJSON): Out {
     case 'Sin': return [`\\sin${fnArg(a0)}`, ATOM];
     case 'Cos': return [`\\cos${fnArg(a0)}`, ATOM];
     case 'Tan': return [`\\tan${fnArg(a0)}`, ATOM];
+    case 'ArcTan': return [`\\arctan${fnArg(a0)}`, ATOM];
+    case 'ArcSin': return [`\\arcsin${fnArg(a0)}`, ATOM];
+    case 'ArcCos': return [`\\arccos${fnArg(a0)}`, ATOM];
     case 'Ln': return [`\\ln${fnArg(a0)}`, ATOM];
     case 'Apply': {
       const args = a.slice(1);
