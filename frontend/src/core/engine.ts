@@ -208,6 +208,30 @@ export class NotebookEngine {
     this.maybeReleaseHeld(lineId);
   }
 
+  deleteDraft(lineId: string) {
+    const line = findLine(this.nb, lineId);
+    if (!line || line.state !== 'DRAFT') return;
+    const drafts = this.nb.lines.filter((l) => l.state === 'DRAFT');
+    if (drafts.length <= 1) {
+      if (line.ink.length > 0) this.clearDraft(lineId);
+      return;
+    }
+    store.getState().commit(
+      'DELETE_DRAFT',
+      (snap) => {
+        const lines = snap.lines.filter((l) => l.id !== lineId);
+        const nextActive = lines.find((l) => l.state === 'DRAFT')?.id ?? null;
+        return {
+          ...snap,
+          lines,
+          activeLineId: snap.activeLineId === lineId ? nextActive : snap.activeLineId,
+        };
+      },
+      lineId,
+    );
+    this.maybeReleaseHeld(lineId);
+  }
+
   private maybeReleaseHeld(lineId: string) {
     const s = store.getState();
     const line = findLine(this.nb, lineId);
@@ -1010,12 +1034,37 @@ export class NotebookEngine {
     const source = findLine(this.nb, lineId);
     if (!source) return;
     const root = source.recovery_root_id ?? source.id;
+
+    // Only allow one revision draft for this wrong line: if one already exists, focus it instead of duplicating
+    const existingRevision = this.nb.lines.find(
+      (l) => l.state === 'DRAFT' && (l.revision_of === source.id || (l.recovery_root_id && l.recovery_root_id === root)),
+    );
+    if (existingRevision) {
+      s.setActive(existingRevision.id);
+      s.set('sheet', null);
+      s.set('candidate', null);
+      return;
+    }
+
     const draft: Line = { ...newDraftLine(), revision_of: source.id, recovery_root_id: root };
     s.commit(
       'START_REVISION',
       (snap) => {
-        const lines = [...snap.lines];
-        lines.splice(lines.findIndex((l) => l.id === source.id) + 1, 0, draft);
+        const existingInSnap = snap.lines.find(
+          (l) => l.state === 'DRAFT' && (l.revision_of === source.id || (l.recovery_root_id && l.recovery_root_id === root)),
+        );
+        if (existingInSnap) {
+          return { ...snap, activeLineId: existingInSnap.id };
+        }
+
+        // Clean up unused empty draft lines so that revising doesn't leave an unnecessary empty draft line below it
+        const lines = snap.lines.filter((l) => {
+          if (l.state !== 'DRAFT') return true;
+          if (l.ink.length === 0) return false;
+          return true;
+        });
+        const newSrcIdx = lines.findIndex((l) => l.id === source.id);
+        lines.splice(newSrcIdx + 1, 0, draft);
         const recoveries = snap.recoveries.some((r) => r.root_line_id === root)
           ? snap.recoveries.map((r) => (r.root_line_id === root ? { ...r, phase: 'REVISING' as const, opened_at: { ...r.opened_at, revise: Date.now() } } : r))
           : [...snap.recoveries, { root_line_id: root, current_line_id: source.id, phase: 'REVISING' as const, opened_at: { revise: Date.now() } }];

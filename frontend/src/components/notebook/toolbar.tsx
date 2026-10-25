@@ -2,7 +2,7 @@
 
 import { Popover } from '@base-ui/react/popover';
 import clsx from 'clsx';
-import { Eraser, GripVertical, Hand, ListPlus, PenLine, Redo2, Sparkles, Undo2, Zap, ZapOff } from 'lucide-react';
+import { Eraser, GripVertical, Hand, ListPlus, Lock, PenLine, Redo2, Sparkles, Undo2, Zap, ZapOff } from 'lucide-react';
 import { animate, motion, useDragControls, useMotionValue } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { suggestBlockerOf } from '@/core/candidates/blocker';
@@ -151,12 +151,21 @@ const side = useDevicePrefs((s) => s.toolbarSide);
           type="button"
           onClick={() => void engine.requestSuggestion(true)}
           aria-disabled={locked}
+          title={locked ? t('tool.suggestLocked') : undefined}
           className={clsx(
-            'ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-medium',
-            locked ? 'bg-none-soft text-none' : 'bg-accent text-on-solid hover:bg-accent-strong',
+            'ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-medium transition-all',
+            locked
+              ? 'bg-none-soft text-none border border-border/60 hover:opacity-90'
+              : 'bg-accent text-on-solid hover:bg-accent-strong active:scale-98 shadow-sm',
           )}
         >
-          {suggesting ? <Spinner size={18} /> : <Sparkles size={18} />}
+          {suggesting ? (
+            <Spinner size={18} />
+          ) : locked ? (
+            <Lock size={17} className="shrink-0 text-muted" aria-hidden />
+          ) : (
+            <Sparkles size={18} />
+          )}
           <span className="hidden sm:inline">{t('tool.suggest')}</span>
         </button>
       </motion.div>

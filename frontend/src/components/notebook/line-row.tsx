@@ -3,13 +3,14 @@
 import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { FEATURES } from '@/features/registry.generated';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
+import { isPenDown } from './gestures';
 import { GhostLine, RejectionChip } from './ghost-line';
 import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
@@ -27,14 +28,31 @@ interface RowProps {
   ghostWithoutTarget: boolean;
 }
 
+function useSlowFeedback(active: boolean, delayMs = 8000) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setTimeout(() => setSlow(true), delayMs);
+    return () => {
+      window.clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [active, delayMs]);
+  return active && slow;
+}
+
 export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisionOf, ancestor, ghostWithoutTarget }: RowProps) {
   const t = useT();
   const engine = useEngine();
   const tool = useNotebook((s) => s.tool);
   const active = useNotebook((s) => s.activeLineId === line.id);
+  const draftCount = useNotebook((s) => s.notebook?.lines.filter((l) => l.state === 'DRAFT').length ?? 0);
   const candidate = useNotebook((s) => s.candidate);
   const rejection = useNotebook((s) => s.rejection);
   const leanChecking = useNotebook((s) => !!s.leanPending[line.id]);
+
+  const slowRecognizing = useSlowFeedback(line.state === 'RECOGNIZING', 8000);
+  const slowVerifying = useSlowFeedback(line.state === 'VERIFYING', 8000);
 
   const ghostHere =
     candidate &&
@@ -46,12 +64,20 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
 
   if (line.state === 'SUPERSEDED') {
     return (
-      <div className="ruled flex min-h-14 items-center gap-3 pr-4 opacity-55">
+      <div className="ruled flex min-h-14 items-center gap-3 pr-4 opacity-60 hover:opacity-90 transition-opacity">
         <Gutter n={number} line={line} />
-        <div className="min-w-0 flex-1 line-through decoration-wrong/50">
+        <button type="button" onClick={openDetails} className="min-w-0 flex-1 text-left line-through decoration-wrong/50">
           <Segments segments={line.segments} />
-        </div>
-        <span className="shrink-0 text-sm text-muted">{t('line.superseded')}</span>
+        </button>
+        <button
+          type="button"
+          onClick={openDetails}
+          className="shrink-0 inline-flex items-center gap-1 rounded-full bg-none-soft px-2.5 py-1 text-xs font-medium text-muted hover:text-ink transition-colors"
+          title={t('line.superseded')}
+        >
+          <CornerUpLeft size={13} />
+          <span>{t('line.superseded')}</span>
+        </button>
       </div>
     );
   }
@@ -77,6 +103,12 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       id={line.id}
       actions={swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
+      onClick={() => {
+        if (isPenDown()) return;
+        if (line.state === 'DRAFT' && !active) {
+          engine.activate(line.id);
+        }
+      }}
     >
       <Gutter n={number} line={line} />
       {/* centered, so the line stays level with the gutter when the status column is the taller one */}
@@ -100,8 +132,9 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             )}
             <InkCanvas
               strokes={line.ink}
-              editable
+              editable={active}
               tool={tool}
+              onActivate={() => !active && engine.activate(line.id)}
               onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
@@ -117,7 +150,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             <InkCanvas strokes={line.ink} editable={false} tool={tool} dim />
             <div className="shimmer absolute inset-0 flex items-end rounded-xl p-2 text-sm text-accent">
               <span className="inline-flex items-center gap-2 rounded-full bg-sheet/90 px-3 py-1 shadow-card">
-                <Spinner size={14} /> {t('line.reading')}
+                <Spinner size={14} /> {t(slowRecognizing ? 'line.readingSlow' : 'line.reading')}
               </span>
             </div>
           </div>
@@ -150,12 +183,17 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'DRAFT' && active && (
           <div className="flex items-center gap-1">
             <IconButton
-              label={t('tool.clear')}
+              label={line.ink.length > 0 ? t('tool.clear') : t('tool.deleteDraft')}
               onClick={() => {
-                engine.clearDraft(line.id);
-                useNotebook.getState().showToast(t('toast.cleared'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+                if (line.ink.length > 0) {
+                  engine.clearDraft(line.id);
+                  useNotebook.getState().showToast(t('toast.cleared'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+                } else if (draftCount > 1) {
+                  engine.deleteDraft(line.id);
+                  useNotebook.getState().showToast(t('toast.draftDeleted'), 'info');
+                }
               }}
-              disabled={line.ink.length === 0}
+              disabled={line.ink.length === 0 && draftCount <= 1}
             >
               <Trash2 size={19} />
             </IconButton>
@@ -178,7 +216,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         )}
         {line.state === 'VERIFYING' && (
           <span className="inline-flex items-center gap-2 text-sm text-muted">
-            <Spinner size={14} /> {t('line.checking')}
+            <Spinner size={14} /> {t(slowVerifying ? 'line.checkingSlow' : 'line.checking')}
           </span>
         )}
         {/* the verdict first, then what can be done with the line, then the Lean check in progress */}

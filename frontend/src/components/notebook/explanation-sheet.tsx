@@ -23,46 +23,58 @@ function EvidenceCard({ ev, goal }: { ev: Evidence; goal?: string }) {
   const t = useT();
   const sides = goal && RELATION_GOALS.has(goal);
   return (
-    <div className="space-y-2 rounded-2xl bg-paper p-4 text-base">
+    <div className="space-y-3 rounded-2xl bg-paper p-4 text-base shadow-sm border border-border/40">
       {ev.assignment && Object.keys(ev.assignment).length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="font-medium text-muted">{t('sheet.at')}</span>
-          {Object.entries(ev.assignment).map(([k, v]) => (
-            <span key={k} className="rounded-lg bg-sheet px-2 py-0.5 shadow-card">
-              <Tex latex={`${k} = ${v}`} />
-            </span>
-          ))}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">{t('sheet.at')}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(ev.assignment).map(([k, v]) => (
+              <span key={k} className="rounded-lg bg-sheet px-2 py-0.5 text-sm font-medium shadow-card border border-border/40">
+                <Tex latex={`${k} = ${v}`} />
+              </span>
+            ))}
+          </div>
         </div>
       )}
       {ev.context_value !== undefined && (
-        <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1">
-          <span className="text-muted">{t(sides ? 'sheet.left' : 'sheet.expected')}</span>
-          <Tex latex={ev.context_value} />
-          <span className="text-muted">{t(sides ? 'sheet.right' : 'sheet.thisLine')}</span>
-          <span className="font-semibold text-wrong-strong">
-            <Tex latex={ev.written_value ?? ''} />
-          </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          <div className="rounded-xl bg-sheet/80 p-3 border border-border/50">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted mb-1">
+              {t(sides ? 'sheet.left' : 'sheet.expected')}
+            </div>
+            <div className="text-base font-medium text-ink">
+              <Tex latex={ev.context_value} />
+            </div>
+          </div>
+          <div className="rounded-xl bg-wrong-soft/60 p-3 border border-wrong/30">
+            <div className="text-xs font-semibold uppercase tracking-wider text-wrong-strong mb-1">
+              {t(sides ? 'sheet.right' : 'sheet.thisLine')}
+            </div>
+            <div className="text-base font-bold text-wrong-strong">
+              <Tex latex={ev.written_value ?? ''} />
+            </div>
+          </div>
         </div>
       )}
       {!!ev.missing?.length && (
-        <div>
-          <span className="text-muted">{t('sheet.missing')}: </span>
+        <div className="rounded-xl bg-sheet/60 p-2.5 text-sm border border-border/40">
+          <span className="font-semibold text-muted">{t('sheet.missing')}: </span>
           <Tex latex={ev.missing.join(',\\; ')} />
         </div>
       )}
       {!!ev.extra?.length && (
-        <div>
-          <span className="text-muted">{t('sheet.extra')}: </span>
+        <div className="rounded-xl bg-sheet/60 p-2.5 text-sm border border-border/40">
+          <span className="font-semibold text-muted">{t('sheet.extra')}: </span>
           <Tex latex={ev.extra.join(',\\; ')} />
         </div>
       )}
       {ev.condition_latex && (
-        <div>
+        <div className="text-sm">
           <span className="text-muted">{t('sheet.condition')}: </span>
           <Tex latex={ev.condition_latex} />
         </div>
       )}
-      {ev.approx && <div className="text-sm text-muted">({t('sheet.approx')})</div>}
+      {ev.approx && <div className="text-xs text-muted">({t('sheet.approx')})</div>}
     </div>
   );
 }
@@ -85,8 +97,46 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
   };
   const h1 = proof.hints.find((h) => h.level === 1);
   const h2 = proof.hints.find((h) => h.level === 2);
+
+  const recovery = nb.recoveries.find((r) => r.root_line_id === root);
+  const isRecovered = line.state === 'SUPERSEDED' || recovery?.phase === 'RECOVERED';
+  const isRevising = isRecovered || recovery?.phase === 'REVISING' || recovery?.phase === 'REVERIFYING' || nb.lines.some((l) => l.revision_of === line.id);
+
+  const steps = [
+    { label: t('sheet.stepCategory'), done: true, inProgress: false },
+    { label: t('sheet.stepEvidence'), done: shown.evidence || !!recovery?.opened_at?.evidence, inProgress: false },
+    { label: t('sheet.stepHint1'), done: shown.hint1 || !!recovery?.opened_at?.hint1, inProgress: false },
+    { label: t('sheet.stepHint2'), done: shown.hint2 || !!recovery?.opened_at?.hint2, inProgress: false },
+    { label: t('sheet.stepRevise'), done: isRecovered, inProgress: isRevising && !isRecovered },
+  ];
+
   return (
     <div className="space-y-4">
+      {/* 5-step recovery progress indicator (spec v1.6 §7.6) */}
+      <div className="rounded-2xl bg-sheet/60 p-3 border border-border/50">
+        <div className="text-2xs font-semibold uppercase tracking-wider text-muted mb-2">{t('sheet.recoverySteps')}</div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {steps.map((st, i) => (
+            <div key={i} className="flex items-center gap-1.5 shrink-0">
+              <span
+                className={clsx(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
+                  st.done
+                    ? 'bg-ok-soft text-ok font-semibold'
+                    : st.inProgress
+                      ? 'bg-accent-soft text-accent-strong font-medium'
+                      : 'bg-muted/15 text-muted'
+                )}
+              >
+                <span>{i + 1}.</span>
+                <span>{st.label}</span>
+              </span>
+              {i < steps.length - 1 && <span className="text-muted/40 text-xs select-none">→</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Button variant={shown.evidence ? 'secondary' : 'accent-soft'} icon={<Search size={17} />} onClick={() => open('evidence')}>
           {t('sheet.showEvidence')}
