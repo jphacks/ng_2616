@@ -121,6 +121,11 @@ export const CAS_CASES: CasCase[] = [
     lines: [{ id: 'L1', src: '$x^2 = 4$', status: 'unknown', reason: 'NO_EVIDENCE' }], target: T('$x = 2$'),
     expect: { status: 'wrong', unverified_ancestors: ['L1'] },
   },
+  {
+    id: 'CF-12c', note: '± of a symbolic square root: the same solutions written two ways',
+    lines: [{ id: 'L1', src: '$x^2 = y$', status: 'none', reason: 'NO_PARENT' }], target: T('$x = \\pm\\sqrt{y}$'),
+    expect: { status: 'ok' },
+  },
   { id: 'CF-13', note: 'exact fractions', lines: first('$\\frac{x+1}{2} + \\frac{x-1}{2}$'), target: T('$= x$'), expect: { status: 'ok' } },
   {
     id: 'CF-14a', note: 'sqrt with x >= 0', given: ['x \\ge 0'],

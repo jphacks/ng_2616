@@ -137,7 +137,7 @@ export function Workspace({ notebookId }: { notebookId: string }) {
       <OrientationProvider className="relative flex h-full flex-col overflow-hidden bg-paper">
         <TopBar mockAi={mockAi} user={user!} />
         <main className="relative min-h-0 flex-1">
-          <div className={clsx('h-full w-full', tab === 'canvas' ? 'block' : 'hidden')}>
+          <div className={clsx('h-full w-full bg-canvas', tab === 'canvas' ? 'block' : 'hidden')}>
             <NotebookPage />
             <Toolbar />
           </div>

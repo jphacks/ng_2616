@@ -74,6 +74,8 @@
   /* — color: surfaces — */
   --color-paper: var(--brand-paper);
   --color-sheet: color-mix(in oklab, var(--brand-paper) 17%, white);
+  /* the notebook page the lines are written on */
+  --color-canvas: #fff;
   /* a surface lifted above a sheet (hovered secondary buttons, switch thumbs) */
   --color-raised: #fff;
   /* documents shown as they are printed (PDF pages, uploaded images) */
@@ -217,6 +219,24 @@ body {
 /* Notebook paper: faint ruling inside each line row */
 .ruled {
   background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--color-rule) calc(100% - 1px));
+}
+
+/* Graph paper behind the notebook page and its miniatures on the home grid */
+.graph-paper {
+  --graph-line: color-mix(in oklch, var(--color-accent) 10%, white);
+  --graph-cell: 20px;
+  background-color: var(--color-canvas);
+  background-image:
+    linear-gradient(var(--graph-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--graph-line) 1px, transparent 1px);
+  background-size: var(--graph-cell) var(--graph-cell);
+}
+
+/* the notebook page itself: fainter squares, so handwriting stays in front, sized to keep the
+   miniatures' proportion of text to squares */
+.graph-paper-page {
+  --graph-line: color-mix(in oklch, var(--color-accent) 4%, white);
+  --graph-cell: 24px;
 }
 
 .shimmer {
