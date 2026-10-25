@@ -99,10 +99,14 @@ export const GraphWireSchema = z.object({
 export type GraphWire = z.infer<typeof GraphWireSchema>;
 export type GraphWireSeries = z.infer<typeof GraphWireSeriesSchema>;
 
-const rangeJson = { type: 'array', items: { type: 'number' }, maxItems: 2 } as const;
+const rangeJson = { type: 'array', items: { type: 'number' } } as const;
 const formulaJson = { type: 'string' } as const;
 
-/** JSON Schema for the provider's structured output (flat; per-type rules are checked after). */
+/**
+ * JSON Schema for the provider's structured output: flat and unbounded, because Gemini refuses a
+ * schema whose bounds make its constrained decoding too large. Every limit and per-type rule is
+ * checked after, by GraphWireSchema and graphFromWire.
+ */
 export const GRAPH_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -117,7 +121,6 @@ export const GRAPH_JSON_SCHEMA = {
     z_range: rangeJson,
     constants: {
       type: 'array',
-      maxItems: 16,
       items: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'number' } }, required: ['name', 'value'], additionalProperties: false },
     },
     aspect: { type: 'string', enum: ['auto', 'equal'] },
@@ -125,7 +128,6 @@ export const GRAPH_JSON_SCHEMA = {
     azim: { type: 'number' },
     series: {
       type: 'array',
-      maxItems: GRAPH_MAX_SERIES,
       items: {
         type: 'object',
         properties: {
@@ -140,7 +142,6 @@ export const GRAPH_JSON_SCHEMA = {
           v: formulaJson,
           params: {
             type: 'array',
-            maxItems: 2,
             items: {
               type: 'object',
               properties: { name: { type: 'string' }, min: { type: 'number' }, max: { type: 'number' } },
@@ -148,11 +149,12 @@ export const GRAPH_JSON_SCHEMA = {
               additionalProperties: false,
             },
           },
-          points: { type: 'array', maxItems: GRAPH_MAX_POINTS, items: { type: 'array', items: { type: 'number' }, maxItems: 3 } },
+          points: { type: 'array', items: { type: 'array', items: { type: 'number' } } },
           part: { type: 'string', enum: ['re', 'im', 'abs', 'abs2'] },
           filled: { type: 'boolean' },
         },
-        required: ['type'],
+        // a required label makes the model name every curve; an empty one is dropped
+        required: ['type', 'label'],
         additionalProperties: false,
       },
     },
