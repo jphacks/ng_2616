@@ -11,7 +11,7 @@ import {
   type Role,
   type Status,
 } from '@mn/contracts';
-import { contextLinesFor, parentFor, proofOf } from '@/core/notebook/model';
+import { contextLinesFor, outsideCas, parentFor, proofOf } from '@/core/notebook/model';
 
 export interface CasContextLine {
   id: string;
@@ -54,7 +54,7 @@ function contextLine(l: Line): CasContextLine {
 /** Payload for an existing line: only active, settled lines above it enter its context. */
 export function payloadForLine(nb: Notebook, lineId: string, extra: Line[] = []): CasPayload {
   const target = nb.lines.find((l) => l.id === lineId)!;
-  const ctx = [...contextLinesFor(nb, lineId), ...extra];
+  const ctx = [...contextLinesFor(nb, lineId), ...extra].filter((l) => !outsideCas(l));
   const parent = extra.length ? extra[extra.length - 1] : parentFor(nb, lineId);
   return {
     lines: ctx.map(contextLine),
@@ -71,6 +71,7 @@ export function payloadForLine(nb: Notebook, lineId: string, extra: Line[] = [])
 
 /** Payload for a suggested line that would be inserted after `afterLines`. */
 export function payloadForCandidate(nb: Notebook, contextLines: Line[], target: CasPayload['target'], claim?: CasPayload['claim']): CasPayload {
+  contextLines = contextLines.filter((l) => !outsideCas(l));
   const parent = [...contextLines].reverse().find((l) => l.segments.some((s) => s.type === 'math') && proofOf(l)?.status !== 'wrong');
   return { lines: contextLines.map(contextLine), target, parent_id: parent?.id ?? null, ...(claim ? { claim } : {}) };
 }

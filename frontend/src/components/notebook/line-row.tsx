@@ -1,16 +1,18 @@
 'use client';
 
-import type { Line } from '@mn/contracts';
+import { graphOf, type Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { FEATURES } from '@/features/registry.generated';
+import { isGraphRequest } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
 import { GhostLine, RejectionChip } from './ghost-line';
+import { GraphPicture } from './graph-picture';
 import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
 import { StatusBadge } from './status';
@@ -43,6 +45,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   const showGhost = (ghostHere || ghostWithoutTarget) && line.ink.length === 0;
   const showRejection = rejection && line.state === 'DRAFT' && isLastDraft;
   const openDetails = () => engine.openLine(line.id);
+  // a graph line is a picture: no verdict to show, so nothing to open or revise
+  const graph = line.state === 'SETTLED' ? graphOf(line) : undefined;
 
   if (line.state === 'SUPERSEDED') {
     return (
@@ -75,7 +79,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   return (
     <SwipeRow
       id={line.id}
-      actions={swipe}
+      actions={graph ? [] : swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
     >
       <Gutter n={number} line={line} />
@@ -135,7 +139,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             </div>
           </div>
         )}
-        {(line.state === 'SETTLED' || line.state === 'VERIFYING') && (
+        {graph && <GraphPicture spec={graph} />}
+        {(line.state === 'SETTLED' || line.state === 'VERIFYING') && !graph && (
           <button type="button" onClick={openDetails} className="flex min-h-16 w-full min-w-0 items-center text-left">
             <Segments segments={line.segments} className="w-full" />
           </button>
@@ -208,6 +213,7 @@ function Gutter({ n, line }: { n: number; line: Line }) {
       {line.role === 'premise' && (
         <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>
       )}
+      {isGraphRequest(line) && <span className="rounded-md px-1 text-2xs font-medium text-accent">{t('graph.request')}</span>}
       {line.source === 'ai' && (
         <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-2xs font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
           <Sparkles size={11} />

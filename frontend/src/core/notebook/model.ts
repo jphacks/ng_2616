@@ -11,7 +11,13 @@ export const isActive = (l: Line) => l.state !== 'SUPERSEDED';
 export const hasMath = (l: Line) => l.segments.some((s) => s.type === 'math');
 export const proofOf = (l: Line): Proof | undefined => l.verified?.proof;
 export const statusOf = (l: Line): Status | undefined => l.verified?.proof.status;
-export const isSettledMath = (l: Line) => l.state === 'SETTLED' && hasMath(l);
+/** A graph line (its picture is drawn from extensions.graph). */
+export const isGraphLine = (l: Line) => l.extensions?.graph !== undefined;
+/** A line the model read as asking for a graph ("plot ψ for n = 1, 2, 3"). */
+export const isGraphRequest = (l: Line) => l.extensions?.graph_request === true;
+/** Graphs and requests for them are words and pictures: the CAS neither checks them nor reasons from them. */
+export const outsideCas = (l: Line) => isGraphLine(l) || isGraphRequest(l);
+export const isSettledMath = (l: Line) => l.state === 'SETTLED' && hasMath(l) && !outsideCas(l);
 
 export function lineIndex(nb: Notebook, id: string): number {
   return nb.lines.findIndex((l) => l.id === id);
@@ -47,7 +53,7 @@ export function contextLinesFor(nb: Notebook, targetId: string): Line[] {
 export function parentFor(nb: Notebook, targetId: string): Line | undefined {
   const target = findLine(nb, targetId);
   if (target?.revision_of) return parentFor(nb, target.revision_of);
-  const ctx = contextLinesFor(nb, targetId).filter((l) => hasMath(l) && statusOf(l) !== 'wrong');
+  const ctx = contextLinesFor(nb, targetId).filter((l) => hasMath(l) && !outsideCas(l) && statusOf(l) !== 'wrong');
   return ctx[ctx.length - 1];
 }
 
