@@ -9,9 +9,9 @@ import type { NotebookPreview as Preview, PreviewLine } from '@/core/notebook/pr
 import { Tex } from '@/ui/tex';
 
 // the miniature is laid out at this width, then scaled to the card, which brings its text to
-// about the notebook's own size on a typical card; the height follows the landscape page ratio
-// of the card (--aspect-page)
-const PAGE_WIDTH = 280;
+// about 0.85x the notebook's own size on a typical card; the height follows the landscape page
+// ratio of the card (--aspect-page)
+const PAGE_WIDTH = 373;
 const PAGE_HEIGHT = (PAGE_WIDTH * 820) / 1180;
 
 /** The top of the notebook's first page, drawn from its data and scaled to fill its card. */
@@ -43,7 +43,7 @@ export const NotebookPreview = memo(function NotebookPreview({ preview }: { prev
 
 function PreviewRow({ number, line }: { number: number; line: PreviewLine | null }) {
   return (
-    <div className="flex h-11 items-center gap-2 overflow-hidden pr-1">
+    <div className="flex min-h-8 items-center gap-2 overflow-hidden py-0.5 pr-1">
       <span className="w-5 shrink-0 text-right text-2xs font-medium text-faint tabular-nums">{number}</span>
       <div className="min-w-0 flex-1 overflow-hidden">
         {line?.segments.length ? (

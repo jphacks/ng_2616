@@ -236,7 +236,7 @@ body {
    miniatures' proportion of text to squares */
 .graph-paper-page {
   --graph-line: color-mix(in oklch, var(--color-accent) 6%, white);
-  --graph-cell: 18px;
+  --graph-cell: 24px;
 }
 
 .shimmer {
