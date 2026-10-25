@@ -163,7 +163,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'graph.alt': 'グラフ',
   'graph.drawing': 'グラフを描画しています…',
   'graph.failed': 'このグラフを描画できませんでした：{reason}',
-  'graph.request': 'グラフの依頼',
+  'graph.request': 'グラフ',
   'line.given': '前提',
   'line.unverifiedAdoption': '未検証のまま採用',
   'line.leanChecking': 'Leanで確認中…',

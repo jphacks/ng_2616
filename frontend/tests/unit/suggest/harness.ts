@@ -2,7 +2,8 @@ import type { CandidateDraftResult, Line, Notebook, Stroke, SuggestInput } from 
 import { toInputSegments } from '@mn/contracts';
 import type { CasOutcome } from '../../../src/core/cas/controller';
 import { inputHash, payloadForLine, type CasPayload, type CasRawProof } from '../../../src/core/cas/payload';
-import { NotebookEngine, type ApiPort, type CasPort } from '../../../src/core/engine';
+import type { GraphImage } from '../../../src/core/graph/controller';
+import { NotebookEngine, type ApiPort, type CasPort, type GraphPort } from '../../../src/core/engine';
 import { useNotebook } from '../../../src/core/store/notebook-store';
 import { line, notebook, segs, settled, stroke } from './fixtures';
 
@@ -105,6 +106,24 @@ export function fakeApi(answer: SuggestAnswer): FakeApi {
   return api;
 }
 
+export interface FakeGraphs extends GraphPort {
+  rendered: unknown[];
+  answer: () => GraphImage;
+}
+
+/** A graph worker that draws nothing: every graph "draws" unless `answer` says otherwise. */
+export function fakeGraphs(answer: () => GraphImage = () => ({ ok: true, png: '', width: 960, height: 600 })): FakeGraphs {
+  const graphs: FakeGraphs = {
+    rendered: [],
+    answer,
+    render: async (spec) => {
+      graphs.rendered.push(spec);
+      return graphs.answer();
+    },
+  };
+  return graphs;
+}
+
 /** A promise you resolve by hand, to hold a request in flight. */
 export function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -131,6 +150,7 @@ export interface Rig {
   engine: NotebookEngine;
   cas: FakeCas;
   api: FakeApi;
+  graphs: FakeGraphs;
   toasts: string[];
   store: typeof useNotebook;
   /** the id of the empty draft line below the settled lines */
@@ -157,15 +177,16 @@ function checkedWith(nb: Notebook, casVersion: string): Notebook {
  * A NotebookEngine on the real store with a fake CAS and api. The notebook is `lines` (default: one ok line "x = 1" and an
  * empty draft). Toasts are the translation keys the engine asked for.
  */
-export function rig(opts: { lines?: Line[]; cas?: FakeCas; api?: FakeApi; answer?: SuggestAnswer } = {}): Rig {
+export function rig(opts: { lines?: Line[]; cas?: FakeCas; api?: FakeApi; answer?: SuggestAnswer; graphs?: FakeGraphs } = {}): Rig {
   const lines = opts.lines ?? [settled('L1', '$x = 1$', 'ok'), line('D1', 'DRAFT')];
   const cas = opts.cas ?? fakeCas();
   const nb: Notebook = checkedWith(notebook(lines), cas.versionString);
   const st = useNotebook.getState();
   st.load(nb, null);
   const api = opts.api ?? fakeApi(opts.answer ?? ((input) => draftFor(input, 'x = 2')));
+  const graphs = opts.graphs ?? fakeGraphs();
   const toasts: string[] = [];
-  const engine = new NotebookEngine({ ownerId: 'owner', lang: () => 'en', t: (k) => k }, { cas, api });
+  const engine = new NotebookEngine({ ownerId: 'owner', lang: () => 'en', t: (k) => k }, { cas, api, graphs });
   // the toast goes through the store; record its text (the engine passes keys as text through t)
   const stopRecording = useNotebook.subscribe((s, prev) => {
     if (s.toast && s.toast !== prev.toast) toasts.push(s.toast.text);
@@ -175,6 +196,7 @@ export function rig(opts: { lines?: Line[]; cas?: FakeCas; api?: FakeApi; answer
     engine,
     cas,
     api,
+    graphs,
     toasts,
     store: useNotebook,
     draftId: draft?.id ?? '',

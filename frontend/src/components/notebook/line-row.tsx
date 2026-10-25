@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { FEATURES } from '@/features/registry.generated';
+import { targetKindOf } from '@/core/candidates/rejection';
 import { isGraphRequest } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -40,7 +41,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
 
   const ghostHere =
     candidate &&
-    ((candidate.mode === 'NEXT_STEP' && candidate.targetLineId === line.id && line.state === 'DRAFT' && line.ink.length === 0) ||
+    ((targetKindOf(candidate.mode) === 'new' && candidate.targetLineId === line.id && line.state === 'DRAFT' && line.ink.length === 0) ||
       (candidate.mode === 'COMPLETE_RHS' && candidate.targetLineId === line.id));
   const showGhost = (ghostHere || ghostWithoutTarget) && line.ink.length === 0;
   const showRejection = rejection && line.state === 'DRAFT' && isLastDraft;

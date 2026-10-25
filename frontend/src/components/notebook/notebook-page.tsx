@@ -3,6 +3,7 @@
 import clsx from 'clsx';
 import { X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { targetKindOf } from '@/core/candidates/rejection';
 import { useDevicePrefs } from '@/core/prefs/device';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
@@ -16,9 +17,9 @@ export function NotebookPage() {
   const nb = useNotebook((s) => s.notebook);
   const activeId = useNotebook((s) => s.activeLineId);
   const ghost = useNotebook((s) => (s.candidate && ['GENERATING', 'READY'].includes(s.candidate.state) ? s.candidate.state : null));
-  // a NEXT_STEP suggestion whose target line does not exist yet is shown on the last draft
+  // a suggestion for a new line (a next step or a graph) whose target line does not exist yet is shown on the last draft
   const targetMissing = useNotebook(
-    (s) => !!s.candidate && s.candidate.mode === 'NEXT_STEP' && !s.notebook?.lines.some((l) => l.id === s.candidate!.targetLineId),
+    (s) => !!s.candidate && targetKindOf(s.candidate.mode) === 'new' && !s.notebook?.lines.some((l) => l.id === s.candidate!.targetLineId),
   );
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);

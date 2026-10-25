@@ -1,6 +1,6 @@
 import type { Line, Notebook } from '@mn/contracts';
 import { isProofNotebook, lastProofLine, leanContinuable, leanEnabled } from '@/core/lean/route';
-import { anyPending, canContinueFrom, hasMath, hasUnresolvedWrong, isGiven, lastSettledMath, proofOf } from '@/core/notebook/model';
+import { anyPending, canContinueFrom, hasMath, hasUnresolvedWrong, isActive, isGiven, isGraphLine, isGraphRequest, lastSettledMath, proofOf } from '@/core/notebook/model';
 
 export type CandidateStateName = 'GENERATING' | 'VERIFYING' | 'READY' | 'HELD' | 'NONE' | 'ADOPTED' | 'REJECTED' | 'STALE';
 
@@ -29,6 +29,20 @@ export function suggestBaseLine(nb: Notebook): Line | undefined {
   return lastSettledMath(nb);
 }
 
+/**
+ * The line asking for a graph that is still unanswered: the last settled line, when it is a graph
+ * request and no graph follows it. A request is answered before anything else is suggested.
+ */
+export function graphAsk(nb: Notebook): Line | undefined {
+  for (let i = nb.lines.length - 1; i >= 0; i--) {
+    const l = nb.lines[i]!;
+    if (!isActive(l) || l.state === 'DRAFT') continue;
+    if (isGraphLine(l)) return undefined;
+    return l.state === 'SETTLED' && isGraphRequest(l) ? l : undefined;
+  }
+  return undefined;
+}
+
 /** The student has written a line of their own (a template's given lines alone do not count). */
 export function hasOwnLine(nb: Notebook): boolean {
   const proof = leanEnabled() && isProofNotebook(nb);
@@ -45,10 +59,13 @@ export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine
   if (!casReady) return 'cas';
   if (anyPending(nb) || leanPending) return 'pending';
   if (hasUnresolvedWrong(nb)) return 'wrong';
-  const last = suggestBaseLine(nb);
-  if (!last) return 'empty';
-  const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
-  if (!incomplete && !continuable(last)) return 'cannot-continue';
+  // a graph request is answered even when it holds no formula and the CAS gave it no verdict
+  if (!graphAsk(nb)) {
+    const last = suggestBaseLine(nb);
+    if (!last) return 'empty';
+    const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
+    if (!incomplete && !continuable(last)) return 'cannot-continue';
+  }
   if (candidate && BUSY.has(candidate)) return 'busy';
   if (activeLine && activeLine.state === 'DRAFT' && activeLine.ink.length > 0) return 'writing';
   return null;

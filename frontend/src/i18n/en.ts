@@ -161,7 +161,7 @@ export const en = {
   'graph.alt': 'Graph',
   'graph.drawing': 'Drawing the graph…',
   'graph.failed': 'This graph could not be drawn: {reason}',
-  'graph.request': 'Graph request',
+  'graph.request': 'Graph',
   'line.given': 'Given',
   'line.unverifiedAdoption': 'adopted unverified',
   'line.leanChecking': 'Checking with Lean…',

@@ -1,5 +1,6 @@
 'use client';
 
+import { graphOf } from '@mn/contracts';
 import clsx from 'clsx';
 import { Check, ShieldAlert, Sparkles, X } from 'lucide-react';
 import { candidateAncestorId } from '@/core/candidates/label';
@@ -8,6 +9,7 @@ import { useNotebook, type Candidate } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
+import { GraphPicture } from './graph-picture';
 import { Segments } from './segments';
 
 /**
@@ -39,7 +41,13 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
   const ancestorNo = ancestor && nb ? lineNumber(nb, ancestor) : null;
   const verifiedLabel = ancestor ? t('status.local', { n: ancestorNo ?? '?' }) : t('ghost.verified');
   const label =
-    candidate.policy === 'verified' ? verifiedLabel : candidate.policy === 'assumption' ? t('ghost.assumption') : t('ghost.unverified', { reason: t(`reason.${reason ?? 'NO_EVIDENCE'}`) });
+    candidate.mode === 'GRAPH'
+      ? t('ghost.graph')
+      : candidate.policy === 'verified'
+        ? verifiedLabel
+        : candidate.policy === 'assumption'
+          ? t('ghost.assumption')
+          : t('ghost.unverified', { reason: t(`reason.${reason ?? 'NO_EVIDENCE'}`) });
 
   const accept = () => {
     const r = engine.adopt(confirming);
@@ -59,12 +67,15 @@ export function GhostLine({ candidate }: { candidate: Candidate }) {
         {label}
       </div>
       <button type="button" onClick={accept} className="block w-full text-left opacity-70 transition-opacity hover:opacity-100">
-        {candidate.lines.map((l, i) => (
+        {candidate.lines.map((l, i) => {
+          const graph = graphOf(l);
+          // a suggested graph shows the picture it would add (already drawn: it was checked by drawing it)
+          if (graph) return <GraphPicture key={i} spec={graph} className="max-w-md py-1" />;
           // Segments scrolls sideways (overflow-x: auto), which makes overflow-y auto as well; a KaTeX fraction is a pixel
           // taller than its line box, so a vertical scrollbar appeared and cut the formula. Extra padding holds the
           // overhang; overflow-y stays hidden so only a long formula scrolls, and only sideways.
-          <Segments key={i} segments={l.segments} className="overflow-y-hidden py-2!" />
-        ))}
+          return <Segments key={i} segments={l.segments} className="overflow-y-hidden py-2!" />;
+        })}
       </button>
       {confirming && unverified && <p className="mt-2 text-md text-unknown">{t('ghost.confirmUnverified')}</p>}
       <div className="mt-2 flex items-center gap-2">
