@@ -4,7 +4,7 @@ import { uuid } from '@/core/ids';
 import { givenHash } from '@/core/lean/route';
 import { newDraftLine } from '@/core/notebook/model';
 
-export type PresetId = 'blank' | 'schrodinger' | 'integral' | 'expansion' | 'solutions' | 'induction' | 'epsilon_delta';
+export type PresetId = 'blank' | 'schrodinger' | 'integral' | 'expansion' | 'solutions' | 'induction' | 'epsilon_delta' | 'sketch';
 
 interface PresetText {
   title: string;
@@ -52,6 +52,10 @@ const TEXT: Record<PresetId, Record<UiLang, PresetText>> = {
       statement: '数学的帰納法により、すべての自然数 $n$ について 1 + 3 + 5 + ⋯ + (2n − 1) = n² が成り立つことを証明しなさい。',
     },
   },
+  sketch: {
+    en: { title: 'Sketch', statement: '' },
+    ja: { title: 'スケッチ', statement: '' },
+  },
   epsilon_delta: {
     en: {
       title: 'ε–δ: the limit of x² at 2',
@@ -72,7 +76,7 @@ export const PRESET_THEOREMS: Partial<Record<PresetId, string>> = {
   epsilon_delta: '∀ ε : ℝ, ε > 0 → ∃ δ : ℝ, δ > 0 ∧ ∀ x : ℝ, |x - 2| < δ → |x ^ 2 - 4| < ε',
 };
 
-export const PRESET_IDS: PresetId[] = ['blank', 'schrodinger', 'integral', 'expansion', 'solutions', 'induction', 'epsilon_delta'];
+export const PRESET_IDS: PresetId[] = ['blank', 'schrodinger', 'integral', 'expansion', 'solutions', 'induction', 'epsilon_delta', 'sketch'];
 
 export function presetText(id: PresetId, lang: UiLang): PresetText {
   return TEXT[id][lang];
@@ -110,6 +114,7 @@ const OPENING: Record<PresetId, Record<UiLang, OpeningLine[]>> = {
   solutions: { en: [], ja: [] },
   induction: { en: [], ja: [] },
   epsilon_delta: { en: [], ja: [] },
+  sketch: { en: [], ja: [] },
 };
 
 function openingLines(id: PresetId, lang: UiLang): Line[] {
@@ -130,7 +135,7 @@ export function buildNotebook(id: PresetId, lang: UiLang): Notebook {
     domain: 'Reals',
     lines,
     recoveries: [],
-    extensions: id === 'schrodinger' ? { demo: { script: 'schrodinger-v1' } } : {},
+    extensions: id === 'schrodinger' ? { demo: { script: 'schrodinger-v1' } } : id === 'sketch' ? { kind: 'sketch', sketch: { strokes: [] } } : {},
   };
   const theorem = PRESET_THEOREMS[id];
   // tied to these given lines: marking another line as given formalizes the problem again

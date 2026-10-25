@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { ArrowDownUp, Atom, Copy, Info, Infinity as InfinityIcon, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
+import { ArrowDownUp, Atom, Copy, Info, Infinity as InfinityIcon, Palette, PenLine, Plus, RefreshCw, Search, Sigma, SquareFunction, Trash2, Variable, X, type LucideProps } from 'lucide-react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
@@ -33,6 +33,7 @@ const PRESET_ICON: Record<PresetId, ComponentType<LucideProps>> = {
   solutions: SquareFunction,
   induction: Sigma,
   epsilon_delta: InfinityIcon,
+  sketch: Palette,
 };
 const SORTS: LibrarySort[] = ['custom', 'updated', 'title'];
 // a deleted card can be restored from the toast until this passes
