@@ -240,6 +240,13 @@ def _parent_expression(ctx: Context) -> tuple[Fact, Any] | None:
 
 def _domain_changes(c_ir: Any, written: sp.Expr, ctx: Context) -> list[str]:
     conds: list[str] = []
+    c_free_names: set[str] | None = None
+    try:
+        c_expr, _ = conv_expr(c_ir, ctx)
+        c_free_names = {s.name for s in c_expr.free_symbols}
+    except Exception:  # noqa: BLE001
+        pass
+
     for d_ir in denominators_ir(c_ir):
         try:
             d, _ = conv_expr(d_ir, ctx)
@@ -249,6 +256,10 @@ def _domain_changes(c_ir: Any, written: sp.Expr, ctx: Context) -> list[str]:
         if len(syms) != 1:
             continue
         v = syms[0]
+        # Bound variables (such as integration dummy variables) are not free in the parent
+        # expression and do not restrict the outer domain.
+        if c_free_names is not None and v.name not in c_free_names:
+            continue
         try:
             zs = sp.solveset(d, v, sp.S.Reals)
         except Exception:  # noqa: BLE001
@@ -273,6 +284,12 @@ def compare_values(
     source: str | None = None,
 ) -> SegResult:
     env = ctx.env
+    # Definite integrals with matching limits: check integrand equivalence directly
+    # (e.g. partial fraction decomposition or algebraic rewrite before evaluation).
+    if isinstance(C, sp.Integral) and isinstance(W, sp.Integral) and C.limits == W.limits:
+        if is_zero(sp.simplify(C.function - W.function)):
+            return SegResult("ok", goal=goal, method="sym", source_line_id=source)
+
     Cd, Wd = _doit(C), _doit(W)
     if is_zero(Wd - Cd):
         conds = _domain_changes(c_ir, Wd, ctx) if c_ir is not None else []
@@ -707,8 +724,46 @@ def _solve(rel: Rel, x: sp.Symbol, ctx: Context) -> sp.Set | None:
     return s
 
 
+def _candidates(s: sp.Set) -> tuple[list[sp.Expr], sp.Set | None] | None:
+    """A set of the form {a, b, …} ∩ D, or a union of such pieces over one D (solveset's output for
+    x² = y versus x = ±√y), as (candidates, D). A plain finite set has D = None."""
+    if isinstance(s, sp.FiniteSet):
+        return list(s), None
+    if isinstance(s, sp.Intersection) and len(s.args) == 2:
+        fin = [a for a in s.args if isinstance(a, sp.FiniteSet)]
+        if len(fin) == 1:
+            dom = s.args[1] if s.args[0] is fin[0] else s.args[0]
+            return list(fin[0]), dom
+        return None
+    if isinstance(s, sp.Union):
+        pieces = [_candidates(a) for a in s.args]
+        if any(p is None for p in pieces):
+            return None
+        doms = {d for _, d in pieces if d is not None}  # type: ignore[misc]
+        if len(doms) > 1:
+            return None
+        dom = next(iter(doms), None)
+        elems: list[sp.Expr] = []
+        for es, d in pieces:  # type: ignore[misc]
+            if d is None and dom is not None and not all(dom.contains(e) == sp.true for e in es):
+                return None  # a bare candidate outside D would change the set
+            elems += es
+        return elems, dom
+    return None
+
+
+def _same_candidates(A: sp.Set, B: sp.Set) -> bool:
+    ca, cb = _candidates(A), _candidates(B)
+    if ca is None or cb is None or ca[1] != cb[1]:
+        return False
+    a, b = ca[0], cb[0]
+    return all(any(is_zero(p - q) for q in b) for p in a) and all(any(is_zero(q - p) for p in a) for q in b)
+
+
 def _sets_equal(A: sp.Set, B: sp.Set) -> bool | None:
     if A == B:
+        return True
+    if _same_candidates(A, B):
         return True
     if isinstance(A, sp.FiniteSet) and isinstance(B, sp.FiniteSet):
         if len(A) != len(B):
@@ -734,7 +789,7 @@ def _sets_equal(A: sp.Set, B: sp.Set) -> bool | None:
 
 def _transcendental_in(rel: Rel, x: sp.Symbol) -> bool:
     """Trig/exp/log of the unknown: solveset is slow there and rarely returns a comparable set."""
-    kinds = (sp.sin, sp.cos, sp.tan, sp.exp, sp.log)
+    kinds = (sp.sin, sp.cos, sp.tan, sp.atan, sp.asin, sp.acos, sp.exp, sp.log)
     for e in (rel.lhs, rel.rhs) if rel.op != "EqualAny" else (rel.lhs, *rel.rhs):
         for f in sp.sympify(e).atoms(*kinds):
             if f.has(x):

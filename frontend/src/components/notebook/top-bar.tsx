@@ -30,7 +30,7 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
   const demo = nb.demo;
 
   return (
-    <header className="relative z-lifted flex min-h-16 items-center gap-3 border-b border-border bg-paper/95 px-3 backdrop-blur">
+    <header className="relative z-lifted flex min-h-16 items-center gap-3 border-b border-border bg-canvas/95 px-3 backdrop-blur">
       {/* leaving flushes the autosave; anything unsent stays in the outbox */}
       <Link
         href="/notebooks"
@@ -74,7 +74,7 @@ export function TopBar({ mockAi, user }: { mockAi: boolean; user: SessionUser })
         />
       </div>
       <div className="flex flex-1 items-center justify-end gap-2">
-        <PdfExport />
+        <PdfExport user={user} />
         <SaveStatus />
         <AccountMenu user={user} unsaved={dirty} />
       </div>

@@ -614,9 +614,21 @@ export class NotebookEngine {
     this.suggestTimer = null;
   }
 
+  /**
+   * Switches suggestions that start by themselves after a pause (on by default). Off stops the timer and
+   * leaves them to the suggest button; a suggestion already shown or on its way is kept.
+   */
+  setAutoSuggest(on: boolean) {
+    const s = store.getState();
+    if (s.autoSuggest === on) return;
+    s.set('autoSuggest', on);
+    if (on) this.scheduleSuggestion();
+    else this.cancelSuggestion();
+  }
+
   scheduleSuggestion(delay = SUGGEST_IDLE_MS) {
     this.cancelSuggestion();
-    if (!this.canSuggest(false)) return;
+    if (!store.getState().autoSuggest || !this.canSuggest(false)) return;
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 

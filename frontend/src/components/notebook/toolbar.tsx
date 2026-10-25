@@ -2,7 +2,7 @@
 
 import { Popover } from '@base-ui/react/popover';
 import clsx from 'clsx';
-import { Eraser, GripVertical, Hand, ListPlus, Lock, PenLine, Redo2, Sparkles, Undo2 } from 'lucide-react';
+import { Eraser, GripVertical, Hand, ListPlus, Lock, PenLine, Redo2, Sparkles, Undo2, Zap, ZapOff } from 'lucide-react';
 import { animate, motion, useDragControls, useMotionValue } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { suggestBlockerOf } from '@/core/candidates/blocker';
@@ -33,6 +33,7 @@ export function Toolbar() {
   const canUndo = useNotebook((s) => s.past.length > 0);
   const canRedo = useNotebook((s) => s.future.length > 0);
   const suggesting = useNotebook((s) => s.suggesting);
+  const autoSuggest = useNotebook((s) => s.autoSuggest);
   const set = useNotebook((s) => s.set);
   // an unresolved wrong line locks completion: grey the button, but a press still explains why (R27)
   const locked = useNotebook(
@@ -127,6 +128,20 @@ const side = useDevicePrefs((s) => s.toolbarSide);
         <IconButton label={t('tool.newLine')} onClick={() => engine.newLine()}>
           <ListPlus size={20} />
         </IconButton>
+        <button
+          type="button"
+          aria-pressed={autoSuggest}
+          aria-label={t(autoSuggest ? 'tool.autoSuggestOn' : 'tool.autoSuggestOff')}
+          title={t(autoSuggest ? 'tool.autoSuggestOn' : 'tool.autoSuggestOff')}
+          onClick={() => engine.setAutoSuggest(!autoSuggest)}
+          className={clsx(
+            'inline-flex h-11 select-none items-center gap-1.5 rounded-xl px-3 text-base font-medium transition-colors',
+            autoSuggest ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-hover',
+          )}
+        >
+          {autoSuggest ? <Zap size={20} /> : <ZapOff size={20} />}
+          <span className="hidden sm:inline">{t('tool.autoSuggest')}</span>
+        </button>
         <button
           type="button"
           onClick={() => void engine.requestSuggestion(true)}
