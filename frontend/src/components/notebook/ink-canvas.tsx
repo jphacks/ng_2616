@@ -8,7 +8,7 @@ import { drawStroke, strokesHit } from '@/core/ink/stroke';
 import { INK_WEIGHTS, useDevicePrefs } from '@/core/prefs/device';
 import { tokenColor } from '@/ui/tokens';
 import type { Tool } from '@/core/store/notebook-store';
-import { fingersDown, useSecondFinger } from './gestures';
+import { fingersDown, isPenDown, notifyInkDrawing, useSecondFinger } from './gestures';
 import { usePageZoom } from './zoom';
 
 import { inkHeight, LINE_HEIGHT, MAX_HEIGHT, PADDING_BOTTOM } from '@/core/ink/height';
@@ -222,7 +222,12 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   }, []);
 
   useSecondFinger(() => {
-    for (const [id, stroke] of activeStrokes.current) if (stroke.touch) activeStrokes.current.delete(id);
+    for (const [id, stroke] of activeStrokes.current) {
+      if (stroke.touch) {
+        activeStrokes.current.delete(id);
+        notifyInkDrawing(false);
+      }
+    }
     if (erasingByTouch.current) { erasing.current = null; erasingPointer.current = null; }
     backingDirty.current = true;
     scrolling.current = null;
@@ -249,6 +254,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     const l = activeStrokes.current.get(pointerId);
     if (!l) return;
     activeStrokes.current.delete(pointerId);
+    notifyInkDrawing(false);
 
     if (l.points.length === 0) return;
 
@@ -323,7 +329,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       schedule();
     };
 
-    const startStroke = (e: PointerEvent) => {
+    const startStroke = (e: PointerEvent, force = false) => {
       // Recover a missing pointerup without committing another active pointer's stroke.
       if (activeStrokes.current.has(e.pointerId)) {
         commitLiveRef.current(e.pointerId);
@@ -331,7 +337,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
 
       rectRef.current = c.getBoundingClientRect();
       const { editable, tool, onPenDown } = propsRef.current;
-      if (!editable || tool === 'view') return;
+      if ((!editable && !force) || tool === 'view') return;
 
       hover.current = null;
       onPenDown?.();
@@ -345,6 +351,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         const strokeId = shortId('s');
         const p = local(e, e.timeStamp);
         activeStrokes.current.set(e.pointerId, { id: strokeId, pointerId: e.pointerId, touch: e.pointerType === 'touch', points: [p], t0: e.timeStamp });
+        notifyInkDrawing(true);
         schedule();
       }
     };
@@ -367,9 +374,16 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       // Eraser tool works with both stylus and finger touch!
       const fingerScroll = tool === 'view' || (tool !== 'eraser' && e.pointerType === 'touch' && !isPen && (mode === 'pen' || (mode === 'auto' && penSeen)));
 
-      if (fingerScroll || !editable) {
-        if (!editable && tool !== 'view') onActivate?.();
+      if (fingerScroll) {
         scrolling.current = { id: e.pointerId, y: e.clientY, el: scrollParent(wrap.current) };
+        return;
+      }
+
+      if (!editable) {
+        if (isPenDown()) return;
+        onActivate?.();
+        e.preventDefault();
+        startStroke(e, true);
         return;
       }
 
@@ -402,8 +416,14 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
 
       // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
-      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
-        startStroke(e);
+      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.tool === 'pen') {
+        if (!propsRef.current.editable) {
+          if (isPenDown()) return;
+          propsRef.current.onActivate?.();
+          startStroke(e, true);
+        } else {
+          startStroke(e);
+        }
       }
 
       const l = activeStrokes.current.get(e.pointerId);

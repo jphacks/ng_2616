@@ -5,7 +5,16 @@ import { anyPending, canContinueFrom, hasMath, hasUnresolvedWrong, isGiven, last
 export type CandidateStateName = 'GENERATING' | 'VERIFYING' | 'READY' | 'HELD' | 'NONE' | 'ADOPTED' | 'REJECTED' | 'STALE';
 
 /** Why a suggestion cannot start now; null means it can (same rules as NotebookEngine.suggestBlocker). */
-export type SuggestBlocker = 'none' | 'cas' | 'pending' | 'wrong' | 'empty' | 'cannot-continue' | 'busy' | 'writing';
+export type SuggestBlocker = 'none' | 'hint-mode' | 'assist-off' | 'cas' | 'pending' | 'wrong' | 'empty' | 'cannot-continue' | 'busy' | 'writing';
+
+/**
+ * Assist mode (spec §14.2): in hint mode no completion is offered; the default is complete. 'off' is not in the
+ * spec: no assistance at all, so neither completion nor the recovery hints (see hintsAllowedIn) are offered.
+ */
+export type AssistMode = 'hint' | 'complete' | 'off';
+
+/** Whether the step-by-step hints (hint 1 and 2 on a wrong line) may be shown. Evidence is not a hint and stays. */
+export const hintsAllowedIn = (mode?: AssistMode): boolean => mode !== 'off';
 
 export interface BlockerInput {
   notebook: Notebook | null;
@@ -14,6 +23,8 @@ export interface BlockerInput {
   candidate: CandidateStateName | null;
   /** the line the student is writing on */
   activeLine: Line | undefined;
+  /** S-02 assist mode; 'hint' hides completion. Absent or 'complete': completion as usual (spec §14.2) */
+  assistMode?: AssistMode;
   /** a Lean check is still running for some line (ADR 0008) */
   leanPending?: boolean;
   manual?: boolean;
@@ -47,8 +58,10 @@ export function continuable(last: Line): boolean {
   return leanContinuable(last) ?? canContinueFrom(last);
 }
 
-export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, leanPending, manual = false }: BlockerInput): SuggestBlocker | null {
+export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, assistMode, leanPending, manual = false }: BlockerInput): SuggestBlocker | null {
   if (!nb) return 'none';
+  if (assistMode === 'hint') return 'hint-mode';
+  if (assistMode === 'off') return 'assist-off';
   if (!casReady) return 'cas';
   if (anyPending(nb) || leanPending) return 'pending';
   if (hasUnresolvedWrong(nb)) return 'wrong';
@@ -90,6 +103,10 @@ export function blockerToastKey(blocker: SuggestBlocker, candidate: CandidateSta
       return 'toast.suggestCannotContinue';
     case 'busy':
       return candidate === 'HELD' ? 'toast.suggestHeld' : 'toast.suggestBusy';
+    case 'hint-mode':
+      return 'toast.suggestHintMode';
+    case 'assist-off':
+      return 'toast.suggestAssistOff';
     case 'none':
       return null;
   }

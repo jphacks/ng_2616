@@ -1,5 +1,7 @@
 # MathIDE
 
+![MathIDE — 数学のためのIDE](docs/images/banner.png)
+
 学習支援 × Tech: MathIDEは、大学数学の学習を支援する手書きノートアプリです。途中式の検証やAIによる数式補完を通して、自分で考えることと、学習の効率化を両立します。
 
 ## 1. 背景と課題
@@ -38,9 +40,7 @@
 
 ### 数学のためのIDE
 
-IDEは、開発者が書いたコードの誤りを検出し、必要に応じて補完を提案することで効率的なコーディングを実現します。
-
-この考え方を数学のノートに適用し、学生が書いた途中式の検証や、次の一手の補完を行うことを考えました。
+![IDEはコードの誤りを検出し補完を提案する。MathIDEは途中式を検証し、次の一手を補完する](docs/images/ide.png)
 
 ## 3. MathIDEの紹介
 
@@ -50,11 +50,7 @@ MathIDEは、手書きによる数学の学習に、途中式の検証・ヒン�
 
 ### 学習フロー
 
-1. ノートに途中式を手書きする
-2. 一行ずつ数学的な正しさを検証する
-3. 誤りがあれば、根拠やヒントをもとに自分で書き直す
-4. 必要に応じてAIの補完を利用する
-5. 学習した過程をノートとして保存・出力する
+![1. ノートに途中式を手書きする → 2. 一行ずつ数学的な正しさを検証する → 3. 誤りがあれば、根拠やヒントをもとに自分で書き直す（再検証へ） → 4. 必要に応じてAIの補完を利用する → 5. 学習した過程をノートとして保存・出力する](docs/images/flow.png)
 
 ### 主な機能
 
@@ -114,12 +110,4 @@ MathIDEでは、学生自身の解法に沿った検証・ヒントによる自�
 
 ### 技術スタック
 
-| 分野 | 使用技術 |
-| --- | --- |
-| Frontend | NEXT.js |
-| Backend | Python, FastAPI |
-| Infrastructure | Vercel, Azure |
-| Authentication / Database | Supabase |
-| LLM | Gemini API |
-| Mathematical Verification | SymPy, LEAN |
-| Math Rendering | KaTeX |
+![システム構成: クライアント（iPad・ブラウザ、Next.js、KaTeX）→ Vercel（APIゲートウェイ）→ Gemini API（手書き認識・数式補完）、Supabase（認証・ノート保存）、Azure（数学的な検証: FastAPI、SymPy、Lean）](docs/images/architecture.png)
