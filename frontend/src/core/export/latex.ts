@@ -2,10 +2,23 @@ import { PdfDocumentSchema, type PdfDocument } from '@mn/contracts';
 import { parseMathLatex, printSegmentLatex, validateExpr } from '@mn/contracts/ir';
 import { safeRawMath } from './raw-math';
 
+// LuaTeX-ja sets Greek in the Japanese font with Japanese spacing ("ε –δ"), and Latin Modern has no
+// Greek: in text, a Greek letter is typeset as the same math letter formulas use.
+const GREEK: Record<string, string> = Object.fromEntries([
+  ...'alpha beta gamma delta varepsilon zeta eta theta iota kappa lambda mu nu xi o pi rho varsigma sigma tau upsilon varphi chi psi omega'
+    .split(' ').map((name, i) => [String.fromCodePoint(0x3b1 + i), name === 'o' ? 'o' : `\\${name}`]),
+  ...'A B Gamma Delta E Z H Theta I K Lambda M N Xi O Pi P - Sigma T Upsilon Phi X Psi Omega'
+    .split(' ').map((name, i) => [String.fromCodePoint(0x391 + i), name.length === 1 ? `\\mathrm{${name}}` : `\\${name}`]),
+  ['ϵ', '\\epsilon'], ['ϑ', '\\vartheta'], ['ϕ', '\\phi'], ['ϖ', '\\varpi'], ['ϱ', '\\varrho'],
+  // the minus sign gets the same Japanese spacing ("|x − 2|")
+  ['−', '-'],
+].filter(([c]) => c !== '΢')); // U+03A2 is unassigned
+
 /** Only text is escaped; math is parsed and reprinted through the shared IR, or rebuilt from allowed tokens. */
 export function escapeTex(text: string): string {
   const escapes: Record<string, string> = { '\\': '\\textbackslash{}', '{': '\\{', '}': '\\}', '$': '\\$', '&': '\\&', '#': '\\#', '%': '\\%', '_': '\\_', '^': '\\textasciicircum{}', '~': '\\textasciitilde{}' };
-  return text.replace(/[\\{}$&#%_^~]/g, c => escapes[c]!).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\r\n?/g, '\n');
+  return text.replace(/[\\{}$&#%_^~]/g, c => escapes[c]!).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\r\n?/g, '\n')
+    .replace(/[Α-Ωα-ωϑϕϖϱϵ−]/g, c => GREEK[c] ? `$${GREEK[c]}$` : c);
 }
 
 function mathTex(value: string): string {

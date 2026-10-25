@@ -64,6 +64,15 @@ describe('LuaLaTeX homework report', () => {
     nb.lines.splice(0, 0, { ...nb.lines[0]!, id: 'two', role: 'step', state: 'SETTLED', segments: segmentsFromSource('so $x = 1$ $y = 2$') });
     assert.ok(serializeLatex(serializeNotebook(nb, 'en').document).includes('so $x = 1$ $y = 2$\\par'));
   });
+  it('sets Greek letters in text as math letters instead of the Japanese font', () => {
+    assert.equal(escapeTex('ε–δ: for every ε > 0'), '$\\varepsilon$–$\\delta$: for every $\\varepsilon$ > 0');
+    assert.equal(escapeTex('ΔΣΩ αβφ ϕ'), '$\\Delta$$\\Sigma$$\\Omega$ $\\alpha$$\\beta$$\\varphi$ $\\phi$');
+    assert.equal(escapeTex('Α'), '$\\mathrm{A}$');
+    assert.equal(escapeTex('|x − 2|'), '|x $-$ 2|');
+    const tex = serializeLatex(serializeNotebook(buildNotebook('epsilon_delta', 'ja'), 'ja').document);
+    assert.ok(tex.includes('$\\varepsilon$–$\\delta$論法'), tex);
+    assert.ok(!/[α-ωΑ-Ω]/.test(tex));
+  });
   it('keeps raw notation as escaped text unless every token is plain math', () => {
     for (const attack of ['\\input{/etc/passwd}', '\\min ^^5cinput{x}', '\\def\\x{1} x', '\\catcode`\\@=11', 'x % comment', 'a & b', '\\frac{1}{2', '\\left( x', '\\text{a^b}', '\\directlua{os.exit()}', 'x \\\\ y']) {
       assert.equal(safeRawMath(attack), null, attack);
