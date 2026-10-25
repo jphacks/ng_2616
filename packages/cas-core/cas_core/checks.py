@@ -707,8 +707,46 @@ def _solve(rel: Rel, x: sp.Symbol, ctx: Context) -> sp.Set | None:
     return s
 
 
+def _candidates(s: sp.Set) -> tuple[list[sp.Expr], sp.Set | None] | None:
+    """A set of the form {a, b, …} ∩ D, or a union of such pieces over one D (solveset's output for
+    x² = y versus x = ±√y), as (candidates, D). A plain finite set has D = None."""
+    if isinstance(s, sp.FiniteSet):
+        return list(s), None
+    if isinstance(s, sp.Intersection) and len(s.args) == 2:
+        fin = [a for a in s.args if isinstance(a, sp.FiniteSet)]
+        if len(fin) == 1:
+            dom = s.args[1] if s.args[0] is fin[0] else s.args[0]
+            return list(fin[0]), dom
+        return None
+    if isinstance(s, sp.Union):
+        pieces = [_candidates(a) for a in s.args]
+        if any(p is None for p in pieces):
+            return None
+        doms = {d for _, d in pieces if d is not None}  # type: ignore[misc]
+        if len(doms) > 1:
+            return None
+        dom = next(iter(doms), None)
+        elems: list[sp.Expr] = []
+        for es, d in pieces:  # type: ignore[misc]
+            if d is None and dom is not None and not all(dom.contains(e) == sp.true for e in es):
+                return None  # a bare candidate outside D would change the set
+            elems += es
+        return elems, dom
+    return None
+
+
+def _same_candidates(A: sp.Set, B: sp.Set) -> bool:
+    ca, cb = _candidates(A), _candidates(B)
+    if ca is None or cb is None or ca[1] != cb[1]:
+        return False
+    a, b = ca[0], cb[0]
+    return all(any(is_zero(p - q) for q in b) for p in a) and all(any(is_zero(q - p) for p in a) for q in b)
+
+
 def _sets_equal(A: sp.Set, B: sp.Set) -> bool | None:
     if A == B:
+        return True
+    if _same_candidates(A, B):
         return True
     if isinstance(A, sp.FiniteSet) and isinstance(B, sp.FiniteSet):
         if len(A) != len(B):
