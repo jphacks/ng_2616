@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import type { Notebook } from '@mn/contracts';
 import { api } from '@/core/api/client';
 import { useSessionUser } from '@/core/auth/browser';
 import { NotebookEngine } from '@/core/engine';
@@ -11,6 +12,7 @@ import { openNotebook } from '@/core/persistence/outbox';
 import { RepoError } from '@/core/persistence/repo';
 import { useNotebook } from '@/core/store/notebook-store';
 import { ResourcesView } from '@/components/resources/resources-view';
+import { isSketch, SketchWorkspace } from '@/components/sketch/sketch-workspace';
 import { currentLocale, translate, useT } from '@/i18n';
 import { OrientationProvider } from '@/ui/orientation';
 import { Spinner } from '@/ui/spinner';
@@ -29,6 +31,8 @@ export function Workspace({ notebookId }: { notebookId: string }) {
   const [engine, setEngine] = useState<NotebookEngine | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mockAi, setMockAi] = useState(false);
+  // an ink-only notebook opens in its own page, without the engine
+  const [sketch, setSketch] = useState<{ notebook: Notebook; revision: number | null } | null>(null);
   const tab = useNotebook((s) => s.tab);
   const loaded = useNotebook((s) => s.notebook?.id === notebookId);
 
@@ -46,6 +50,10 @@ export function Workspace({ notebookId }: { notebookId: string }) {
           setError('not_found');
           return;
         }
+        if (isSketch(res.notebook)) {
+          setSketch({ notebook: res.notebook, revision: res.revision });
+          return;
+        }
         const s = useNotebook.getState();
         s.load(res.notebook, res.revision);
         // edits this device had not sent yet: autosave picks them up
@@ -61,6 +69,7 @@ export function Workspace({ notebookId }: { notebookId: string }) {
       alive = false;
       created?.dispose();
       setEngine(null);
+      setSketch(null);
       useNotebook.getState().unload();
     };
   }, [userId, notebookId]);
@@ -114,6 +123,7 @@ export function Workspace({ notebookId }: { notebookId: string }) {
     };
   }, [engine]);
 
+  if (sketch && userId) return <SketchWorkspace userId={userId} notebook={sketch.notebook} revision={sketch.revision} />;
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
