@@ -3,12 +3,13 @@ import { shortId } from '@/core/ids';
 
 export const PENDING_STATES = new Set<Line['state']>(['RECOGNIZING', 'VERIFYING']);
 
-export function newDraftLine(): Line {
-  return { id: shortId('L'), version: 1, source: 'user', role: 'step', state: 'DRAFT', ink: [], segments: [] };
+export function newDraftLine(isMemo = false): Line {
+  return { id: shortId('L'), version: 1, source: 'user', role: 'step', state: 'DRAFT', ink: [], segments: [], is_memo: isMemo };
 }
 
 export const isActive = (l: Line) => l.state !== 'SUPERSEDED';
-export const hasMath = (l: Line) => l.segments.some((s) => s.type === 'math');
+export const isMemo = (l: Line) => !!l.is_memo;
+export const hasMath = (l: Line) => !l.is_memo && l.segments.some((s) => s.type === 'math');
 export const proofOf = (l: Line): Proof | undefined => l.verified?.proof;
 export const statusOf = (l: Line): Status | undefined => l.verified?.proof.status;
 export const isSettledMath = (l: Line) => l.state === 'SETTLED' && hasMath(l);
@@ -41,7 +42,7 @@ export function contextLinesFor(nb: Notebook, targetId: string): Line[] {
   const target = nb.lines[idx];
   const exclude = new Set<string>();
   if (target?.revision_of) exclude.add(target.revision_of);
-  return nb.lines.slice(0, idx < 0 ? nb.lines.length : idx).filter((l) => isActive(l) && l.state === 'SETTLED' && !exclude.has(l.id));
+  return nb.lines.slice(0, idx < 0 ? nb.lines.length : idx).filter((l) => isActive(l) && l.state === 'SETTLED' && !l.is_memo && !exclude.has(l.id));
 }
 
 export function parentFor(nb: Notebook, targetId: string): Line | undefined {
@@ -53,7 +54,7 @@ export function parentFor(nb: Notebook, targetId: string): Line | undefined {
 
 /** Any unresolved wrong line blocks every completion mode (spec §10). */
 export function hasUnresolvedWrong(nb: Notebook): boolean {
-  return nb.lines.some((l) => isActive(l) && l.state === 'SETTLED' && statusOf(l) === 'wrong') ||
+  return nb.lines.some((l) => isActive(l) && l.state === 'SETTLED' && !l.is_memo && statusOf(l) === 'wrong') ||
     nb.recoveries.some((r) => r.phase === 'UNRESOLVED');
 }
 
