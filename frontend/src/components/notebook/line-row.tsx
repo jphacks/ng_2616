@@ -4,6 +4,7 @@ import type { Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { memo } from 'react';
+import { FEATURES } from '@/features/registry.generated';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
@@ -193,6 +194,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             {t('line.revise')}
           </Button>
         )}
+        {line.state === 'SETTLED' &&
+          FEATURES.flatMap((f) => f.lineActions ?? []).map((Action, i) => <Action key={i} line={line} />)}
       </div>
     </SwipeRow>
   );
