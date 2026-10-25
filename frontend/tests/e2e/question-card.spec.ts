@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { normalizeQuestionPage } from '@mn/contracts';
+import { quadraticQuestionFixture } from '@mn/contracts/fixtures';
 import { inkPixels, scribble } from './helpers';
 
 async function worksheet(page: Page): Promise<Buffer> {
@@ -16,7 +17,7 @@ async function worksheet(page: Page): Promise<Buffer> {
   return pdf;
 }
 
-async function openImport(page: Page, buffer?: Buffer, review = true) {
+async function openImport(page: Page, buffer?: Buffer, review = true, readInitial = true) {
   await page.route('https://cdn.jsdelivr.net/**', (r) => r.abort());
   await page.addInitScript(() => localStorage.setItem('mn.locale', 'en'));
   await page.goto('/notebooks');
@@ -33,10 +34,22 @@ async function openImport(page: Page, buffer?: Buffer, review = true) {
   if (!review) return page.getByRole('dialog');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Choose a problem from this PDF' }).click();
+  if (readInitial) {
+    const result = { ...quadraticQuestionFixture(), method: 'ai', mock: false };
+    result.questions = result.questions.map((q) => ({ ...q, title: `Question ${q.label}` }));
+    let initial = true;
+    await page.route('**/api/v1/resources/questions', (route) => {
+      if (!initial) return route.fallback();
+      initial = false;
+      return route.fulfill({ status: 202, json: { ok: true, request_id: 'initial-ai-fixture', data: { job: { state: 'succeeded', result } } } });
+    });
+    await page.getByRole('dialog').getByRole('button', { name: 'Read problems with AI', exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Question', exact: true }).locator('option')).toHaveCount(11);
+  }
   return page.getByRole('dialog');
 }
 
-test('real worksheet → ten questions → given lines, undo/redo and save/reopen, without AI calls', async ({ page }) => {
+test('real worksheet → scripted AI reading → ten questions → given lines, undo/redo and save/reopen', async ({ page }) => {
   const calls: string[] = [];
   page.on('request', (r) => { if (r.url().includes('/resources/questions')) calls.push(r.url()); });
   const dialog = await openImport(page);
@@ -59,7 +72,7 @@ test('real worksheet → ten questions → given lines, undo/redo and save/reope
   await page.reload();
   await expect(card).toContainText('test_questioncard.pdf');
   await expect.poll(() => inkPixels(page.locator('[data-line-id]').last())).toBeGreaterThan(10);
-  expect(calls).toEqual([]);
+  expect(calls).toHaveLength(1);
 });
 
 const aiPage = () => normalizeQuestionPage({
@@ -78,7 +91,7 @@ test('explicit page AI path reviews a grounded premise and isolates unreadable/i
   const dialog = await openImport(page);
   await expect(dialog.getByRole('combobox', { name: 'Question', exact: true }).locator('option')).toHaveCount(11);
   await dialog.getByRole('button', { name: 'Reread with AI (optional)' }).click();
-  await expect(dialog.getByRole('radio', { name: 'PDF text (original reading)', exact: true })).toBeChecked();
+  await expect(dialog.getByRole('radio', { name: 'Initial AI reading', exact: true })).toBeChecked();
   await dialog.getByRole('radio', { name: 'AI reread result', exact: true }).check();
   await expect(dialog.getByText('AI transcription of this page.', { exact: false })).toBeVisible();
   await dialog.getByRole('combobox', { name: 'Question', exact: true }).selectOption('q');
@@ -96,14 +109,17 @@ test('explicit page AI path reviews a grounded premise and isolates unreadable/i
   expect(input?.text.length).toBeGreaterThan(60);
 });
 
-test('unconfigured image OCR reports an error once and keeps local extraction usable', async ({ page }) => {
-  const dialog = await openImport(page);
-  await expect(dialog.getByRole('combobox', { name: 'Question', exact: true }).locator('option')).toHaveCount(11);
-  await dialog.getByRole('button', { name: 'Reread with AI (optional)' }).click();
+test('AI is required for adoption and a missing provider never falls back to broken PDF text', async ({ page }) => {
+  await page.route('**/api/v1/resources/questions', (route) => route.fulfill({ status: 202, json: {
+    ok: true, request_id: 'unconfigured', data: { job: { state: 'failed', error: { code: 'QUESTION_OCR_UNAVAILABLE', message: 'unconfigured' } } },
+  } }));
+  const dialog = await openImport(page, undefined, true, false);
+  await expect(dialog.getByRole('combobox', { name: 'Question', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Adopt as given lines' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Read problems with AI', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('configured Gemini');
-  await dialog.getByRole('combobox', { name: 'Question', exact: true }).selectOption({ label: 'Question 10' });
-  await dialog.getByRole('button', { name: 'Adopt as given lines' }).click();
-  await expect(page.locator('main')).toContainText('Question 10');
+  await expect(dialog.getByRole('combobox', { name: 'Question', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Adopt as given lines' })).toBeDisabled();
 });
 
 test('closing a pending transcription discards its late result and retains the existing card/ink', async ({ page }) => {
@@ -183,11 +199,11 @@ test('AI symbol changes stay separate and switching readings preserves edits wit
   await expect(dialog.getByRole('alert')).toContainText('formulas differ');
   await dialog.getByRole('region', { name: 'Compare the readings' }).screenshot({ path: test.info().outputPath('ai-readings.png') });
   await expect(editor).toHaveValue(edited);
-  await expect(dialog.getByRole('radio', { name: 'PDF text (original reading)', exact: true })).toBeChecked();
+  await expect(dialog.getByRole('radio', { name: 'Initial AI reading', exact: true })).toBeChecked();
   await dialog.getByRole('radio', { name: 'AI reread result', exact: true }).check();
   await dialog.getByRole('combobox', { name: 'Question', exact: true }).selectOption('q');
   await editor.fill('$3x^2-15=0$\nAI draft edit');
-  await dialog.getByRole('radio', { name: 'PDF text (original reading)', exact: true }).check();
+  await dialog.getByRole('radio', { name: 'Initial AI reading', exact: true }).check();
   await expect(editor).toHaveValue(edited);
   await dialog.getByRole('radio', { name: 'AI reread result', exact: true }).check();
   await expect(editor).toHaveValue('$3x^2-15=0$\nAI draft edit');
@@ -224,5 +240,30 @@ test('one resource entry point and a rendered PDF survive closing, reopening and
   await expect.poll(() => pdfCanvas.evaluate((c: HTMLCanvasElement) => c.width)).toBeLessThan(wide);
   await expect.poll(darkPixels).toBeGreaterThan(100);
   await page.getByRole('button', { name: 'Choose a problem from this PDF' }).click();
-  await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Question', exact: true }).locator('option')).toHaveCount(11);
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Read problems with AI', exact: true })).toBeVisible();
+});
+
+test('integral worksheet keeps fraction structure and bounds through AI-only adoption', async ({ page }) => {
+  const file = process.env.INTEGRAL_DEMO_PDF;
+  let pdf: Buffer;
+  if (file) pdf = await readFile(file);
+  else {
+    const maker = await page.context().newPage();
+    await maker.setContent('<h1>Definite integral</h1><math display="block"><msubsup><mo>∫</mo><mn>1</mn><mn>2</mn></msubsup><mfrac><mrow><mn>3</mn><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><mn>5</mn><mi>x</mi><mo>+</mo><mn>4</mn></mrow><mrow><mi>x</mi><mo>(</mo><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn><mo>)</mo></mrow></mfrac><mi>d</mi><mi>x</mi></math>');
+    pdf = await maker.pdf({ format: 'A4' }); await maker.close();
+  }
+  const result = normalizeQuestionPage({ complete: true,
+    lines: [{ id: 'l', has_unreadable: false, segments: [{ type: 'math', content: '\\int_1^2 \\frac{3x^2+5x+4}{x(x^2+1)}\\,dx' }] }],
+    questions: [{ id: 'q', label: '', title: 'Integral', line_ids: ['l'], unknowns: [], independent_var: '', functions: [], premises: [] }],
+  }, 1, 'ai');
+  await page.route('**/api/v1/resources/questions', (route) => route.fulfill({ status: 202, json: { ok: true, request_id: 'integral', data: { job: { state: 'succeeded', result } } } }));
+  const dialog = await openImport(page, pdf, true, false);
+  await expect(dialog.getByRole('combobox', { name: 'Question', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Adopt as given lines' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Read problems with AI', exact: true }).click();
+  const editor = dialog.getByLabel('Review / correct the transcription');
+  await expect(editor).toHaveValue(/\\int_\{1\}\^\{2\}.*\\frac\{3 x\^\{2\} \+ 5 x \+ 4\}/);
+  await dialog.getByRole('button', { name: 'Adopt as given lines' }).click();
+  await expect(page.locator('main > div').first()).toContainText('Integral');
+  await expect(page.locator('main > div').first().locator('.katex .mfrac')).toHaveCount(1);
 });

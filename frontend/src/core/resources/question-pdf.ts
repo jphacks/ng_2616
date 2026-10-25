@@ -2,7 +2,7 @@
 
 import type { QuestionPage, UiLang } from '@mn/contracts';
 import { closePdf, openPdf, type PdfDoc } from './pdf';
-import { positionedPdfLines, questionPageFromText } from './question-text';
+import { positionedPdfLines } from './question-text';
 
 export const MAX_QUESTION_BYTES = 10 * 1024 * 1024;
 export const MAX_QUESTION_PAGES = 5;
@@ -26,7 +26,12 @@ export async function readQuestionPdf(file: File, lang: UiLang, signal: AbortSig
       const content = await page.getTextContent();
       const lines = positionedPdfLines(content.items.filter((item) => 'str' in item));
       text.push(lines.join('\n'));
-      pages.push(questionPageFromText(lines, p, lang));
+      // Text order cannot reconstruct a fraction bar or integral bounds reliably. Keep it
+      // only as auxiliary input for image transcription, never as an adoptable question.
+      pages.push({ page: p, method: 'text', mock: false, questions: [], lines: [{
+        id: `p${p}_unread`, has_unreadable: true,
+        segments: [{ type: 'text', text: lang === 'ja' ? 'AIで読み取ってから問題を選択してください。' : 'Read this page with AI before choosing a problem.' }],
+      }] });
     }
     signal.throwIfAborted();
     return { doc, pages, text, fileName: file.name };

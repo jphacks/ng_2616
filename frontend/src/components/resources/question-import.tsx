@@ -42,7 +42,7 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const [pageNo, setPageNo] = useState(1);
   const [selection, setSelection] = useState<QuestionSelection | null>(null);
   const [aiResults, setAiResults] = useState<Record<number, QuestionPage>>({});
-  const [reading, setReading] = useState<'text' | 'ai'>('text');
+  const [reading, setReading] = useState<'initial' | 'reread'>('initial');
   const [drafts, setDrafts] = useState<Record<string, QuestionSelection | null>>({});
   const [busy, setBusy] = useState<'file' | 'ai' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const previewHost = useRef<HTMLDivElement>(null);
   const originalPage = pdf?.pages.find((p) => p.page === pageNo);
   const alternative = aiResults[pageNo];
-  const page = reading === 'ai' && alternative ? alternative : originalPage;
+  const page = reading === 'reread' && alternative ? alternative : originalPage;
   const question = page?.questions.find((q) => q.id === selection?.questionId);
   const changedMath = originalPage && alternative ? changedQuestionMath(originalPage, alternative) : [];
 
@@ -87,13 +87,13 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
   const close = () => {
     controller.current?.abort(); controller.current = null;
     setOpen(false); setBusy(null); setPdf(null); setSelection(null); setError(null);
-    setAiResults({}); setReading('text'); setDrafts({});
+    setAiResults({}); setReading('initial'); setDrafts({});
     releaseDoc(); source.current = null;
   };
   const readFile = async (file: File, ctl = new AbortController()) => {
     controller.current?.abort(); controller.current = ctl;
     setBusy('file'); setError(null); setSelection(null); setPdf(null); releaseDoc();
-    setAiResults({}); setReading('text'); setDrafts({});
+    setAiResults({}); setReading('initial'); setDrafts({});
     try {
       const loaded = await readQuestionPdf(file, locale, ctl.signal);
       if (ctl.signal.aborted) { await closePdf(loaded.doc); return; }
@@ -125,19 +125,19 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
     setSelection(q ? { questionId: q.id, title: q.title, statement: statementSource(result, q.id), premiseIds: [] } : null);
     setError(null);
   };
-  const switchReading = (next: 'text' | 'ai') => {
+  const switchReading = (next: 'initial' | 'reread') => {
     setDrafts((current) => ({ ...current, [`${pageNo}:${reading}`]: selection }));
     setSelection(drafts[`${pageNo}:${next}`] ?? null);
     setReading(next); setError(null);
   };
   const switchPage = (next: number) => {
     setDrafts((current) => ({ ...current, [`${pageNo}:${reading}`]: selection }));
-    setPageNo(next); setReading('text'); setSelection(drafts[`${next}:text`] ?? null); setError(null);
+    setPageNo(next); setReading('initial'); setSelection(drafts[`${next}:initial`] ?? null); setError(null);
   };
   const discardAi = () => {
-    if (reading === 'ai') { setReading('text'); setSelection(drafts[`${pageNo}:text`] ?? null); }
+    if (reading === 'reread') { setReading('initial'); setSelection(drafts[`${pageNo}:initial`] ?? null); }
     setAiResults((current) => { const next = { ...current }; delete next[pageNo]; return next; });
-    setDrafts((current) => { const next = { ...current }; delete next[`${pageNo}:ai`]; return next; });
+    setDrafts((current) => { const next = { ...current }; delete next[`${pageNo}:reread`]; return next; });
     setError(null);
   };
   const transcribe = async () => {
@@ -156,8 +156,15 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
       ctl.signal.throwIfAborted();
       const result = QuestionPageSchema.parse(raw);
       if (result.page !== pageNo) throw new Error('QUESTION_CONTEXT_CHANGED');
-      // Keep the original reading and its edits active until the user chooses the AI result.
-      setAiResults((current) => ({ ...current, [pageNo]: result }));
+      if (originalPage?.method !== 'ai') {
+        setPdf((current) => current ? { ...current, pages: current.pages.map((p) => p.page === pageNo ? result : p) } : null);
+        setReading('initial');
+        const only = result.questions.length === 1 ? result.questions[0] : undefined;
+        setSelection(only ? { questionId: only.id, title: only.title, statement: statementSource(result, only.id), premiseIds: [] } : null);
+      } else {
+        // A reread never replaces the initial AI reading or the student's edits.
+        setAiResults((current) => ({ ...current, [pageNo]: result }));
+      }
     } catch (e) { if (!ctl.signal.aborted) showError(e); }
     finally { if (controller.current === ctl) setBusy(null); }
   };
@@ -189,7 +196,13 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
             <select value={pageNo} disabled={!!busy} onChange={(e) => switchPage(Number(e.target.value))} className="mt-1 h-11 w-full rounded-xl bg-paper px-3 ring-1 ring-border">{pdf.pages.map((p) => <option key={p.page} value={p.page}>{t('res.page', { n: p.page })}</option>)}</select>
           </label>
           <details open><summary className="cursor-pointer py-2 font-medium">{t('question.original')}</summary><div ref={previewHost} className="max-h-60 overflow-auto rounded-xl border border-border bg-page" /></details>
-          <p className="text-xs text-muted">{t(page.method === 'ai' ? 'question.aiRead' : 'question.textRead')}</p>
+          {originalPage?.method !== 'ai' && <div className="space-y-3">
+            <p className="text-sm text-muted">{t('question.aiRequired')}</p>
+            <Button variant="primary" icon={<ScanText size={18} />} disabled={!!busy} onClick={() => void transcribe()}>{t('question.readAi')}</Button>
+            <p className="text-xs text-muted">{t('question.aiConsent')}</p>
+          </div>}
+          {originalPage?.method === 'ai' && <>
+          <p className="text-xs text-muted">{t('question.aiRead')}</p>
           {page.mock && <p className="text-wrong-strong">{t('question.mock')}</p>}
           {!alternative && <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-x-2">
@@ -210,9 +223,9 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
             </details>
             <fieldset className="space-y-1 text-sm">
               <legend className="font-medium">{t('question.readingSource')}</legend>
-              {(['text', 'ai'] as const).map((method) => <label key={method} className="flex min-h-11 cursor-pointer items-center gap-2">
+              {(['initial', 'reread'] as const).map((method) => <label key={method} className="flex min-h-11 cursor-pointer items-center gap-2">
                 <input type="radio" name={`question-reading-${pageNo}`} checked={reading === method} disabled={!!busy} onChange={() => switchReading(method)} />
-                {t(method === 'text' ? 'question.readingText' : 'question.readingAi')}
+                {t(method === 'initial' ? 'question.readingText' : 'question.readingAi')}
               </label>)}
             </fieldset>
             <Button variant="ghost" size="sm" className="min-h-11 text-sm font-normal" disabled={!!busy} onClick={discardAi}>{t('question.discardAi')}</Button>
@@ -240,6 +253,7 @@ export function QuestionImportButton({ loadFile, initialPage = 1 }: { loadFile?:
             </fieldset>
             <p className="text-xs text-muted">{t('question.domain')}</p>
             <p className="rounded-xl bg-accent-soft p-3">{t('question.replace')}</p>
+          </>}
           </>}
         </>}
       </div>
