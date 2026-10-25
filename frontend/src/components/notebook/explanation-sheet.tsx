@@ -96,12 +96,16 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
   const h1 = proof.hints.find((h) => h.level === 1);
   const h2 = proof.hints.find((h) => h.level === 2);
 
+  const recovery = nb.recoveries.find((r) => r.root_line_id === root);
+  const isRecovered = line.state === 'SUPERSEDED' || recovery?.phase === 'RECOVERED';
+  const isRevising = isRecovered || recovery?.phase === 'REVISING' || recovery?.phase === 'REVERIFYING' || nb.lines.some((l) => l.revision_of === line.id);
+
   const steps = [
-    { label: t('sheet.stepCategory'), done: true },
-    { label: t('sheet.stepEvidence'), done: shown.evidence },
-    { label: t('sheet.stepHint1'), done: shown.hint1 },
-    { label: t('sheet.stepHint2'), done: shown.hint2 },
-    { label: t('sheet.stepRevise'), done: false },
+    { label: t('sheet.stepCategory'), done: true, inProgress: false },
+    { label: t('sheet.stepEvidence'), done: shown.evidence || !!recovery?.opened_at?.evidence, inProgress: false },
+    { label: t('sheet.stepHint1'), done: shown.hint1 || !!recovery?.opened_at?.hint1, inProgress: false },
+    { label: t('sheet.stepHint2'), done: shown.hint2 || !!recovery?.opened_at?.hint2, inProgress: false },
+    { label: t('sheet.stepRevise'), done: isRecovered, inProgress: isRevising && !isRecovered },
   ];
 
   return (
@@ -117,7 +121,9 @@ function WrongBody({ line, nb, proof }: { line: Line; nb: Notebook; proof: Proof
                   'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
                   st.done
                     ? 'bg-ok-soft text-ok font-semibold'
-                    : 'bg-muted/15 text-muted'
+                    : st.inProgress
+                      ? 'bg-accent-soft text-accent-strong font-medium'
+                      : 'bg-muted/15 text-muted'
                 )}
               >
                 <span>{i + 1}.</span>

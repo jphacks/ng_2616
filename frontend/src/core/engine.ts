@@ -1006,13 +1006,10 @@ export class NotebookEngine {
     s.commit(
       'START_REVISION',
       (snap) => {
-        const srcIdx = snap.lines.findIndex((l) => l.id === source.id);
-        // Clean up unused empty draft lines and trailing normal draft lines that sit at or after the source
-        // so that revising doesn't leave an unnecessary or orphaned empty draft line below it
-        const lines = snap.lines.filter((l, idx) => {
+        // Clean up unused empty draft lines so that revising doesn't leave an unnecessary empty draft line below it
+        const lines = snap.lines.filter((l) => {
           if (l.state !== 'DRAFT') return true;
           if (l.ink.length === 0) return false;
-          if (!l.revision_of && idx >= srcIdx) return false;
           return true;
         });
         const newSrcIdx = lines.findIndex((l) => l.id === source.id);

@@ -4,6 +4,8 @@ import { useEffect, useRef, type RefObject } from 'react';
 
 /** Fingers currently on the screen (pens and mice are not counted). */
 const touches = new Set<number>();
+const pens = new Set<number>();
+let activeInkDrawingCount = 0;
 const onSecondFinger = new Set<() => void>();
 let installed = false;
 
@@ -14,15 +16,29 @@ function install() {
   window.addEventListener(
     'pointerdown',
     (e) => {
+      if (e.pointerType === 'pen') pens.add(e.pointerId);
       if (e.pointerType !== 'touch') return;
       touches.add(e.pointerId);
       if (touches.size === 2) for (const cb of onSecondFinger) cb();
     },
     true,
   );
-  const lift = (e: PointerEvent) => touches.delete(e.pointerId);
+  const lift = (e: PointerEvent) => {
+    if (e.pointerType === 'pen') pens.delete(e.pointerId);
+    touches.delete(e.pointerId);
+  };
   window.addEventListener('pointerup', lift, true);
   window.addEventListener('pointercancel', lift, true);
+}
+
+export function notifyInkDrawing(drawing: boolean) {
+  if (drawing) activeInkDrawingCount++;
+  else activeInkDrawingCount = Math.max(0, activeInkDrawingCount - 1);
+}
+
+export function isPenDown(): boolean {
+  install();
+  return pens.size > 0 || activeInkDrawingCount > 0;
 }
 
 export function fingersDown(): number {

@@ -10,6 +10,7 @@ import { useT } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
+import { isPenDown } from './gestures';
 import { GhostLine, RejectionChip } from './ghost-line';
 import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
@@ -103,6 +104,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       actions={swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
       onClick={() => {
+        if (isPenDown()) return;
         if (line.state === 'DRAFT' && !active) {
           engine.activate(line.id);
         }
@@ -129,8 +131,9 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             )}
             <InkCanvas
               strokes={line.ink}
-              editable
+              editable={active}
               tool={tool}
+              onActivate={() => !active && engine.activate(line.id)}
               onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
