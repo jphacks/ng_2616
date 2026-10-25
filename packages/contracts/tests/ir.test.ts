@@ -265,10 +265,35 @@ describe('LaTeX repair and normalization', () => {
     assert.deepEqual(parsed.expr, ['Add', 'beta', 'theta']);
   });
 
-  it('supports inverse trigonometric functions (arctan, arcsin, arccos)', () => {
+  it('supports inverse trigonometric functions (arctan, arcsin, arccos, tan^-1, sin^-1, cos^-1)', () => {
     const parsedAtan = parseMathLatex('5 \\arctan(x)');
     assert.ok(parsedAtan.ok);
     assert.deepEqual(parsedAtan.expr, ['Multiply', 5, ['ArcTan', 'x']]);
+
+    const parsedTanInvBraced = parseMathLatex('\\tan^{-1}(x)');
+    assert.ok(parsedTanInvBraced.ok);
+    assert.deepEqual(parsedTanInvBraced.expr, ['ArcTan', 'x']);
+
+    const parsedTanInvUnbraced = parseMathLatex('\\tan^-1 x');
+    assert.ok(parsedTanInvUnbraced.ok);
+    assert.deepEqual(parsedTanInvUnbraced.expr, ['ArcTan', 'x']);
+
+    const parsedSinInv = parseMathLatex('\\sin^{-1}(x)');
+    assert.ok(parsedSinInv.ok);
+    assert.deepEqual(parsedSinInv.expr, ['ArcSin', 'x']);
+
+    const parsedCosInv = parseMathLatex('\\cos^{-1}(x)');
+    assert.ok(parsedCosInv.ok);
+    assert.deepEqual(parsedCosInv.expr, ['ArcCos', 'x']);
+
+    // Non-trig inverse notation or higher negative powers should still fail
+    const parsedLnInv = parseMathLatex('\\ln^{-1}(x)');
+    assert.equal(parsedLnInv.ok, false);
+    if (!parsedLnInv.ok) assert.equal(parsedLnInv.error.code, 'UNSUPPORTED_NOTATION');
+
+    const parsedTanMinus2 = parseMathLatex('\\tan^{-2}(x)');
+    assert.equal(parsedTanMinus2.ok, false);
+    if (!parsedTanMinus2.ok) assert.equal(parsedTanMinus2.error.code, 'UNSUPPORTED_NOTATION');
 
     const parsedEvaluated = parseMathLatex('\\left[ 4 \\ln(x) + 5 \\arctan(x) - \\frac{1}{2} \\ln\\left(x^{2} + 1\\right) \\right]_{2}^{3}');
     assert.ok(parsedEvaluated.ok);

@@ -445,7 +445,13 @@ class Parser {
       if (t.v === 'infty') return 'Infinity';
       if (t.v === 'hbar') return 'Hbar';
     }
-    if (t.k === 'sym' && (t.v === '+' || t.v === '-')) return t.v; // only meaningful for limit directions
+    if (t.k === 'sym' && (t.v === '+' || t.v === '-')) {
+      if (t.v === '-' && this.peek()?.k === 'num') {
+        const numTok = this.next();
+        return ['Negate', this.numberValue(numTok)];
+      }
+      return t.v; // only meaningful for limit directions
+    }
     this.pos--;
     return this.fail('unsupported script');
   }
@@ -717,7 +723,13 @@ class Parser {
     if (this.isSym('^')) {
       this.next();
       power = this.parseScript();
-      if (power === -1 || (Array.isArray(power) && power[0] === 'Negate')) {
+      const isMinusOne = power === -1 || (Array.isArray(power) && power[0] === 'Negate' && power[1] === 1);
+      if (isMinusOne) {
+        if (name === 'tan') { name = 'arctan'; power = undefined; }
+        else if (name === 'sin') { name = 'arcsin'; power = undefined; }
+        else if (name === 'cos') { name = 'arccos'; power = undefined; }
+        else { this.fail('inverse-function notation is not supported', 'UNSUPPORTED_NOTATION'); }
+      } else if (power === -1 || (Array.isArray(power) && power[0] === 'Negate')) {
         this.fail('inverse-function notation is not supported', 'UNSUPPORTED_NOTATION');
       }
     }
