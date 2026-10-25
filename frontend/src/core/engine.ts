@@ -1002,10 +1002,29 @@ export class NotebookEngine {
     const source = findLine(this.nb, lineId);
     if (!source) return;
     const root = source.recovery_root_id ?? source.id;
+
+    // Only allow one revision draft for this wrong line: if one already exists, focus it instead of duplicating
+    const existingRevision = this.nb.lines.find(
+      (l) => l.state === 'DRAFT' && (l.revision_of === source.id || (l.recovery_root_id && l.recovery_root_id === root)),
+    );
+    if (existingRevision) {
+      s.setActive(existingRevision.id);
+      s.set('sheet', null);
+      s.set('candidate', null);
+      return;
+    }
+
     const draft: Line = { ...newDraftLine(), revision_of: source.id, recovery_root_id: root };
     s.commit(
       'START_REVISION',
       (snap) => {
+        const existingInSnap = snap.lines.find(
+          (l) => l.state === 'DRAFT' && (l.revision_of === source.id || (l.recovery_root_id && l.recovery_root_id === root)),
+        );
+        if (existingInSnap) {
+          return { ...snap, activeLineId: existingInSnap.id };
+        }
+
         // Clean up unused empty draft lines so that revising doesn't leave an unnecessary empty draft line below it
         const lines = snap.lines.filter((l) => {
           if (l.state !== 'DRAFT') return true;
