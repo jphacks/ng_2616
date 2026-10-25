@@ -5,6 +5,7 @@ export type CommandType =
   | 'ADD_STROKE'
   | 'ERASE_STROKES'
   | 'CLEAR_DRAFT'
+  | 'DELETE_DRAFT'
   | 'ADD_DRAFT'
   | 'CONFIRM_LINE'
   | 'START_REVISION'
