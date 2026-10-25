@@ -95,7 +95,7 @@ describe('pre-v2.2 snapshots', () => {
       ['definition', 'f\\left(x\\right) = x^{2}'],
       // the functions on one line, the assumptions on the next, one formula per segment
       ['premise', 'f\\left(x\\right)'],
-      ['premise', 'm > 0 n \\in \\mathbb{Z}^{+} \\psi\\left(x\\right) \\ne 0 0 \\le x, x \\le L'],
+      ['premise', 'm > 0 n \\in \\mathbb{Z}^{+} \\psi\\left(x\\right) \\ne 0 0 \\le x \\le L'],
       ['step', ''],
     ]);
     assert.ok(nb.lines.slice(0, -1).every((l) => l.state === 'SETTLED' && !l.verified));

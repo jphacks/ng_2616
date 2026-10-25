@@ -31,6 +31,14 @@ function bounds(lo: MathJSON, hi: MathJSON): string {
 
 const isImplicitApply = (e: MathJSON) => Array.isArray(e) && e[0] === 'Apply' && e.length === 2;
 
+const CHAIN_OPS: Record<string, string> = { Equal: '=', Less: '<', LessEqual: '\\le', Greater: '>', GreaterEqual: '\\ge', NotEqual: '\\ne' };
+
+/** Relations where each right-hand side is the next left-hand side: a chain such as a = b < c. */
+function isChain(rels: MathJSON[]): boolean {
+  const ok = (r: MathJSON): boolean => Array.isArray(r) && r.length === 3 && (r[0] as string) in CHAIN_OPS && r[2] !== null;
+  return rels.length >= 2 && rels.every(ok) && rels.slice(1).every((r, i) => JSON.stringify((r as MathJSON[])[1]) === JSON.stringify((rels[i] as MathJSON[])[2]));
+}
+
 function renderDerivative(e: [string, ...MathJSON[]]): Out {
   const kind = e[0];
   const mark = kind === 'D' ? 'd' : '\\partial';
@@ -154,8 +162,11 @@ function render(e: MathJSON): Out {
     case 'GreaterEqual': return [`${p(a0, ADD)} \\ge ${p(a1, ADD)}`, REL];
     case 'NotEqual': return [`${p(a0, ADD)} \\ne ${p(a1, ADD)}`, REL];
     case 'Element': return [`${p(a0, ADD)} \\in ${NUMBER_SETS[a1 as NumberSet]}`, REL];
-    case 'And':
+    case 'And': {
+      // "a = b < c = d" parses to And(a = b, b < c, c = d): print it back as the chain it was written as
+      if (isChain(a)) return [p((a[0] as MathJSON[])[1]!, ADD) + a.map((x) => ` ${CHAIN_OPS[(x as MathJSON[])[0] as string]} ${p((x as MathJSON[])[2]!, ADD)}`).join(''), REL];
       return [a.map((x) => p(x, REL)).join(', '), 0];
+    }
     case 'Or':
       return [a.map((x) => p(x, REL)).join(' \\lor '), 0];
     case 'Set':
