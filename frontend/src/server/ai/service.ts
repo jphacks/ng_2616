@@ -30,6 +30,15 @@ export interface AiService {
 }
 
 let service: AiService | null = null;
+let documentService: DirectAiService | null = null;
+
+/** Document transcription belongs to this web app; it never uses the Azure relay. */
+export function getDocumentAiService(): DirectAiService {
+  if (documentService) return documentService;
+  const env = serverEnv();
+  documentService = new DirectAiService(env.LLM_PROVIDER === 'gemini' && env.GEMINI_API_KEY ? new GeminiProvider(env.GEMINI_API_KEY) : new MockProvider(), env);
+  return documentService;
+}
 
 export function getAiService(): AiService {
   if (service) return service;

@@ -54,11 +54,10 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   const backingCanvas = useRef<HTMLCanvasElement | null>(null);
   const backingDirty = useRef(true);
 
-  // Active stroke currently being drawn
   const activeStrokes = useRef<Map<number, LiveStroke>>(new Map());
+  const erasing = useRef<Set<string> | null>(null);
   const erasingPointer = useRef<number | null>(null);
   const erasingByTouch = useRef(false);
-  const erasing = useRef<Set<string> | null>(null);
   const scrolling = useRef<{ id: number; y: number; el: HTMLElement | null } | null>(null);
   const rectRef = useRef<DOMRect | null>(null);
   const hover = useRef<{ x: number; y: number } | null>(null);
@@ -290,7 +289,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       drawRef.current();
       propsRef.current.onStroke?.(stroke);
     }
-    rectRef.current = null;
+    if (!activeStrokes.current.size) rectRef.current = null;
     schedule();
   }, [schedule]);
 
@@ -310,13 +309,14 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
-    const strokesInFlight = activeStrokes.current;
+    const livePointers = activeStrokes.current;
 
     const commitEraser = () => {
       if (!erasing.current) return;
       const ids = [...erasing.current];
       erasing.current = null;
       erasingPointer.current = null;
+      backingDirty.current = true;
       if (ids.length) {
         const drop = new Set(ids);
         pendingStrokesRef.current = pendingStrokesRef.current.filter((s) => !drop.has(s.id));
@@ -330,8 +330,10 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     };
 
     const startStroke = (e: PointerEvent, force = false) => {
-      // 1. SALVAGE: If rapid strokes occur and the previous stroke was not yet committed, commit it immediately!
-      if (activeStrokes.current.has(e.pointerId)) commitLiveRef.current(e.pointerId);
+      // Recover a missing pointerup without committing another active pointer's stroke.
+      if (activeStrokes.current.has(e.pointerId)) {
+        commitLiveRef.current(e.pointerId);
+      }
 
       rectRef.current = c.getBoundingClientRect();
       const { editable, tool, onPenDown } = propsRef.current;
@@ -361,7 +363,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       if (e.pointerType === 'touch' && fingersDown() > 1) return;
       // its pointerdown can also arrive before fingersDown() counts it: then drop what the first
       // finger started instead of salvaging it as a stroke
-      if (e.pointerType === 'touch' && [...activeStrokes.current.values()].some(l => l.touch && l.pointerId !== e.pointerId)) {
+      if (e.pointerType === 'touch' && Array.from(activeStrokes.current.values()).some((s) => s.touch && s.pointerId !== e.pointerId)) {
         for (const [id, stroke] of activeStrokes.current) if (stroke.touch) activeStrokes.current.delete(id);
         schedule();
         return;
@@ -480,7 +482,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
     window.addEventListener('pointercancel', onUp, { passive: false });
 
     return () => {
-      for (const pointerId of [...strokesInFlight.keys()]) commitLiveRef.current(pointerId);
+      for (const pointerId of [...livePointers.keys()]) commitLiveRef.current(pointerId);
       commitEraser();
       c.removeEventListener('touchstart', onTouch);
       c.removeEventListener('touchmove', onTouch);
