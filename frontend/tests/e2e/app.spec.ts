@@ -148,8 +148,15 @@ test('iPad frame for demos rotates between landscape and portrait', async ({ pag
 });
 
 test('holding a card (touch or mouse) opens its menu; holding and moving reorders the cards', async ({ page }) => {
-  await openPreset(page, /Expand a polynomial/);
-  await openPreset(page, /Solve a quadratic equation/);
+  // Card gestures work independently of the formula checker; do not load three CAS runtimes
+  // when this case runs beside the checker tests in CI.
+  await page.route('https://cdn.jsdelivr.net/**', route => route.abort());
+  for (const name of [/Expand a polynomial/, /Solve a quadratic equation/]) {
+    await openHome(page);
+    await page.getByRole('button', { name }).first().click();
+    await page.waitForURL(/\/notebooks\/[0-9a-f-]{36}$/);
+    await expect(rows(page).first()).toBeVisible();
+  }
   await openHome(page);
   const cdp = await page.context().newCDPSession(page);
   const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', x = 0, y = 0) =>
@@ -160,27 +167,30 @@ test('holding a card (touch or mouse) opens its menu; holding and moving reorder
 
   const a = (await cards.nth(0).boundingBox())!;
   await touch('touchStart', a.x + a.width / 2, a.y + a.height / 2);
-  await page.waitForTimeout(700);
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
   await touch('touchEnd');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
+  await expect(cards.nth(0)).toHaveClass(/z-base/);
 
   // a mouse hold behaves the same, and releasing it does not open the notebook
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();
-  await page.waitForTimeout(700);
+  // Wait for the hold to activate before releasing it, including on a busy CI browser.
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
   await page.mouse.up();
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
   await expect(page).toHaveURL(/\/notebooks$/);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
+  await expect(cards.nth(0)).toHaveClass(/z-base/);
 
   const b = (await cards.nth(1).boundingBox())!;
   await touch('touchStart', a.x + a.width / 2, a.y + a.height / 2);
-  await page.waitForTimeout(700);
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
   for (let i = 1; i <= 12; i++) await touch('touchMove', a.x + a.width / 2 + ((b.x - a.x) * i) / 12, a.y + a.height / 2 + ((b.y - a.y) * i) / 12);
-  await page.waitForTimeout(300);
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
   await touch('touchEnd');
   await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeHidden();
   await expect.poll(titles).toEqual(expect.arrayContaining([second, first]));

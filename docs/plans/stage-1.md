@@ -34,6 +34,10 @@ preservation · M-11 (partial) sign-in + manual save/open · Resources tab · EN
 Deferred: M-09 PDF → problem card via Azure · M-10 `.tex` export · job infrastructure + relay ·
 all Should/Could features · Lean.
 
+Follow-up (2026-10-24): the `feature/pdf-latex` branch adds device-local **PDF** output instead of
+M-10's original `.tex` download. It uses no Azure/LuaLaTeX service; see [ADR 0005](../adr/0005-browser-pdf-export.md).
+The deferred scope above describes the Stage 1 hand-off, not the PDF export follow-up.
+
 ## Repository map
 
 ```

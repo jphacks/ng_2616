@@ -49,6 +49,26 @@ set `LLM_PROVIDER=mock`: the demo notebook maps any ink to its scripted lines.
 See `docs/plans/stage-1.md` for the repository map and `docs/design/v2.1-deltas.md` for how the
 build differs from the v2.0 spec.
 
+## PDF export
+
+Open a notebook, choose **Export PDF / PDF出力**, set the report title and optional name/student ID,
+choose **Create report PDF**, then choose **Download PDF** when ready. These fields belong to the
+report and never rename or edit the notebook. The report uses a separate A4 document layout with
+problem/assumptions, solution/derivation, sources and a revision appendix, rather than copying app UI.
+The current browser-only implementation needs no Azure service, backend URL, TeX installation or
+additional environment variables. It includes unsaved edits, verification labels, PDF/AI sources
+and revision history. Ink and hints are omitted; unfinished lines are noted. Closing the panel
+cancels generation and leaves the notebook untouched.
+
+Body text and formulas are embedded as high-resolution images, so they cannot be selected/searched
+as PDF text. Export is limited to 500 lines, 50 pages and 30 MiB. Japanese glyphs use the device's
+fonts. See [ADR 0005](adr/0005-browser-pdf-export.md) for the departure from the `.tex`/LuaLaTeX plan.
+
+Run `pnpm --filter frontend test` for document unit tests and
+`pnpm --filter frontend test:e2e tests/e2e/pdf-export.spec.ts` for browser export tests. The browser
+tests do not depend on CAS/LLM availability. Setting `PDF_QA_DIR` saves the generated sample PDF
+there for visual inspection; otherwise it stays in Playwright's temporary output directory.
+
 ## Design system
 Everything visual is defined once, in `frontend/src/app/globals.css`:
 
