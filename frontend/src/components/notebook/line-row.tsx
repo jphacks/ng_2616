@@ -44,6 +44,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   const engine = useEngine();
   const tool = useNotebook((s) => s.tool);
   const active = useNotebook((s) => s.activeLineId === line.id);
+  const draftCount = useNotebook((s) => s.notebook?.lines.filter((l) => l.state === 'DRAFT').length ?? 0);
   const candidate = useNotebook((s) => s.candidate);
   const rejection = useNotebook((s) => s.rejection);
 
@@ -99,7 +100,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
       id={line.id}
       actions={swipe}
       className={clsx('ruled relative flex gap-3 pr-4 transition-colors', active && line.state === 'DRAFT' && 'bg-accent-soft/25')}
-      onPointerDown={() => {
+      onClick={() => {
         if (line.state === 'DRAFT' && !active) {
           engine.activate(line.id);
         }
@@ -126,9 +127,8 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             )}
             <InkCanvas
               strokes={line.ink}
-              editable
+              editable={active}
               tool={tool}
-              onPenDown={() => !active && engine.activate(line.id)}
               onStroke={(s) => engine.addStroke(line.id, s)}
               onErase={(ids) => engine.eraseStrokes(line.id, ids)}
               onScratchOut={(ids) => {
@@ -176,12 +176,17 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
         {line.state === 'DRAFT' && active && (
           <div className="flex items-center gap-1">
             <IconButton
-              label={t('tool.clear')}
+              label={line.ink.length > 0 ? t('tool.clear') : t('tool.deleteDraft')}
               onClick={() => {
-                engine.clearDraft(line.id);
-                useNotebook.getState().showToast(t('toast.cleared'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+                if (line.ink.length > 0) {
+                  engine.clearDraft(line.id);
+                  useNotebook.getState().showToast(t('toast.cleared'), 'info', { label: t('tool.undo'), run: () => engine.undo() });
+                } else if (draftCount > 1) {
+                  engine.deleteDraft(line.id);
+                  useNotebook.getState().showToast(t('toast.draftDeleted'), 'info');
+                }
               }}
-              disabled={line.ink.length === 0}
+              disabled={line.ink.length === 0 && draftCount <= 1}
             >
               <Trash2 size={19} />
             </IconButton>

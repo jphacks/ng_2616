@@ -34,12 +34,14 @@ export function SwipeRow({
   actions,
   className,
   onPointerDown,
+  onClick,
   children,
 }: {
   id: string;
   actions: SwipeAction[];
   className?: string;
   onPointerDown?: (e: React.PointerEvent) => void;
+  onClick?: (e: React.MouseEvent) => void;
   children: ReactNode;
 }) {
   const x = useMotionValue(0);
@@ -66,14 +68,14 @@ export function SwipeRow({
 
   if (actions.length === 0) {
     return (
-      <div data-line-id={id} className={className} onPointerDown={onPointerDown}>
+      <div data-line-id={id} className={className} onPointerDown={onPointerDown} onClick={onClick}>
         {children}
       </div>
     );
   }
 
   return (
-    <div ref={wrap} data-line-id={id} className="relative overflow-hidden" onPointerDown={onPointerDown}>
+    <div ref={wrap} data-line-id={id} className="relative overflow-hidden" onPointerDown={onPointerDown} onClick={onClick}>
       <div aria-hidden className="absolute inset-y-0 right-0 flex" style={{ width }}>
         {actions.map((a) => (
           <button

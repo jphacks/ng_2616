@@ -143,6 +143,7 @@ export const en = {
   'tool.suggestLocked': 'Resolve unresolved errors first to unlock AI suggestions',
   'tool.newLine': 'New line',
   'tool.clear': 'Clear line',
+  'tool.deleteDraft': 'Delete draft line',
 
   'line.confirm': 'Confirm',
   'line.reading': 'Reading handwriting…',
@@ -314,6 +315,7 @@ export const en = {
   'toast.undone': 'Undone',
   'toast.redone': 'Redone',
   'toast.cleared': 'Line cleared',
+  'toast.draftDeleted': 'Draft line deleted',
   'toast.erased': 'Scratched out',
   'zoom.reset': 'Reset zoom to 100%',
   'toast.signInAgain': 'Your session expired. Sign in again; your ink is kept.',

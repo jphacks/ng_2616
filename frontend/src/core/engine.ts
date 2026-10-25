@@ -191,6 +191,30 @@ export class NotebookEngine {
     this.maybeReleaseHeld(lineId);
   }
 
+  deleteDraft(lineId: string) {
+    const line = findLine(this.nb, lineId);
+    if (!line || line.state !== 'DRAFT') return;
+    const drafts = this.nb.lines.filter((l) => l.state === 'DRAFT');
+    if (drafts.length <= 1) {
+      if (line.ink.length > 0) this.clearDraft(lineId);
+      return;
+    }
+    store.getState().commit(
+      'DELETE_DRAFT',
+      (snap) => {
+        const lines = snap.lines.filter((l) => l.id !== lineId);
+        const nextActive = lines.find((l) => l.state === 'DRAFT')?.id ?? null;
+        return {
+          ...snap,
+          lines,
+          activeLineId: snap.activeLineId === lineId ? nextActive : snap.activeLineId,
+        };
+      },
+      lineId,
+    );
+    this.maybeReleaseHeld(lineId);
+  }
+
   private maybeReleaseHeld(lineId: string) {
     const s = store.getState();
     const line = findLine(this.nb, lineId);
@@ -812,16 +836,17 @@ export class NotebookEngine {
     s.commit(
       'START_REVISION',
       (snap) => {
-        const lines = [...snap.lines];
-        const srcIdx = lines.findIndex((l) => l.id === source.id);
-        const nextLine = lines[srcIdx + 1];
-        // If an unused empty draft line is sitting right below the source, replace it
-        // so we don't have two empty draft lines stacked on top of each other
-        if (nextLine && nextLine.state === 'DRAFT' && nextLine.ink.length === 0 && !nextLine.revision_of) {
-          lines.splice(srcIdx + 1, 1, draft);
-        } else {
-          lines.splice(srcIdx + 1, 0, draft);
-        }
+        const srcIdx = snap.lines.findIndex((l) => l.id === source.id);
+        // Clean up unused empty draft lines and trailing normal draft lines that sit at or after the source
+        // so that revising doesn't leave an unnecessary or orphaned empty draft line below it
+        const lines = snap.lines.filter((l, idx) => {
+          if (l.state !== 'DRAFT') return true;
+          if (l.ink.length === 0) return false;
+          if (!l.revision_of && idx >= srcIdx) return false;
+          return true;
+        });
+        const newSrcIdx = lines.findIndex((l) => l.id === source.id);
+        lines.splice(newSrcIdx + 1, 0, draft);
         const recoveries = snap.recoveries.some((r) => r.root_line_id === root)
           ? snap.recoveries.map((r) => (r.root_line_id === root ? { ...r, phase: 'REVISING' as const, opened_at: { ...r.opened_at, revise: Date.now() } } : r))
           : [...snap.recoveries, { root_line_id: root, current_line_id: source.id, phase: 'REVISING' as const, opened_at: { revise: Date.now() } }];

@@ -145,6 +145,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'tool.suggestLocked': '誤りを解決するまでAI補完は休止します（自力解決を優先）',
   'tool.newLine': '新しい行',
   'tool.clear': '行を消去',
+  'tool.deleteDraft': '下書き行を削除',
 
   'line.confirm': '確定',
   'line.reading': '手書きを読み取り中…',
@@ -316,6 +317,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.undone': '元に戻しました',
   'toast.redone': 'やり直しました',
   'toast.cleared': '行を消去しました',
+  'toast.draftDeleted': '下書き行を削除しました',
   'toast.erased': '消しました',
   'zoom.reset': '拡大率を100%に戻す',
   'toast.signInAgain': 'セッションの有効期限が切れました。手書きは保持されています。再度ログインしてください。',
