@@ -52,10 +52,14 @@ export class GeminiProvider implements LlmProvider {
     const text = interaction.output_text;
     if (!text) throw new AiError('UPSTREAM_INVALID', 'empty model output', true);
     try {
-      return JSON.parse(text);
+      return JSON.parse(repairJsonLatex(text));
     } catch {
-      // truncated or non-JSON output is never treated as success
-      throw new AiError('SCHEMA_INVALID', 'model output is not valid JSON');
+      try {
+        return JSON.parse(text);
+      } catch {
+        // truncated or non-JSON output is never treated as success
+        throw new AiError('SCHEMA_INVALID', 'model output is not valid JSON');
+      }
     }
   }
 
@@ -78,4 +82,74 @@ export class GeminiProvider implements LlmProvider {
     if (/timeout|timed out|ETIMEDOUT|ECONNRESET|fetch failed/i.test(message)) return new AiError('UPSTREAM_TIMEOUT', 'provider timeout', true);
     return new AiError('UPSTREAM_INVALID', message.slice(0, 200), true);
   }
+}
+
+/**
+ * Repairs raw JSON from LLMs when LaTeX formulas contain single backslashes.
+ * In JSON strings, single-backslash LaTeX commands like \frac, \tau, \notag, \int, \sqrt
+ * either turn into control characters (\f -> formfeed, \t -> tab, \n -> newline)
+ * or cause JSON.parse syntax errors (\i, \s, \,).
+ * This function preserves valid JSON escapes (\" and \\) and properly escapes any
+ * LaTeX backslashes inside JSON string literals.
+ */
+export function repairJsonLatex(jsonStr: string): string {
+  let inString = false;
+  let result = '';
+  let i = 0;
+  while (i < jsonStr.length) {
+    const ch = jsonStr[i]!;
+    if (!inString) {
+      if (ch === '"') inString = true;
+      result += ch;
+      i++;
+      continue;
+    }
+    // Inside string literal
+    if (ch === '"') {
+      inString = false;
+      result += ch;
+      i++;
+      continue;
+    }
+    if (ch === '\\') {
+      const next = jsonStr[i + 1];
+      if (next === undefined) {
+        result += '\\\\';
+        i++;
+        continue;
+      }
+      // If already escaped \\
+      if (next === '\\') {
+        result += '\\\\';
+        i += 2;
+        continue;
+      }
+      // If escaped quote \"
+      if (next === '"') {
+        result += '\\"';
+        i += 2;
+        continue;
+      }
+      // If valid unicode escape \uXXXX
+      if (next === 'u' && /^[0-9a-fA-F]{4}$/.test(jsonStr.slice(i + 2, i + 6))) {
+        result += jsonStr.slice(i, i + 6);
+        i += 6;
+        continue;
+      }
+      // If JSON whitespace escape (\n, \r, \t) NOT followed by a letter, preserve it
+      if ((next === 'n' || next === 'r' || next === 't') && !/[a-zA-Z]/.test(jsonStr[i + 2] ?? '')) {
+        result += '\\' + next;
+        i += 2;
+        continue;
+      }
+      // Any other backslash in JSON string is a LaTeX command:
+      // \frac, \tint, \notag, \tau, \theta, \int, \sqrt, \,
+      result += '\\\\';
+      i++;
+      continue;
+    }
+    result += ch;
+    i++;
+  }
+  return result;
 }

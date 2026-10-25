@@ -206,3 +206,62 @@ describe('unparsed math', () => {
     assert.notEqual(validateExpr(['Unparsed', 3]), null);
   });
 });
+
+describe('LaTeX repair and normalization', () => {
+  it('recovers corrupted fractions with formfeed (\\x0crac) and missing backslash (rac{)', () => {
+    const parsedFf = parseMathLatex('4 \\int_{2}^{3} \x0crac{1}{x} \\, dx');
+    assert.ok(parsedFf.ok);
+    assert.deepEqual(parsedFf.expr, [
+      'Multiply',
+      4,
+      ['Integrate', ['Divide', 1, 'x'], ['Tuple', 'x', 2, 3]],
+    ]);
+
+    const parsedRac = parseMathLatex('rac{1}{x}');
+    assert.ok(parsedRac.ok);
+    assert.deepEqual(parsedRac.expr, ['Divide', 1, 'x']);
+  });
+
+  it('recovers corrupted integrals with tab (\\x09int), \\tint, and int_{...}', () => {
+    const parsedTab = parseMathLatex('4 \x09int_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsedTab.ok);
+    assert.deepEqual(parsedTab.expr, [
+      'Multiply',
+      4,
+      ['Integrate', ['Divide', 1, 'x'], ['Tuple', 'x', 2, 3]],
+    ]);
+
+    const parsedTint = parseMathLatex('\\tint_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsedTint.ok);
+    assert.deepEqual(parsedTint.expr, [
+      'Integrate',
+      ['Divide', 1, 'x'],
+      ['Tuple', 'x', 2, 3],
+    ]);
+
+    const parsedInt = parseMathLatex('int_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsedInt.ok);
+    assert.deepEqual(parsedInt.expr, [
+      'Integrate',
+      ['Divide', 1, 'x'],
+      ['Tuple', 'x', 2, 3],
+    ]);
+  });
+
+  it('ignores equation tags like \\notag without failing or producing variable tokens', () => {
+    const parsed = parseMathLatex('4 \\notag \\int_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.expr, [
+      'Multiply',
+      4,
+      ['Integrate', ['Divide', 1, 'x'], ['Tuple', 'x', 2, 3]],
+    ]);
+  });
+
+  it('recovers control characters from JSON single backslash decoding', () => {
+    // \x08eta -> \beta, \x09heta -> \theta, \x0dight -> \right
+    const parsed = parseMathLatex('\x08eta + \x09heta');
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.expr, ['Add', 'beta', 'theta']);
+  });
+});

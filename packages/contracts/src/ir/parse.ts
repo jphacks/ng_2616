@@ -39,6 +39,7 @@ const FN_CMDS = new Set(['sin', 'cos', 'tan', 'ln', 'log', 'exp']);
 const SKIP_CMDS = new Set([
   ',', ';', ':', '!', ' ', '>', 'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl',
   'biggr', 'Biggl', 'Biggr', 'displaystyle', 'textstyle', 'limits', 'nolimits', 'mathstrut',
+  'notag', 'tag', 'label', 'nonumber',
 ]);
 const REL_CMDS: Record<string, string> = {
   le: 'LessEqual', leq: 'LessEqual', leqslant: 'LessEqual', ge: 'GreaterEqual', geq: 'GreaterEqual',
@@ -61,8 +62,30 @@ class ParseError extends Error {
 }
 
 function normalize(src: string): string {
+  // 1. Recover control characters corrupted by JSON decoding of single-backslash LaTeX
+  let s = src
+    // \x0c (form feed from JSON \f): \x0crac -> \frac, etc.
+    .replace(/\x0crac/g, '\\frac')
+    .replace(/\x0c([a-zA-Z])/g, '\\f$1')
+    // \x08 (backspace from JSON \b): \x08eta -> \beta, etc.
+    .replace(/\x08([a-zA-Z])/g, '\\b$1')
+    // \x09 (tab from JSON \t): \x09int -> \int, \x09([a-zA-Z]) -> \t$1
+    .replace(/\x09int/g, '\\int')
+    .replace(/\x09([a-zA-Z])/g, '\\t$1')
+    // \x0d (carriage return from JSON \r): \x0dight -> \right, \x0dho -> \rho
+    .replace(/\x0d([a-zA-Z])/g, '\\r$1')
+    // \x0a (newline from JSON \n): \x0a(notag|nu|nabla|neq) -> \$1
+    .replace(/\x0a(notag|nu|nabla|neq)\b/g, '\\$1');
+
+  // 2. Fix typos and stripped backslashes for structural commands
+  s = s
+    .replace(/\\tint\b/g, '\\int')
+    .replace(/(?<![\\a-zA-Z])rac\{/g, '\\frac{')
+    .replace(/(?<![\\a-zA-Z])int(?=[_^])/g, '\\int');
+
+  // 3. Unicode substitutions
   let out = '';
-  for (const ch of src) out += UNICODE_TO_LATEX[ch] ?? ch;
+  for (const ch of s) out += UNICODE_TO_LATEX[ch] ?? ch;
   return out;
 }
 
@@ -557,7 +580,7 @@ class Parser {
       case 'frac': return this.parseFrac();
       case 'sqrt': return this.parseSqrt();
       case 'sin': case 'cos': case 'tan': case 'ln': case 'log': case 'exp': return this.parseFn(v);
-      case 'int': return this.parseIntegral();
+      case 'int': case 'tint': return this.parseIntegral();
       case 'sum': return this.parseSum();
       case 'lim': return this.parseLimit();
       case 'partial': return this.parsePartialPrefix();
