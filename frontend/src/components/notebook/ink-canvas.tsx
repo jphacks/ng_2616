@@ -329,13 +329,13 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       schedule();
     };
 
-    const startStroke = (e: PointerEvent) => {
+    const startStroke = (e: PointerEvent, force = false) => {
       // 1. SALVAGE: If rapid strokes occur and the previous stroke was not yet committed, commit it immediately!
       if (activeStrokes.current.has(e.pointerId)) commitLiveRef.current(e.pointerId);
 
       rectRef.current = c.getBoundingClientRect();
       const { editable, tool, onPenDown } = propsRef.current;
-      if (!editable || tool === 'view') return;
+      if ((!editable && !force) || tool === 'view') return;
 
       hover.current = null;
       onPenDown?.();
@@ -381,7 +381,7 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
         if (isPenDown()) return;
         onActivate?.();
         e.preventDefault();
-        startStroke(e);
+        startStroke(e, true);
         return;
       }
 
@@ -414,8 +414,14 @@ export function InkCanvas({ strokes, editable, tool, dim, onStroke, onErase, onA
       }
 
       // Auto-start stroke if pointerdown was swallowed by iPadOS / Scribble
-      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.editable && propsRef.current.tool === 'pen') {
-        startStroke(e);
+      if (!activeStrokes.current.has(e.pointerId) && e.target === c && e.pointerType === 'pen' && isContact && propsRef.current.tool === 'pen') {
+        if (!propsRef.current.editable) {
+          if (isPenDown()) return;
+          propsRef.current.onActivate?.();
+          startStroke(e, true);
+        } else {
+          startStroke(e);
+        }
       }
 
       const l = activeStrokes.current.get(e.pointerId);
