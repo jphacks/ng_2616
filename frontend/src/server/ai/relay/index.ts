@@ -6,6 +6,8 @@ import type {
   RecognizeInput,
   RecognizeResult,
   SuggestInput,
+  TagInput,
+  TagResult,
 } from '@mn/contracts';
 import { AiError } from '../errors';
 import type { AiService, CallCtx } from '../service';
@@ -51,5 +53,9 @@ export class RelayAiService implements AiService {
 
   ocrPage(input: OcrPageInput, ctx: CallCtx): Promise<OcrPageResult> {
     return this.post('resources/page', input, ctx);
+  }
+
+  tag(input: TagInput, ctx: CallCtx): Promise<TagResult> {
+    return this.post('notebooks/tags', input, ctx);
   }
 }

@@ -87,7 +87,6 @@ export function serializeLatex(value: PdfDocument): string {
     else out.push('\\subsection*{' + escapeTex(section.title) + '}');
     for (const block of section.blocks) {
       const body: string[] = [];
-      const mixed = block.fragments.some(f => f.kind === 'text') && block.fragments.some(f => f.kind === 'math');
       const caption = block.fragments.map(f => escapeTex(f.value)).join(' ');
       if (block.image && !historical && block.image.png.length <= budget) {
         // the picture is written once, in the derivation; the record appendix reuses the file
@@ -97,9 +96,11 @@ export function serializeLatex(value: PdfDocument): string {
         out.push(`\\directlua{mnGraph('${file}', '${block.image.png.replace(/.{1,100}/g, '$&\n').trimEnd()}')}`);
         body.push('\\begin{center}\\includegraphics[width=0.82\\linewidth]{' + file + '}\\\\[2pt]{\\small ' + caption + '}\\end{center}');
       } else if (block.image) body.push('{\\small ' + caption + ' (' + (ja ? 'グラフはPDFの容量上限のため省略' : 'graph omitted: the report is at its size limit') + ')}\\par');
-      // two formulas side by side get a space: "$a$$b$" would open display math
-      else if (mixed) body.push(block.fragments.map((f, i) => f.kind === 'text' ? escapeTex(f.value) : (block.fragments[i - 1]?.kind === 'math' ? ' $' : '$') + mathTex(f.value) + '$').join('') + '\\par');
-      else for (const f of block.fragments) body.push(f.kind === 'text' ? escapeTex(f.value) + '\\par' : '\\ReportEquation{' + mathTex(f.value) + '}');
+      // Explanations and equations use separate rows, including mixed notebook lines.
+      else for (const f of block.fragments) {
+        if (f.kind === 'math') body.push('\\ReportEquation{' + mathTex(f.value) + '}');
+        else if (f.value.trim()) body.push(escapeTex(f.value.trim()) + '\\par');
+      }
       if (!historical) out.push(...body);
       if (h.include_records && (block.notes.length || historical)) {
         records.push('\\textbf{' + (ja ? '行 ' : 'Line ') + escapeTex(block.label) + '}\\par', ...body,

@@ -1,4 +1,4 @@
-import type { Line, Notebook } from '@mn/contracts';
+import { hasUnparsed, hasUnreadable, type Line, type Notebook } from '@mn/contracts';
 import { isProofNotebook, lastProofLine, leanContinuable, leanEnabled } from '@/core/lean/route';
 import { anyPending, canContinueFrom, hasMath, hasUnresolvedWrong, isActive, isGiven, isGraphLine, isGraphRequest, lastSettledMath, proofOf } from '@/core/notebook/model';
 
@@ -27,6 +27,7 @@ export interface BlockerInput {
   assistMode?: AssistMode;
   /** a Lean check is still running for some line (ADR 0008) */
   leanPending?: boolean;
+  manual?: boolean;
 }
 
 const BUSY: ReadonlySet<CandidateStateName> = new Set(['GENERATING', 'VERIFYING', 'READY', 'HELD']);
@@ -60,12 +61,18 @@ export function hasOwnLine(nb: Notebook): boolean {
   return nb.lines.some((l) => l.state === 'SETTLED' && !isGiven(l) && (hasMath(l) || (proof && l.segments.length > 0)));
 }
 
+/** A reviewed PDF question may start a step only when the student explicitly asks. */
+export function canStartPdfQuestion(line: Line): boolean {
+  return isGiven(line) && line.source === 'pdf' && !!line.document_origin && hasMath(line)
+    && !hasUnparsed(line.segments) && !hasUnreadable(line.segments);
+}
+
 /** Lean's verdict decides for a line Lean checked; otherwise the CAS rules of spec §11. */
 export function continuable(last: Line): boolean {
   return leanContinuable(last) ?? canContinueFrom(last);
 }
 
-export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, assistMode, leanPending }: BlockerInput): SuggestBlocker | null {
+export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, assistMode, leanPending, manual = false }: BlockerInput): SuggestBlocker | null {
   if (!nb) return 'none';
   if (assistMode === 'hint') return 'hint-mode';
   if (assistMode === 'off') return 'assist-off';
@@ -75,7 +82,7 @@ export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine
   // a graph request is answered even when it holds no formula and the CAS gave it no verdict
   if (!graphAsk(nb)) {
     const last = suggestBaseLine(nb);
-    if (!last) return 'empty';
+    if (!last || (!hasOwnLine(nb) && !(manual && canStartPdfQuestion(last)))) return 'empty';
     const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
     if (!incomplete && !continuable(last)) return 'cannot-continue';
   }

@@ -105,6 +105,13 @@
   --color-danger: var(--brand-danger);
   --color-danger-soft: color-mix(in oklch, var(--brand-danger) 7%, white);
 
+  /* — color: the home page's progress charts — */
+  /* subject levels, an ordinal ramp of the accent hue (validated: monotone lightness, the light
+     end clears the card surface); white text on the first two, ink on the topic step */
+  --color-viz-field: #312e81;
+  --color-viz-subfield: #4f46e5;
+  --color-viz-topic: #939cf8;
+
   /* — color: the demo iPad frame (?frame=ipad) — */
   --color-frame-backdrop: #dcdad4;
   --color-frame-bezel: #1c1d20;
@@ -123,6 +130,7 @@
   --text-2xl: 1.125rem; /* 18px  sheet titles */
   --text-3xl: 1.25rem; /* 20px  page headings */
   --text-4xl: 1.875rem; /* 30px  hero headings */
+  --text-figure: 3rem; /* 48px  the one hero number of the progress section */
   /* titles on hero cards: 36px, shrinking with the card (an @container) on narrow phones */
   --text-display: clamp(1.5rem, 13.5cqi, 2.25rem);
 

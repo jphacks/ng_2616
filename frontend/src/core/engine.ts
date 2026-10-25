@@ -19,13 +19,14 @@ import {
   type Meta,
   type Notebook,
   type Proof,
+  type QuestionPageInput,
   type Recovery,
   type Stroke,
   type SuggestInput,
   type UiLang,
 } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, continuable, graphAsk, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, canStartPdfQuestion, continuable, graphAsk, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
@@ -57,6 +58,7 @@ import { clearPending, openOutbox, putPending, putPendingNow } from '@/core/pers
 import { getRepository } from '@/core/persistence/repo';
 import { demoBinding } from '@/core/presets';
 import { buildReferences } from '@/core/resources/references';
+import { canAdoptQuestion, questionImportSnapshot, type QuestionSource } from '@/core/resources/question-adoption';
 import { copyNotebookResources } from '@/core/resources/service';
 import { notebookStore as store, type Candidate, type CandidatePolicy } from '@/core/store/notebook-store';
 import { SUGGEST_ATTEMPTS, checkerFeedback, runAttempts, type Attempt } from '@/core/suggest/attempts';
@@ -314,6 +316,25 @@ export class NotebookEngine {
     s.bumpEpoch();
     const next = this.nb.lines[lineIndex(this.nb, lineId) + 1];
     const draft = next && emptyDraft(next) ? next : newDraftLine();
+
+    // A scratch note (memo line) is settled as-is: no LaTeX recognition or CAS verification.
+    if (line.is_memo) {
+      s.commit(
+        'CONFIRM_LINE',
+        (snap) => {
+          const lines = snap.lines.map((l) =>
+            l.id === lineId
+              ? { ...l, version: l.version + 1, state: 'SETTLED' as const, segments: [], failure: undefined, verified: undefined }
+              : l,
+          );
+          if (draft !== next) lines.splice(lines.findIndex((l) => l.id === lineId) + 1, 0, draft);
+          return { ...snap, lines, activeLineId: draft.id };
+        },
+        lineId,
+      );
+      return;
+    }
+
     s.commit(
       'CONFIRM_LINE',
       (snap) => {
@@ -324,6 +345,102 @@ export class NotebookEngine {
       lineId,
     );
     await this.recognize(lineId);
+  }
+
+  /**
+   * Toggles whether a line is a scratch note (memo) or a standard math line.
+   * Memo lines are never LaTeX-converted or verified by CAS/Lean.
+   * Toggling a settled memo line off immediately kicks recognition & verification if it has ink.
+   */
+  async toggleMemo(lineId: string) {
+    const s = store.getState();
+    const line = findLine(this.nb, lineId);
+    if (!line) return;
+
+    const nextIsMemo = !line.is_memo;
+
+    if (line.state === 'DRAFT') {
+      s.commit(
+        'CONFIRM_LINE',
+        (snap) => ({
+          ...snap,
+          lines: snap.lines.map((l) => (l.id === lineId ? { ...l, version: l.version + 1, is_memo: nextIsMemo } : l)),
+        }),
+        lineId,
+      );
+      s.showToast(this.deps.t(nextIsMemo ? 'toast.memoOn' : 'toast.memoOff'), 'info');
+      return;
+    }
+
+    if (line.state === 'SETTLED' || line.state === 'RECOGNIZE_FAILED') {
+      if (nextIsMemo) {
+        // Math / Failed -> Memo
+        this.abortSlot(`line:${lineId}`);
+        this.abortSlot(`lean:${lineId}`);
+        s.commit(
+          'CONFIRM_LINE',
+          (snap) => ({
+            ...snap,
+            lines: snap.lines.map((l) =>
+              l.id === lineId
+                ? {
+                    ...l,
+                    version: l.version + 1,
+                    is_memo: true,
+                    state: 'SETTLED' as const,
+                    segments: [],
+                    verified: undefined,
+                    failure: undefined,
+                  }
+                : l,
+            ),
+          }),
+          lineId,
+        );
+        s.showToast(this.deps.t('toast.memoOn'), 'info');
+        if (this.syncDeclarations()) void this.recheckStale();
+      } else {
+        // Memo -> Math: toggle off and start recognition/verification
+        if (line.ink.length > 0) {
+          s.commit(
+            'CONFIRM_LINE',
+            (snap) => ({
+              ...snap,
+              lines: snap.lines.map((l) =>
+                l.id === lineId
+                  ? {
+                      ...l,
+                      version: l.version + 1,
+                      is_memo: false,
+                      state: 'RECOGNIZING' as const,
+                      failure: undefined,
+                    }
+                  : l,
+              ),
+            }),
+            lineId,
+          );
+          s.showToast(this.deps.t('toast.memoOff'), 'info');
+          await this.recognize(lineId);
+        } else {
+          // No ink: revert to draft
+          s.commit(
+            'CONFIRM_LINE',
+            (snap) => ({
+              ...snap,
+              activeLineId: lineId,
+              lines: snap.lines.map((l) =>
+                l.id === lineId
+                  ? { ...l, version: l.version + 1, is_memo: false, state: 'DRAFT' as const, failure: undefined }
+                  : l,
+              ),
+            }),
+            lineId,
+          );
+          s.showToast(this.deps.t('toast.memoOff'), 'info');
+        }
+      }
+    }
   }
 
   private async recognize(lineId: string) {
@@ -470,6 +587,8 @@ export class NotebookEngine {
       const out = await this.cas.verify(payload);
       line = findLine(this.nb, lineId);
       if (!line || line.version !== version || this.disposed) return null;
+      // Undo/import can restore the same line version under a different given context.
+      if (this.nb.id !== nb.id || this.cas.versionString !== casVersion || inputHash(this.nb, payloadForLine(this.nb, lineId), casVersion) !== hash) return null;
       if (out.kind === 'unavailable') {
         this.failLine(lineId, version, 'verify', 'CAS_UNAVAILABLE');
         return null;
@@ -670,7 +789,7 @@ export class NotebookEngine {
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 
-  private suggestBlocker(): SuggestBlocker | null {
+  private suggestBlocker(manual = false): SuggestBlocker | null {
     const s = store.getState();
     const nb = s.notebook;
     if (!nb) return 'none';
@@ -682,8 +801,8 @@ export class NotebookEngine {
     // a graph request is answered even when it holds no formula and the CAS gave it no verdict
     if (!graphAsk(nb)) {
       const last = suggestBaseLine(nb);
-      // a template's given lines alone do not start suggestions: the student writes first
-      if (!last || !hasOwnLine(nb)) return 'empty';
+      // Templates do not start automatically; a reviewed PDF question can start on an explicit press.
+      if (!last || (!hasOwnLine(nb) && !(manual && canStartPdfQuestion(last)))) return 'empty';
       const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
       if (!incomplete && !continuable(last)) return 'cannot-continue';
     }
@@ -693,13 +812,13 @@ export class NotebookEngine {
     return null;
   }
 
-  /** True when pressing the suggest button would start a request (the same rules as the automatic start). */
-  canSuggest(_manual = false): boolean {
-    return this.suggestBlocker() === null;
+  /** A reviewed PDF question can start manually before the student's first written line. */
+  canSuggest(manual = false): boolean {
+    return this.suggestBlocker(manual) === null;
   }
 
   async requestSuggestion(manual: boolean) {
-    const blocker = this.suggestBlocker();
+    const blocker = this.suggestBlocker(manual);
     if (blocker) {
       if (manual) {
         const key = blockerToastKey(blocker, store.getState().candidate?.state ?? null);
@@ -1176,6 +1295,29 @@ export class NotebookEngine {
   }
 
   // ------------------------------------------------------------------ resources
+
+  transcribeQuestionPage(input: QuestionPageInput, signal: AbortSignal) {
+    return api.questionPage(this.meta(), input, signal);
+  }
+
+  adoptPdfQuestion(lines: Line[], source: QuestionSource): boolean {
+    const nb = this.nb;
+    if (!nb || !canAdoptQuestion(nb, source)) throw new Error('QUESTION_CONTEXT_CHANGED');
+    if (lines.some((l) => (l.extensions?.pdf_question as { mock?: boolean } | undefined)?.mock) && nb.mode !== 'mock') throw new Error('QUESTION_MOCK_MISMATCH');
+    if (anyPending(nb)) throw new Error('QUESTION_CHECKS_PENDING');
+    this.abortAll();
+    this.cancelSuggestion();
+    const s = store.getState();
+    s.commit('IMPORT_PDF', (snapshot) => questionImportSnapshot(snapshot, lines));
+    s.bumpEpoch();
+    s.set('candidate', null);
+    s.set('rejection', null);
+    s.set('ghostConfirm', false);
+    s.set('rejections', {});
+    s.set('tab', 'canvas');
+    void this.recheckStale();
+    return true;
+  }
 
   /** Lazy OCR for a resource page without a text layer (spec §15.2: only when opened). */
   async ocrPage(image: { mime: 'image/jpeg' | 'image/png'; data: string }): Promise<string | null> {

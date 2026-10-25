@@ -40,7 +40,7 @@ export const sameFunctions = (a: readonly FunctionDecl[], b: readonly FunctionDe
  */
 export function reparseSegments(segments: Line['segments'], functions: readonly FunctionDecl[]): Line['segments'] {
   let changed = false;
-  const out = segments.map((s): Segment => {
+  const out = segments.map((s: Segment): Segment => {
     if (s.type !== 'math' || (Array.isArray(s.expr) && s.expr[0] === 'Unparsed')) return s;
     const r = parseMathLatex(s.source_latex ?? s.latex, { functions });
     if (!r.ok || JSON.stringify(r.expr) === JSON.stringify(s.expr)) return s;

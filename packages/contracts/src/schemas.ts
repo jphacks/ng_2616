@@ -127,6 +127,7 @@ export const LineSchema = z.object({
   revision_of: IdSchema.optional(),
   recovery_root_id: IdSchema.optional(),
   superseded_by: IdSchema.optional(),
+  is_memo: z.boolean().optional(),
   ai_origin: z.object({ candidate_id: z.string(), mode: SuggestModeSchema, unverified_adoption: z.boolean().optional() }).optional(),
   document_origin: z.object({ name: z.string(), page: z.number().int(), has_unreadable: z.boolean() }).optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),

@@ -6,7 +6,6 @@ import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import type { Notebook } from '@mn/contracts';
 import { ApiCallError } from '@/core/api/client';
-import type { SessionUser } from '@/core/auth/browser';
 import { compileReportPdf } from '@/core/export/compile';
 import { drawGraphs } from '@/core/export/graphs';
 import { serializeLatex } from '@/core/export/latex';
@@ -22,9 +21,10 @@ type Result = { url: string; name: string; omitted: number };
 /** Fields that open holding a suggested value: shown gray, printed as is, made solid on first touch. */
 type Prefilled = 'author' | 'studentId' | 'course';
 
-const SAMPLE_STUDENT_ID = '01234567';
+const SAMPLE_AUTHOR = '山田 太郎';
+const SAMPLE_STUDENT_ID = '12345657';
 
-export function PdfExport({ user }: { user: SessionUser }) {
+export function PdfExport() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -61,9 +61,8 @@ export function PdfExport({ user }: { user: SessionUser }) {
     if (!notebook) return;
     snapshotRef.current = structuredClone(exportSnapshot(notebook));
     // an empty title prints the notebook's own title
-    const author = user.name?.trim() ?? '';
-    setReport({ title: '', author, studentId: SAMPLE_STUDENT_ID, homework: { course: t('pdf.defaultCourse'), institution: '', date: '', exercise: '', paper: 'letter', include_records: false } });
-    setPrefilled(new Set<Prefilled>(author ? ['author', 'studentId', 'course'] : ['studentId', 'course']));
+    setReport({ title: '', author: SAMPLE_AUTHOR, studentId: SAMPLE_STUDENT_ID, homework: { course: t('pdf.defaultCourse'), institution: '', date: '', exercise: '', paper: 'letter', include_records: false } });
+    setPrefilled(new Set<Prefilled>(['author', 'studentId', 'course']));
     setMethod('tex'); setTexDownload(null);
     setOpen(true); setProgress(null); setResult(null); setError(null);
   };

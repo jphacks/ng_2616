@@ -5,9 +5,11 @@ import {
   LeanCheckInputSchema,
   MetaSchema,
   OcrPageInputSchema,
+  QuestionPageInputSchema,
   RecognizeInputSchema,
   SCHEMA_VERSION,
   SuggestInputSchema,
+  TagInputSchema,
   hashOf,
   type Capabilities,
   type Feature,
@@ -16,7 +18,7 @@ import {
 } from '@mn/contracts';
 import { z } from 'zod';
 import { AiError } from '@/server/ai/errors';
-import { getAiService } from '@/server/ai/service';
+import { getAiService, getDocumentAiService } from '@/server/ai/service';
 import { getLeanService, leanConfigured } from '@/server/lean';
 import { serverEnv } from '@/server/env';
 import { authenticate, type AuthedUser } from '@/server/supabase';
@@ -25,13 +27,17 @@ import { lookup, remember } from './idempotency';
 import { withLimits } from './limits';
 
 type JobRoute = {
-  kind: 'recognize' | 'suggest' | 'resources_page' | 'lean_check';
+  kind: 'recognize' | 'suggest' | 'resources_page' | 'resources_questions' | 'lean_check' | 'notebook_tags';
   input: z.ZodType;
   deadlineMs: number;
   run: (input: never, user: AuthedUser, signal: AbortSignal) => Promise<unknown>;
 };
 
 const JOB_ROUTES: Record<string, JobRoute> = {
+  'resources/questions': {
+    kind: 'resources_questions', input: QuestionPageInputSchema, deadlineMs: 45_000,
+    run: (input, user, signal) => getDocumentAiService().questionPage(input, { userId: user.id, signal }),
+  },
   recognize: {
     kind: 'recognize',
     input: RecognizeInputSchema,
@@ -49,6 +55,12 @@ const JOB_ROUTES: Record<string, JobRoute> = {
     input: OcrPageInputSchema,
     deadlineMs: 45_000,
     run: (input, user, signal) => getAiService().ocrPage(input, { userId: user.id, signal }),
+  },
+  'notebooks/tags': {
+    kind: 'notebook_tags',
+    input: TagInputSchema,
+    deadlineMs: 30_000,
+    run: (input, user, signal) => getAiService().tag(input, { userId: user.id, signal }),
   },
   // ADR 0008: up to three translations plus their Lean checks. Longer than spec §14.4's 90 s:
   // one translation of a hard step took 110 s in testing (thinking tokens), see LeanService

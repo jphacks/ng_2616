@@ -26,6 +26,7 @@ function fixture(): Notebook {
   add('$x = 6$', 'unknown', { segments: [{ type: 'math', expr: ['Unparsed', '<script>alert(1)</script> \\input{private}'], notation: 'plain', latex: 'do not execute' }] });
   add('$x = 7$', 'none', { segments: [{ type: 'text', text: '特殊文字：\\ { } $ & # ^ _ ~ %。これは解説の文章です。改行と日本語が正しく表示されることを確認します。\n' }] });
   add('$x = 8$', 'ok', { segments: [{ type: 'math', expr: ['Add', ...Array.from({ length: 12 }, (_, i) => ['Divide', ['Power', 'x', i + 1], ['Add', 'x', i + 1]] as import('@mn/contracts').MathJSON)], notation: 'plain', latex: 'ignored' }] });
+  add('積分して $I = \\int_1^2 \\frac{3x^2+5x+4}{x(x^2+1)}\\,dx$', 'ok');
   for (let i = 0; i < 12; i++) add('$x = 9$', i % 2 ? 'none' : 'ok', { segments: [{ type: 'text', text: `段落 ${i + 1}。` + '問題の条件を確認し、式の変形と検証結果を順番に記録します。'.repeat(18) }] });
   n.lines.push({ id: 'draft', version: 2, state: 'DRAFT', role: 'step', source: 'user', ink: [{ id: 's', points: [{ x: 1, y: 1, p: 1, t: 1 }] }], segments: [] });
   return n;
@@ -67,7 +68,21 @@ test('exports a real multipage PDF locally, preserving unsaved title and noteboo
   await page.getByLabel('PDF generation').selectOption('browser');
   await page.getByLabel('Name (optional)').fill('山田 太郎');
   await page.getByLabel('Student ID (optional)').fill('12345678');
+  // Observe actual layout before rasterization removes the export frame.
+  const formulaLayout = page.waitForFunction(() => {
+    const doc = document.querySelector<HTMLIFrameElement>('iframe[data-pdf-export]')?.contentDocument;
+    const explanation = [...(doc?.querySelectorAll<HTMLElement>('.pdf-page .pdf-unit') ?? [])].find(el => el.textContent === '積分して');
+    const equation = explanation?.nextElementSibling as HTMLElement | null;
+    if (!explanation || !equation?.querySelector('.katex')) return null;
+    return { textBottom: explanation.getBoundingClientRect().bottom, mathTop: equation.getBoundingClientRect().top,
+      mixed: !!explanation.querySelector('.katex'), mathHeight: equation.getBoundingClientRect().height };
+  }, undefined, { polling: 50 });
   await page.getByRole('button', { name: 'Create report PDF' }).click();
+  const layout = await (await formulaLayout).jsonValue();
+  if (!layout) throw new Error('Missing mixed-line export layout');
+  expect(layout.mixed).toBe(false);
+  expect(layout.mathTop).toBeGreaterThanOrEqual(layout.textBottom);
+  expect(layout.mathHeight).toBeGreaterThan(30);
   await expect(page.getByText('Your PDF is ready.').or(page.getByRole('dialog').getByRole('alert'))).toBeVisible({ timeout: 120000 });
   await expect(page.getByRole('dialog').getByRole('alert')).toHaveCount(0);
   await expect(page.getByText('Your PDF is ready.')).toBeVisible();

@@ -6,6 +6,8 @@ import type {
   RecognizeInput,
   RecognizeResult,
   SuggestInput,
+  TagInput,
+  TagResult,
 } from '@mn/contracts';
 import { serverEnv } from '@/server/env';
 import { DirectAiService } from './direct';
@@ -23,10 +25,20 @@ export interface AiService {
   recognize(input: RecognizeInput, ctx: CallCtx): Promise<RecognizeResult>;
   suggest(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult>;
   ocrPage(input: OcrPageInput, ctx: CallCtx): Promise<OcrPageResult>;
+  tag(input: TagInput, ctx: CallCtx): Promise<TagResult>;
   status(): { provider: string; configured: boolean; mock: boolean };
 }
 
 let service: AiService | null = null;
+let documentService: DirectAiService | null = null;
+
+/** Document transcription belongs to this web app; it never uses the Azure relay. */
+export function getDocumentAiService(): DirectAiService {
+  if (documentService) return documentService;
+  const env = serverEnv();
+  documentService = new DirectAiService(env.LLM_PROVIDER === 'gemini' && env.GEMINI_API_KEY ? new GeminiProvider(env.GEMINI_API_KEY) : new MockProvider(), env);
+  return documentService;
+}
 
 export function getAiService(): AiService {
   if (service) return service;
