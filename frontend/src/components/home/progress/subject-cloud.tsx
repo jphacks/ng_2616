@@ -9,7 +9,22 @@ import { radii, seed, settle, tick, type Bubble } from './bubbles';
 
 /** the rest of a long tail would be dots too small to read or touch */
 const MAX_BUBBLES = 28;
-const HEIGHT = 320;
+const HEIGHT = 460;
+/** label sizes: as large as the circle allows, up to this share of its radius, and never below the floor */
+const LABEL_MAX = 0.6;
+const LABEL_MIN = 11;
+const LINE_HEIGHT = 1.15;
+/** how much of the circle's chord a line may use */
+const LABEL_ROOM = 0.92;
+
+let measurer: CanvasRenderingContext2D | null = null;
+/** The rendered width of a line at 1px, from the page's own font (a rough estimate without canvas). */
+function unitWidth(line: string): number {
+  measurer ??= document.createElement('canvas').getContext('2d');
+  if (!measurer) return line.length * 0.54;
+  measurer.font = `600 100px ${getComputedStyle(document.body).fontFamily}`;
+  return measurer.measureText(line).width / 100;
+}
 /** pointer travel below this is a tap, not a drag */
 const TAP_SLOP = 5;
 /** the tooltip's height and half its widest width, to keep it inside the card */
@@ -27,20 +42,28 @@ const TEXT: Record<SubjectLevel, string> = {
   2: 'var(--color-ink)',
 };
 
-/** The name set inside the bubble on up to three lines, or null when it would not fit. */
+const labels = new Map<string, { lines: string[]; size: number } | null>();
+
+/**
+ * The name set inside the bubble on up to three lines, as large as fits, or null when even the
+ * smallest size would not. A block of `rows` lines at size s, its widest line w·s, fits when
+ * w·s ≤ 2·ROOM·√(r² − (rows·s·LINE_HEIGHT / 2)²), which gives the largest s directly.
+ */
 function fitLabel(tag: string, r: number): { lines: string[]; size: number } | null {
+  const key = `${tag}|${Math.round(r)}`;
+  if (labels.has(key)) return labels.get(key)!;
   // words break at spaces, and after a hyphen ("epsilon-" / "delta")
   const words = tag.split(/(?<=-)|\s+/).filter(Boolean);
-  for (const size of r >= 44 ? [13, 12, 11] : [12, 11]) {
-    const width = (line: string) => line.length * size * 0.54;
-    for (let rows = 1; rows <= Math.min(3, words.length); rows++) {
-      // text block must sit inside the circle: narrower lines when there are more of them
-      const room = 2 * Math.sqrt(Math.max(0, r * r - ((rows * size * 1.15) / 2) ** 2)) * 0.86;
-      const lines = splitInto(words, rows);
-      if (Math.max(...lines.map(width)) <= room) return { lines, size };
-    }
+  let best: { lines: string[]; size: number } | null = null;
+  for (let rows = 1; rows <= Math.min(3, words.length); rows++) {
+    const lines = splitInto(words, rows);
+    const w = Math.max(...lines.map(unitWidth));
+    const k = 2 * LABEL_ROOM;
+    const size = Math.min(LABEL_MAX * r, (k * r) / Math.sqrt(w * w + ((k * rows * LINE_HEIGHT) / 2) ** 2));
+    if (size >= LABEL_MIN && (!best || size > best.size)) best = { lines, size: Math.floor(size) };
   }
-  return null;
+  labels.set(key, best);
+  return best;
 }
 
 /** Splits words into `rows` lines, keeping the longest line as short as possible. */
@@ -118,7 +141,7 @@ export function SubjectCloud({ subjects, selected, onSelect }: { subjects: Subje
       publish();
       return;
     }
-    const rs = radii(shown.map((s) => s.notebooks), width, HEIGHT);
+    const rs = radii(shown.map((s) => s.notebooks), width, HEIGHT, 0.5);
     const before = new Map(nodes.current.map((n) => [n.id, n]));
     const fresh = seed(shown.map((s, i) => ({ id: s.tag, r: rs[i]! })), width, HEIGHT);
     nodes.current = fresh.map((n) => {
@@ -242,7 +265,7 @@ export function SubjectCloud({ subjects, selected, onSelect }: { subjects: Subje
                       dominantBaseline="central"
                     >
                       {label.lines.map((line, i) => (
-                        <tspan key={i} x={0} y={(i - (label.lines.length - 1) / 2) * label.size * 1.15}>
+                        <tspan key={i} x={0} y={(i - (label.lines.length - 1) / 2) * label.size * LINE_HEIGHT}>
                           {line}
                         </tspan>
                       ))}
@@ -281,7 +304,6 @@ export function SubjectCloud({ subjects, selected, onSelect }: { subjects: Subje
           </li>
         ))}
       </ul>
-      <p className="-mt-2 text-xs text-pretty text-muted">{t('progress.subjectsHint')}</p>
       {/* the same numbers as a list, for screen readers */}
       <ul className="sr-only" aria-label={t('progress.subjectsList')}>
         {subjects.map((s) => (

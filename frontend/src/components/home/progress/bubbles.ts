@@ -17,7 +17,7 @@ export interface Bubble {
 /** gap between neighbouring bubbles, in px */
 export const BUBBLE_GAP = 3;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-const MIN_R = 16;
+const MIN_R = 30;
 
 /** Radii with area proportional to the value, scaled so the bubbles cover about `fill` of the box. */
 export function radii(values: readonly number[], width: number, height: number, fill = 0.42): number[] {

@@ -1,7 +1,6 @@
 'use client';
 
 import clsx from 'clsx';
-import { Check, CircleHelp, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { addDays, streak, type Totals } from '@/core/insights/aggregate';
 import { useLocale, useT } from '@/i18n';
@@ -9,15 +8,13 @@ import { useLocale, useT } from '@/i18n';
 /** About four and a half months of days, a column per week. */
 const WEEKS = 20;
 
-/** The numbers beside the subject cloud: what was written, what the notebook caught, and when. */
+/** The numbers beside the subject cloud: how many lines were written, and on which days. */
 export function StatsPanel({ totals, days, today }: { totals: Totals; days: ReadonlyMap<string, number>; today: string }) {
   const t = useT();
   const { locale } = useLocale();
   const fmt = (n: number) => n.toLocaleString(locale);
   const own = totals.lines - totals.ai_lines;
   const aiShare = totals.lines ? Math.round((totals.ai_lines / totals.lines) * 100) : 0;
-  const checked = totals.checked.ok + totals.checked.wrong + totals.checked.unknown;
-  const lean = totals.lean_proofs > 0 || totals.lean_steps > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,57 +41,10 @@ export function StatsPanel({ totals, days, today }: { totals: Totals; days: Read
         )}
       </div>
 
-      <div className={clsx('grid grid-cols-2 gap-3', lean && 'lg:grid-cols-3')}>
-        <Tile label={t('progress.mistakes')} value={fmt(totals.mistakes)}>
-          {totals.mistakes > 0 && (
-            <>
-              <span className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-ok-soft" aria-hidden>
-                <span className="rounded-full bg-ok" style={{ width: `${(totals.fixed / totals.mistakes) * 100}%` }} />
-              </span>
-              <span className="mt-1 block text-xs text-muted">{t('progress.fixedOf', { fixed: fmt(totals.fixed), n: fmt(totals.mistakes) })}</span>
-            </>
-          )}
-        </Tile>
-        <Tile label={t('progress.hints')} value={fmt(totals.hints)} />
-        {lean && (
-          <Tile label={t('progress.lean')} value={fmt(totals.lean_proofs)}>
-            <span className="mt-1 block text-xs text-muted">{t('progress.leanSteps', { n: fmt(totals.lean_steps) })}</span>
-          </Tile>
-        )}
-      </div>
-
-      {checked > 0 && (
-        <div>
-          <p className="text-sm font-medium text-muted">{t('progress.checked', { n: fmt(checked) })}</p>
-          <div className="mt-2 flex h-2.5 gap-0.5" aria-hidden>
-            {(['ok', 'wrong', 'unknown'] as const).map((k) =>
-              totals.checked[k] > 0 ? (
-                <span key={k} className={clsx('first:rounded-l-sm last:rounded-r-sm', BAR[k])} style={{ flexGrow: totals.checked[k] }} />
-              ) : null,
-            )}
-          </div>
-          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft">
-            {(['ok', 'wrong', 'unknown'] as const).map((k) => {
-              const Icon = ICON[k];
-              return (
-                <li key={k} className="inline-flex items-center gap-1.5">
-                  <Icon size={14} className={TEXT[k]} aria-hidden />
-                  {t(`progress.status.${k}` as const, { n: fmt(totals.checked[k]) })}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-
       <Activity days={days} today={today} />
     </div>
   );
 }
-
-const BAR = { ok: 'bg-ok', wrong: 'bg-wrong', unknown: 'bg-unknown' } as const;
-const TEXT = { ok: 'text-ok', wrong: 'text-wrong', unknown: 'text-unknown' } as const;
-const ICON = { ok: Check, wrong: X, unknown: CircleHelp } as const;
 
 function Key({ swatch, children }: { swatch: string; children: ReactNode }) {
   return (
@@ -102,16 +52,6 @@ function Key({ swatch, children }: { swatch: string; children: ReactNode }) {
       <span aria-hidden className={clsx('size-2.5 rounded-sm', swatch)} />
       {children}
     </li>
-  );
-}
-
-function Tile({ label, value, children }: { label: string; value: string; children?: ReactNode }) {
-  return (
-    <div className="min-w-0 rounded-2xl bg-fill p-3">
-      <p className="truncate text-xs font-medium text-muted">{label}</p>
-      <p className="text-4xl leading-tight font-semibold">{value}</p>
-      {children}
-    </div>
   );
 }
 
