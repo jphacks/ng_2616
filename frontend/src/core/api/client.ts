@@ -12,6 +12,8 @@ import type {
   RecognizeInput,
   RecognizeResult,
   SuggestInput,
+  TagInput,
+  TagResult,
 } from '@mn/contracts';
 import { uuid } from '@/core/ids';
 
@@ -82,4 +84,5 @@ export const api = {
   suggest: (meta: Meta, input: SuggestInput, signal?: AbortSignal) => runJob<CandidateDraftResult>('suggest', meta, input, signal),
   ocrPage: (meta: Meta, input: OcrPageInput, signal?: AbortSignal) => runJob<OcrPageResult>('resources/page', meta, input, signal),
   leanCheck: (meta: Meta, input: LeanCheckInput, signal?: AbortSignal) => runJob<LeanCheckResult>('lean/check', meta, input, signal),
+  tag: (meta: Meta, input: TagInput, signal?: AbortSignal) => runJob<TagResult>('notebooks/tags', meta, input, signal),
 };

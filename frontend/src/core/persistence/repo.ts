@@ -4,6 +4,7 @@ import { NotebookSchema, type Notebook, type Stroke } from '@mn/contracts';
 import Dexie, { type EntityTable } from 'dexie';
 import { DEV_BYPASS, supabaseBrowser } from '@/core/auth/browser';
 import { uuid } from '@/core/ids';
+import { recordInsights } from '@/core/insights/store';
 import { buildPreview, previewOf, PREVIEW_LINES, type NotebookPreview } from '@/core/notebook/preview';
 import { removeNotebookResources } from '@/core/resources/service';
 import { inkHash, joinInk, splitInk } from './ink';
@@ -184,6 +185,7 @@ class SupabaseRepo implements NotebookRepository {
     const row = (Array.isArray(data) ? data[0] : data) as { revision: number } | undefined;
     if (!row) return { ok: false, reason: 'error', message: 'empty save response' };
     this.known.set(nb.id, new Set(Object.values(index)));
+    recordInsights(this.ownerId, full);
     return { ok: true, revision: Number(row.revision) };
   }
 
@@ -245,6 +247,9 @@ class LocalRepo implements NotebookRepository {
       const revision = (expectedRevision ?? 0) + 1;
       await this.db.notebooks.put({ id: nb.id, title: nb.title, updated_at: new Date().toISOString(), revision, snapshot });
       return { ok: true as const, revision };
+    }).then((res) => {
+      if (res.ok) recordInsights(this.ownerId, snapshot);
+      return res;
     });
   }
 
