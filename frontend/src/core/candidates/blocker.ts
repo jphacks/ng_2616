@@ -4,10 +4,13 @@ import { anyPending, canContinueFrom, hasUnresolvedWrong, lastSettledMath, proof
 export type CandidateStateName = 'GENERATING' | 'VERIFYING' | 'READY' | 'HELD' | 'NONE' | 'ADOPTED' | 'REJECTED' | 'STALE';
 
 /** Why a suggestion cannot start now; null means it can (same rules as NotebookEngine.suggestBlocker). */
-export type SuggestBlocker = 'none' | 'hint-mode' | 'cas' | 'pending' | 'wrong' | 'empty' | 'cannot-continue' | 'busy' | 'writing';
+export type SuggestBlocker = 'none' | 'hint-mode' | 'assist-off' | 'cas' | 'pending' | 'wrong' | 'empty' | 'cannot-continue' | 'busy' | 'writing';
 
-/** S-02 (spec §14.2): in hint mode no completion is offered; the default is complete. */
-export type AssistMode = 'hint' | 'complete';
+/**
+ * Assist mode (spec §14.2): in hint mode no completion is offered; the default is complete. 'off' is not in the
+ * spec: no assistance at all (today the same as hint for completion; the hints feature would not show either).
+ */
+export type AssistMode = 'hint' | 'complete' | 'off';
 
 export interface BlockerInput {
   notebook: Notebook | null;
@@ -25,6 +28,7 @@ const BUSY: ReadonlySet<CandidateStateName> = new Set(['GENERATING', 'VERIFYING'
 export function suggestBlockerOf({ notebook: nb, casReady, candidate, activeLine, assistMode }: BlockerInput): SuggestBlocker | null {
   if (!nb) return 'none';
   if (assistMode === 'hint') return 'hint-mode';
+  if (assistMode === 'off') return 'assist-off';
   if (!casReady) return 'cas';
   if (anyPending(nb)) return 'pending';
   if (hasUnresolvedWrong(nb)) return 'wrong';
@@ -68,6 +72,8 @@ export function blockerToastKey(blocker: SuggestBlocker, candidate: CandidateSta
       return candidate === 'HELD' ? 'toast.suggestHeld' : 'toast.suggestBusy';
     case 'hint-mode':
       return 'toast.suggestHintMode';
+    case 'assist-off':
+      return 'toast.suggestAssistOff';
     case 'none':
       return null;
   }

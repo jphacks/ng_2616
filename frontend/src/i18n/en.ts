@@ -332,6 +332,8 @@ export const en = {
   'toast.suggestCannotContinue': 'This line cannot be continued yet. Check it, or fix it first.',
   'toast.suggestBusy': 'A suggestion is already being prepared or waiting for you.',
   'toast.suggestHintMode': 'Hint mode is on, so no completion is offered. Switch to Complete to get suggestions.',
+  'toast.suggestAssistOff': 'Assist is off, so no completion is offered. Switch the assist mode to get suggestions.',
+  'assist.off': 'Off',
   'assist.hint': 'Hint',
   'assist.complete': 'Complete',
   'assist.label': 'Assist mode',

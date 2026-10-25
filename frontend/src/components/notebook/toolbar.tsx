@@ -44,7 +44,7 @@ export function Toolbar() {
       activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
       assistMode: s.assistMode,
     });
-    return blocker === 'wrong' || blocker === 'hint-mode';
+    return blocker === 'wrong' || blocker === 'hint-mode' || blocker === 'assist-off';
   });
 const side = useDevicePrefs((s) => s.toolbarSide);
   const inkWeight = useDevicePrefs((s) => s.inkWeight);

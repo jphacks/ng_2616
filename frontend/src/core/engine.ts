@@ -507,6 +507,7 @@ export class NotebookEngine {
     const nb = s.notebook;
     if (!nb) return 'none';
     if (s.assistMode === 'hint') return 'hint-mode';
+    if (s.assistMode === 'off') return 'assist-off';
     if (this.cas.status !== 'ready') return 'cas';
     if (anyPending(nb)) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';

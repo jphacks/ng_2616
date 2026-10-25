@@ -334,6 +334,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   'toast.suggestCannotContinue': 'この行からはまだ続けられません。先に確認するか、直してください。',
   'toast.suggestBusy': '提案を作成中か、採用待ちの提案があります。',
   'toast.suggestHintMode': 'ヒントモードなので補完は出ません。補完を使うには「完全補完」に切り替えてください。',
+  'toast.suggestAssistOff': '補助がオフなので補完は出ません。補完を使うには補助モードを切り替えてください。',
+  'assist.off': 'オフ',
   'assist.hint': 'ヒント',
   'assist.complete': '完全補完',
   'assist.label': '補助モード',

@@ -99,6 +99,33 @@ describe('S-02 assist modes (spec §14.2)', () => {
     assert.equal(blockerToastKey('hint-mode', null), 'toast.suggestHintMode');
   });
 
+  it('A10 off: no request by the button or the timer, its own explanation, and the candidate and request are dropped', async () => {
+    r = rig();
+    await r.engine.requestSuggestion(true);
+    await until(() => candidateOf(r)?.state === 'READY', 'READY');
+    r.engine.setAssistMode('off');
+    assert.equal(candidateOf(r), null);
+    const before = calls();
+    await r.engine.requestSuggestion(true);
+    r.engine.scheduleSuggestion(0);
+    await new Promise((res) => setTimeout(res, 20));
+    assert.equal(calls(), before);
+    assert.deepEqual(r.toasts, ['toast.suggestAssistOff']);
+    assert.equal(r.engine.canSuggest(true), false);
+  });
+
+  it('A11 hint, off and complete switch among each other; every change moves the epoch', () => {
+    r = rig();
+    for (const mode of ['hint', 'off', 'complete', 'off', 'hint'] as const) {
+      const epoch = r.store.getState().epoch;
+      r.engine.setAssistMode(mode);
+      assert.equal(r.store.getState().assistMode, mode);
+      assert.ok(r.store.getState().epoch > epoch);
+    }
+    assert.equal(suggestBlockerOf({ notebook: notebook([settled('L1', '$x = 1$')]), casReady: true, candidate: null, activeLine: undefined, assistMode: 'off' }), 'assist-off');
+    assert.equal(blockerToastKey('assist-off', null), 'toast.suggestAssistOff');
+  });
+
   it('A9 an unused api is fine: hint mode never needs the checker or the model', () => {
     r = rig({ api: fakeApi(() => assert.fail('the model must not be called')) });
     r.engine.setAssistMode('hint');
