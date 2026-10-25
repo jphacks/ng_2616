@@ -264,4 +264,15 @@ describe('LaTeX repair and normalization', () => {
     assert.ok(parsed.ok);
     assert.deepEqual(parsed.expr, ['Add', 'beta', 'theta']);
   });
+
+  it('supports inverse trigonometric functions (arctan, arcsin, arccos)', () => {
+    const parsedAtan = parseMathLatex('5 \\arctan(x)');
+    assert.ok(parsedAtan.ok);
+    assert.deepEqual(parsedAtan.expr, ['Multiply', 5, ['ArcTan', 'x']]);
+
+    const parsedEvaluated = parseMathLatex('\\left[ 4 \\ln(x) + 5 \\arctan(x) - \\frac{1}{2} \\ln\\left(x^{2} + 1\\right) \\right]_{2}^{3}');
+    assert.ok(parsedEvaluated.ok);
+    assert.ok(Array.isArray(parsedEvaluated.expr));
+    assert.equal(parsedEvaluated.expr[0], 'Evaluate');
+  });
 });

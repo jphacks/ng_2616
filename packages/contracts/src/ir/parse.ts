@@ -35,7 +35,7 @@ export type ParseResult =
 /** Names that read as functions when directly followed by "(" even if undeclared. */
 const DEFAULT_FUNCTION_NAMES = new Set(['f', 'g', 'h', 'F', 'G', 'H', 'y', 'u', 'psi', 'Psi', 'phi', 'Phi', 'varphi', 'chi']);
 
-const FN_CMDS = new Set(['sin', 'cos', 'tan', 'ln', 'log', 'exp']);
+const FN_CMDS = new Set(['sin', 'cos', 'tan', 'ln', 'log', 'exp', 'arctan', 'arcsin', 'arccos', 'atan', 'asin', 'acos']);
 const SKIP_CMDS = new Set([
   ',', ';', ':', '!', ' ', '>', 'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl',
   'biggr', 'Biggl', 'Biggr', 'displaystyle', 'textstyle', 'limits', 'nolimits', 'mathstrut',
@@ -56,8 +56,12 @@ type Tok =
   | { k: 'sym'; v: string; at: number };
 
 class ParseError extends Error {
-  constructor(public code: ParseErrorCode, message: string, public at: number) {
+  code: ParseErrorCode;
+  at: number;
+  constructor(code: ParseErrorCode, message: string, at: number) {
     super(message);
+    this.code = code;
+    this.at = at;
   }
 }
 
@@ -180,7 +184,13 @@ class Parser {
   absDepth = 0;
   stopAtDiff = false;
 
-  constructor(private toks: Tok[], private opts: Resolved) {}
+  private toks: Tok[];
+  private opts: Resolved;
+
+  constructor(toks: Tok[], opts: Resolved) {
+    this.toks = toks;
+    this.opts = opts;
+  }
 
   // ---- token helpers ----
   peek(o = 0): Tok | undefined { return this.toks[this.pos + o]; }
@@ -579,7 +589,9 @@ class Parser {
       case 'square': case 'Box': case 'blacksquare': return ['Unreadable'];
       case 'frac': return this.parseFrac();
       case 'sqrt': return this.parseSqrt();
-      case 'sin': case 'cos': case 'tan': case 'ln': case 'log': case 'exp': return this.parseFn(v);
+      case 'sin': case 'cos': case 'tan': case 'ln': case 'log': case 'exp':
+      case 'arctan': case 'arcsin': case 'arccos': case 'atan': case 'asin': case 'acos':
+        return this.parseFn(v);
       case 'int': case 'tint': return this.parseIntegral();
       case 'sum': return this.parseSum();
       case 'lim': return this.parseLimit();
@@ -727,8 +739,13 @@ class Parser {
       if (factors.length === 0) this.fail(`\\${name} needs an argument`);
       arg = factors.length === 1 ? factors[0]! : ['Multiply', ...factors];
     }
-    const op = { sin: 'Sin', cos: 'Cos', tan: 'Tan', exp: 'Exp', ln: 'Ln', log: 'Ln' }[name]!;
-    const node: MathJSON = [op, arg];
+    const op: Record<string, string> = {
+      sin: 'Sin', cos: 'Cos', tan: 'Tan', exp: 'Exp', ln: 'Ln', log: 'Ln',
+      arctan: 'ArcTan', atan: 'ArcTan',
+      arcsin: 'ArcSin', asin: 'ArcSin',
+      arccos: 'ArcCos', acos: 'ArcCos',
+    };
+    const node: MathJSON = [op[name]!, arg];
     return power === undefined ? node : ['Power', node, power];
   }
 

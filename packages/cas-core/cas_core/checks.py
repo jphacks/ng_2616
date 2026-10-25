@@ -751,7 +751,7 @@ def _sets_equal(A: sp.Set, B: sp.Set) -> bool | None:
 
 def _transcendental_in(rel: Rel, x: sp.Symbol) -> bool:
     """Trig/exp/log of the unknown: solveset is slow there and rarely returns a comparable set."""
-    kinds = (sp.sin, sp.cos, sp.tan, sp.exp, sp.log)
+    kinds = (sp.sin, sp.cos, sp.tan, sp.atan, sp.asin, sp.acos, sp.exp, sp.log)
     for e in (rel.lhs, rel.rhs) if rel.op != "EqualAny" else (rel.lhs, *rel.rhs):
         for f in sp.sympify(e).atoms(*kinds):
             if f.has(x):
