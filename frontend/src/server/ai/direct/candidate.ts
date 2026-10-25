@@ -1,5 +1,16 @@
 import 'server-only';
-import { toInputSegments, type CandidateDraftResult, type CheckerRoute, type MathJSON, type Role, type Segment, type SuggestInput } from '@mn/contracts';
+import {
+  graphFromWire,
+  hashOf,
+  toInputSegments,
+  type CandidateDraftResult,
+  type CheckerRoute,
+  type GraphWire,
+  type MathJSON,
+  type Role,
+  type Segment,
+  type SuggestInput,
+} from '@mn/contracts';
 import { printSegmentLatex } from '@mn/contracts/ir';
 import { candidateHash, lineHash, proofCandidateHash, proofLineHash } from '@/core/candidates/hash';
 
@@ -45,6 +56,29 @@ export function finalizeCandidate(input: SuggestInput, segments: Segment[], role
       mode: input.mode,
       content_hash: contentHash,
       lines: [{ target: { id: input.target_line_id, role, segments: inputSegs }, segments: segs, ...(route ? { route } : {}) }],
+    },
+  };
+}
+
+/**
+ * A GRAPH candidate: one text-role line whose words are the graph's title and whose picture is the
+ * parsed spec. `detail` says which formula the parser refused, for the model's second try.
+ */
+export function graphCandidate(input: SuggestInput, wire: GraphWire, mock: boolean): CandidateDraftResult & { detail?: string } {
+  const parsed = graphFromWire(wire, { functions: input.context.functions });
+  if (!parsed.ok) return { ...none('IR_INVALID', mock), detail: parsed.message };
+  const title = parsed.spec.title || (input.ui_lang === 'ja' ? 'グラフ' : 'Graph');
+  const segments: Segment[] = [{ type: 'text', text: title }];
+  const contentHash = hashOf({ mode: 'GRAPH', graph: parsed.spec });
+  if (input.rejected_hashes.includes(contentHash)) return none('REJECTED_BEFORE', mock);
+  return {
+    state: 'GENERATED',
+    mock,
+    candidate: {
+      id: crypto.randomUUID(),
+      mode: 'GRAPH',
+      content_hash: contentHash,
+      lines: [{ target: { id: input.target_line_id, role: 'text', segments: toInputSegments(segments) }, segments, graph: { ...parsed.spec, title } }],
     },
   };
 }

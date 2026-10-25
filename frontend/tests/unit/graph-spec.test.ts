@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { graphFromWire, graphOf, GraphWireSchema, type GraphWire } from '@mn/contracts';
+import { graphFromWire, graphOf, GraphWireSchema, type GraphWire, type SuggestInput } from '@mn/contracts';
+import { scriptedRecognition, scriptedSuggestion } from '../../src/server/ai/direct/demo';
 
 const wire = (over: Partial<GraphWire> = {}): GraphWire =>
   GraphWireSchema.parse({
@@ -68,5 +69,41 @@ describe('graph lines: the model describes a graph, our parser reads its formula
 
   it('does not draw when the model declines', () => {
     assert.equal(graphFromWire(wire({ has_graph: false })).ok, false);
+  });
+});
+
+describe('graph lines in the scripted demo', () => {
+  const input = (over: Partial<SuggestInput> = {}): SuggestInput => ({
+    context: { lines: [] },
+    mode: 'GRAPH',
+    based_on_line_id: 'L1',
+    target_line_id: 'L2',
+    rejected_hashes: [],
+    ui_lang: 'en',
+    ...over,
+  });
+
+  it('reads a line written after the script as a request for a graph', () => {
+    const r = scriptedRecognition({ image: { mime: 'image/png', data: '' }, ui_lang: 'en', user_line_index: 99 });
+    assert.equal(r.graph_request, true);
+    assert.equal(r.route, 'none');
+    assert.ok(r.segments.some((s) => s.type === 'text' && s.text.startsWith('Plot')));
+  });
+
+  it('answers the request with a graph line: the title as words, three curves as the picture', async () => {
+    const r = await scriptedSuggestion(input(), new AbortController().signal);
+    assert.equal(r.state, 'GENERATED');
+    const line = r.candidate!.lines[0]!;
+    assert.equal(r.candidate!.mode, 'GRAPH');
+    assert.equal(line.target.role, 'text');
+    assert.deepEqual(line.segments, [{ type: 'text', text: line.graph!.title }]);
+    assert.equal(line.graph!.series.length, 3);
+    assert.deepEqual(line.graph!.constants, { L: 1 });
+  });
+
+  it('does not offer a graph the student dismissed', async () => {
+    const first = await scriptedSuggestion(input(), new AbortController().signal);
+    const again = await scriptedSuggestion(input({ rejected_hashes: [first.candidate!.content_hash] }), new AbortController().signal);
+    assert.equal(again.state, 'NONE');
   });
 });
