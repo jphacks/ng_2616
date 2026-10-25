@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { Notebook, PdfDocument } from '@mn/contracts';
+import { segmentsFromSource, type Notebook, type PdfDocument } from '@mn/contracts';
 import { serializeLatex, escapeTex } from '../../src/core/export/latex';
 import { safeRawMath } from '../../src/core/export/raw-math';
 import { serializeNotebook } from '../../src/core/export/document';
@@ -52,6 +52,17 @@ describe('LuaLaTeX homework report', () => {
     assert.ok(tex.includes('\\ReportEquation{\\forall \\varepsilon > 0 \\, \\exists \\delta > 0}'));
     assert.ok(tex.includes('\\ReportEquation{|x - 2| < 1 \\Rightarrow |x + 2| < 5}'));
     assert.ok(!tex.includes('\\textbackslash{}delta'));
+  });
+  it('spaces inline formulas in a sentence like the screen, except before punctuation and next to Japanese', () => {
+    const en = serializeLatex(serializeNotebook(buildNotebook('epsilon_delta', 'en'), 'en').document);
+    assert.ok(en.includes('every real $x$ with'), en);
+    const integral = serializeLatex(serializeNotebook(buildNotebook('integral', 'en'), 'en').document);
+    assert.ok(/Evaluate \$I.*\$ for \$a > 0\$\.\\par/.test(integral), integral);
+    const ja = serializeLatex(serializeNotebook(buildNotebook('integral', 'ja'), 'ja').document);
+    assert.ok(ja.includes('$a > 0$のとき$I') && ja.includes('$を求めなさい。'), ja);
+    const nb = buildNotebook('blank', 'en');
+    nb.lines.splice(0, 0, { ...nb.lines[0]!, id: 'two', role: 'step', state: 'SETTLED', segments: segmentsFromSource('so $x = 1$ $y = 2$') });
+    assert.ok(serializeLatex(serializeNotebook(nb, 'en').document).includes('so $x = 1$ $y = 2$\\par'));
   });
   it('keeps raw notation as escaped text unless every token is plain math', () => {
     for (const attack of ['\\input{/etc/passwd}', '\\min ^^5cinput{x}', '\\def\\x{1} x', '\\catcode`\\@=11', 'x % comment', 'a & b', '\\frac{1}{2', '\\left( x', '\\text{a^b}', '\\directlua{os.exit()}', 'x \\\\ y']) {

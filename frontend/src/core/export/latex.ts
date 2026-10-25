@@ -55,7 +55,8 @@ export function serializeLatex(value: PdfDocument): string {
     for (const block of section.blocks) {
       const body: string[] = [];
       const mixed = block.fragments.some(f => f.kind === 'text') && block.fragments.some(f => f.kind === 'math');
-      if (mixed) body.push(block.fragments.map(f => f.kind === 'text' ? escapeTex(f.value) : '$' + mathTex(f.value) + '$').join('') + '\\par');
+      // two formulas side by side get a space: "$a$$b$" would open display math
+      if (mixed) body.push(block.fragments.map((f, i) => f.kind === 'text' ? escapeTex(f.value) : (block.fragments[i - 1]?.kind === 'math' ? ' $' : '$') + mathTex(f.value) + '$').join('') + '\\par');
       else for (const f of block.fragments) body.push(f.kind === 'text' ? escapeTex(f.value) + '\\par' : '\\ReportEquation{' + mathTex(f.value) + '}');
       if (!historical) out.push(...body);
       if (h.include_records && (block.notes.length || historical)) {

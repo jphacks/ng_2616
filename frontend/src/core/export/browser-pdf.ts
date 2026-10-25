@@ -92,7 +92,9 @@ function unitsFor(doc: Document, data: PdfDocument): HTMLElement[] {
         let para = doc.createElement('div'); para.className = 'pdf-unit';
         const flush = () => { if (para.childNodes.length) units.push(para); para = doc.createElement('div'); para.className = 'pdf-unit'; };
         let length = 0;
-        for (const fragment of block.fragments) {
+        for (const [n, fragment] of block.fragments.entries()) {
+          // two formulas side by side; text already carries its spaces (document.ts)
+          if (fragment.kind === 'math' && block.fragments[n - 1]?.kind === 'math') para.append(doc.createTextNode(' '));
           if (fragment.kind === 'text') {
             const chunks = textChunks(fragment.value);
             for (const [i, chunk] of chunks.entries()) {

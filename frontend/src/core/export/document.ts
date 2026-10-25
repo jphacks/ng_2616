@@ -32,8 +32,33 @@ function formula(expr: MathJSON, notation: 'plain' | 'continuation' = 'plain'): 
   return { kind: 'math', value: printSegmentLatex(expr, notation) };
 }
 
+// Japanese needs no space next to a formula (LuaTeX-ja and the browser add their own spacing)
+const CJK = /[　-ヿ㐀-鿿豈-﫿＀-￯]/;
+const HUGS_LEFT = /^[\s.,;:!?)\]}]/;
+const HUGS_RIGHT = /[\s([{]$/;
+
+/**
+ * Segments store text trimmed, and the screen puts gaps between them; a paragraph needs real
+ * spaces, or "every real $x$ with" prints as "every realxwith". Two formulas side by side are
+ * spaced by the renderer.
+ */
+function spaced(frags: PdfFragment[]): PdfFragment[] {
+  const out = frags.map((f) => ({ ...f }));
+  for (let i = 0; i + 1 < out.length; i++) {
+    const left = out[i]!;
+    const right = out[i + 1]!;
+    if (left.kind === 'math' && right.kind === 'math') continue;
+    const end = left.kind === 'text' ? left.value.slice(-1) : 'x';
+    const start = right.kind === 'text' ? right.value.slice(0, 1) : 'x';
+    if (!end || !start || HUGS_RIGHT.test(end) || HUGS_LEFT.test(start) || CJK.test(end) || CJK.test(start)) continue;
+    if (left.kind === 'text') left.value += ' ';
+    else right.value = ` ${right.value}`;
+  }
+  return out;
+}
+
 function fragments(segments: readonly Segment[]): PdfFragment[] {
-  return segments.map((s) => s.type === 'text' ? text(s.text) : formula(s.expr, s.notation));
+  return spaced(segments.map((s) => s.type === 'text' ? text(s.text) : formula(s.expr, s.notation)));
 }
 
 function pdfQuestion(line: Line) {
