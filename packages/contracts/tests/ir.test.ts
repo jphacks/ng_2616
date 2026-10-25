@@ -213,3 +213,98 @@ describe('unparsed math', () => {
     assert.notEqual(validateExpr(['Unparsed', 3]), null);
   });
 });
+
+describe('LaTeX repair and normalization', () => {
+  it('recovers corrupted fractions with formfeed (\\x0crac) and missing backslash (rac{)', () => {
+    const parsedFf = parseMathLatex('4 \\int_{2}^{3} \x0crac{1}{x} \\, dx');
+    assert.ok(parsedFf.ok);
+    assert.deepEqual(parsedFf.expr, [
+      'Multiply',
+      4,
+      ['Integrate', ['Divide', 1, 'x'], ['Tuple', 'x', 2, 3]],
+    ]);
+
+    const parsedRac = parseMathLatex('rac{1}{x}');
+    assert.ok(parsedRac.ok);
+    assert.deepEqual(parsedRac.expr, ['Divide', 1, 'x']);
+  });
+
+  it('recovers corrupted integrals with tab (\\x09int), \\tint, and int_{...}', () => {
+    const parsedTab = parseMathLatex('4 \x09int_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsedTab.ok);
+    assert.deepEqual(parsedTab.expr, [
+      'Multiply',
+      4,
+      ['Integrate', ['Divide', 1, 'x'], ['Tuple', 'x', 2, 3]],
+    ]);
+
+    const parsedTint = parseMathLatex('\\tint_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsedTint.ok);
+    assert.deepEqual(parsedTint.expr, [
+      'Integrate',
+      ['Divide', 1, 'x'],
+      ['Tuple', 'x', 2, 3],
+    ]);
+
+    const parsedInt = parseMathLatex('int_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsedInt.ok);
+    assert.deepEqual(parsedInt.expr, [
+      'Integrate',
+      ['Divide', 1, 'x'],
+      ['Tuple', 'x', 2, 3],
+    ]);
+  });
+
+  it('ignores equation tags like \\notag without failing or producing variable tokens', () => {
+    const parsed = parseMathLatex('4 \\notag \\int_{2}^{3} \\frac{1}{x} \\, dx');
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.expr, [
+      'Multiply',
+      4,
+      ['Integrate', ['Divide', 1, 'x'], ['Tuple', 'x', 2, 3]],
+    ]);
+  });
+
+  it('recovers control characters from JSON single backslash decoding', () => {
+    // \x08eta -> \beta, \x09heta -> \theta, \x0dight -> \right
+    const parsed = parseMathLatex('\x08eta + \x09heta');
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.expr, ['Add', 'beta', 'theta']);
+  });
+
+  it('supports inverse trigonometric functions (arctan, arcsin, arccos, tan^-1, sin^-1, cos^-1)', () => {
+    const parsedAtan = parseMathLatex('5 \\arctan(x)');
+    assert.ok(parsedAtan.ok);
+    assert.deepEqual(parsedAtan.expr, ['Multiply', 5, ['ArcTan', 'x']]);
+
+    const parsedTanInvBraced = parseMathLatex('\\tan^{-1}(x)');
+    assert.ok(parsedTanInvBraced.ok);
+    assert.deepEqual(parsedTanInvBraced.expr, ['ArcTan', 'x']);
+
+    const parsedTanInvUnbraced = parseMathLatex('\\tan^-1 x');
+    assert.ok(parsedTanInvUnbraced.ok);
+    assert.deepEqual(parsedTanInvUnbraced.expr, ['ArcTan', 'x']);
+
+    const parsedSinInv = parseMathLatex('\\sin^{-1}(x)');
+    assert.ok(parsedSinInv.ok);
+    assert.deepEqual(parsedSinInv.expr, ['ArcSin', 'x']);
+
+    const parsedCosInv = parseMathLatex('\\cos^{-1}(x)');
+    assert.ok(parsedCosInv.ok);
+    assert.deepEqual(parsedCosInv.expr, ['ArcCos', 'x']);
+
+    // Non-trig inverse notation or higher negative powers should still fail
+    const parsedLnInv = parseMathLatex('\\ln^{-1}(x)');
+    assert.equal(parsedLnInv.ok, false);
+    if (!parsedLnInv.ok) assert.equal(parsedLnInv.error.code, 'UNSUPPORTED_NOTATION');
+
+    const parsedTanMinus2 = parseMathLatex('\\tan^{-2}(x)');
+    assert.equal(parsedTanMinus2.ok, false);
+    if (!parsedTanMinus2.ok) assert.equal(parsedTanMinus2.error.code, 'UNSUPPORTED_NOTATION');
+
+    const parsedEvaluated = parseMathLatex('\\left[ 4 \\ln(x) + 5 \\arctan(x) - \\frac{1}{2} \\ln\\left(x^{2} + 1\\right) \\right]_{2}^{3}');
+    assert.ok(parsedEvaluated.ok);
+    assert.ok(Array.isArray(parsedEvaluated.expr));
+    assert.equal(parsedEvaluated.expr[0], 'Evaluate');
+  });
+});
