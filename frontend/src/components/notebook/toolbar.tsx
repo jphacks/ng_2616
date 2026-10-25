@@ -2,13 +2,14 @@
 
 import { Popover } from '@base-ui/react/popover';
 import clsx from 'clsx';
-import { Eraser, GripVertical, Hand, ListPlus, PenLine, Redo2, Sparkles, Undo2 } from 'lucide-react';
+import { Eraser, GripVertical, Hand, ListPlus, Lock, PenLine, Redo2, Sparkles, Undo2, Zap, ZapOff } from 'lucide-react';
 import { animate, motion, useDragControls, useMotionValue } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { suggestBlockerOf } from '@/core/candidates/blocker';
 import { findLine } from '@/core/notebook/model';
 import { INK_WEIGHTS, useDevicePrefs, type InkWeight, type ToolbarSide } from '@/core/prefs/device';
 import { useNotebook, type Tool } from '@/core/store/notebook-store';
+import { FEATURES } from '@/features/registry.generated';
 import { useT } from '@/i18n';
 import { IconButton } from '@/ui/button';
 import { Spinner } from '@/ui/spinner';
@@ -33,17 +34,19 @@ export function Toolbar() {
   const canUndo = useNotebook((s) => s.past.length > 0);
   const canRedo = useNotebook((s) => s.future.length > 0);
   const suggesting = useNotebook((s) => s.suggesting);
+  const autoSuggest = useNotebook((s) => s.autoSuggest);
   const set = useNotebook((s) => s.set);
-  // an unresolved wrong line locks completion: grey the button, but a press still explains why (R27)
-  const locked = useNotebook(
-    (s) =>
-      suggestBlockerOf({
-        notebook: s.notebook,
-        casReady: s.cas.state === 'ready',
-        candidate: s.candidate?.state ?? null,
-        activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
-      }) === 'wrong',
-  );
+  // an unresolved wrong line (or the hint mode) locks completion: grey the button, but a press still explains why (R27)
+  const locked = useNotebook((s) => {
+    const blocker = suggestBlockerOf({
+      notebook: s.notebook,
+      casReady: s.cas.state === 'ready',
+      candidate: s.candidate?.state ?? null,
+      activeLine: s.notebook && s.activeLineId ? findLine(s.notebook, s.activeLineId) : undefined,
+      assistMode: s.assistMode,
+    });
+    return blocker === 'wrong' || blocker === 'hint-mode' || blocker === 'assist-off';
+  });
 const side = useDevicePrefs((s) => s.toolbarSide);
   const inkWeight = useDevicePrefs((s) => s.inkWeight);
   const setPref = useDevicePrefs((s) => s.setPref);
@@ -127,16 +130,42 @@ const side = useDevicePrefs((s) => s.toolbarSide);
         <IconButton label={t('tool.newLine')} onClick={() => engine.newLine()}>
           <ListPlus size={20} />
         </IconButton>
+        {FEATURES.flatMap((f) => f.toolbar ?? []).map((Slot, i) => (
+          <Slot key={i} />
+        ))}
+        <button
+          type="button"
+          aria-pressed={autoSuggest}
+          aria-label={t(autoSuggest ? 'tool.autoSuggestOn' : 'tool.autoSuggestOff')}
+          title={t(autoSuggest ? 'tool.autoSuggestOn' : 'tool.autoSuggestOff')}
+          onClick={() => engine.setAutoSuggest(!autoSuggest)}
+          className={clsx(
+            'inline-flex h-11 select-none items-center gap-1.5 rounded-xl px-3 text-base font-medium transition-colors',
+            autoSuggest ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:bg-hover',
+          )}
+        >
+          {autoSuggest ? <Zap size={20} /> : <ZapOff size={20} />}
+          <span className="hidden sm:inline">{t('tool.autoSuggest')}</span>
+        </button>
         <button
           type="button"
           onClick={() => void engine.requestSuggestion(true)}
           aria-disabled={locked}
+          title={locked ? t('tool.suggestLocked') : undefined}
           className={clsx(
-            'ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-medium',
-            locked ? 'bg-none-soft text-none' : 'bg-accent text-on-solid hover:bg-accent-strong',
+            'ml-1 inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-medium transition-all',
+            locked
+              ? 'bg-none-soft text-none border border-border/60 hover:opacity-90'
+              : 'bg-accent text-on-solid hover:bg-accent-strong active:scale-98 shadow-sm',
           )}
         >
-          {suggesting ? <Spinner size={18} /> : <Sparkles size={18} />}
+          {suggesting ? (
+            <Spinner size={18} />
+          ) : locked ? (
+            <Lock size={17} className="shrink-0 text-muted" aria-hidden />
+          ) : (
+            <Sparkles size={18} />
+          )}
           <span className="hidden sm:inline">{t('tool.suggest')}</span>
         </button>
       </motion.div>

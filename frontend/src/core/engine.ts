@@ -24,7 +24,7 @@ import {
   type UiLang,
 } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, continuable, hasOwnLine, suggestBaseLine, suggestModeOf, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, continuable, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
 import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
@@ -205,6 +205,30 @@ export class NotebookEngine {
     const line = findLine(this.nb, lineId);
     if (!line || line.state !== 'DRAFT' || line.ink.length === 0) return;
     store.getState().commit('CLEAR_DRAFT', (snap) => ({ ...snap, lines: snap.lines.map((l) => (l.id === lineId ? { ...l, version: l.version + 1, ink: [] } : l)) }), lineId);
+    this.maybeReleaseHeld(lineId);
+  }
+
+  deleteDraft(lineId: string) {
+    const line = findLine(this.nb, lineId);
+    if (!line || line.state !== 'DRAFT') return;
+    const drafts = this.nb.lines.filter((l) => l.state === 'DRAFT');
+    if (drafts.length <= 1) {
+      if (line.ink.length > 0) this.clearDraft(lineId);
+      return;
+    }
+    store.getState().commit(
+      'DELETE_DRAFT',
+      (snap) => {
+        const lines = snap.lines.filter((l) => l.id !== lineId);
+        const nextActive = lines.find((l) => l.state === 'DRAFT')?.id ?? null;
+        return {
+          ...snap,
+          lines,
+          activeLineId: snap.activeLineId === lineId ? nextActive : snap.activeLineId,
+        };
+      },
+      lineId,
+    );
     this.maybeReleaseHeld(lineId);
   }
 
@@ -590,9 +614,39 @@ export class NotebookEngine {
     this.suggestTimer = null;
   }
 
+  /**
+   * S-02 (spec §14.2): "hint" hides completion, "complete" is the normal completion. A change drops
+   * the candidate on show and any request on its way, and moves the epoch so a late result is stale.
+   * The change is not an undoable command (the history types belong to the editing code).
+   */
+  setAssistMode(mode: AssistMode) {
+    const s = store.getState();
+    if (s.assistMode === mode) return;
+    s.set('assistMode', mode);
+    s.bumpEpoch();
+    this.cancelSuggestion();
+    this.abortSlot('suggest');
+    this.suggestSlot = null;
+    s.set('candidate', null);
+    s.set('suggesting', false);
+    s.set('ghostConfirm', false);
+  }
+
+  /**
+   * Switches suggestions that start by themselves after a pause (on by default). Off stops the timer and
+   * leaves them to the suggest button; a suggestion already shown or on its way is kept.
+   */
+  setAutoSuggest(on: boolean) {
+    const s = store.getState();
+    if (s.autoSuggest === on) return;
+    s.set('autoSuggest', on);
+    if (on) this.scheduleSuggestion();
+    else this.cancelSuggestion();
+  }
+
   scheduleSuggestion(delay = SUGGEST_IDLE_MS) {
     this.cancelSuggestion();
-    if (!this.canSuggest(false)) return;
+    if (!store.getState().autoSuggest || !this.canSuggest(false)) return;
     this.suggestTimer = setTimeout(() => void this.requestSuggestion(false), delay);
   }
 
@@ -600,6 +654,8 @@ export class NotebookEngine {
     const s = store.getState();
     const nb = s.notebook;
     if (!nb) return 'none';
+    if (s.assistMode === 'hint') return 'hint-mode';
+    if (s.assistMode === 'off') return 'assist-off';
     if (this.cas.status !== 'ready') return 'cas';
     if (anyPending(nb) || Object.keys(s.leanPending).length > 0) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';
@@ -978,12 +1034,37 @@ export class NotebookEngine {
     const source = findLine(this.nb, lineId);
     if (!source) return;
     const root = source.recovery_root_id ?? source.id;
+
+    // Only allow one revision draft for this wrong line: if one already exists, focus it instead of duplicating
+    const existingRevision = this.nb.lines.find(
+      (l) => l.state === 'DRAFT' && (l.revision_of === source.id || (l.recovery_root_id && l.recovery_root_id === root)),
+    );
+    if (existingRevision) {
+      s.setActive(existingRevision.id);
+      s.set('sheet', null);
+      s.set('candidate', null);
+      return;
+    }
+
     const draft: Line = { ...newDraftLine(), revision_of: source.id, recovery_root_id: root };
     s.commit(
       'START_REVISION',
       (snap) => {
-        const lines = [...snap.lines];
-        lines.splice(lines.findIndex((l) => l.id === source.id) + 1, 0, draft);
+        const existingInSnap = snap.lines.find(
+          (l) => l.state === 'DRAFT' && (l.revision_of === source.id || (l.recovery_root_id && l.recovery_root_id === root)),
+        );
+        if (existingInSnap) {
+          return { ...snap, activeLineId: existingInSnap.id };
+        }
+
+        // Clean up unused empty draft lines so that revising doesn't leave an unnecessary empty draft line below it
+        const lines = snap.lines.filter((l) => {
+          if (l.state !== 'DRAFT') return true;
+          if (l.ink.length === 0) return false;
+          return true;
+        });
+        const newSrcIdx = lines.findIndex((l) => l.id === source.id);
+        lines.splice(newSrcIdx + 1, 0, draft);
         const recoveries = snap.recoveries.some((r) => r.root_line_id === root)
           ? snap.recoveries.map((r) => (r.root_line_id === root ? { ...r, phase: 'REVISING' as const, opened_at: { ...r.opened_at, revise: Date.now() } } : r))
           : [...snap.recoveries, { root_line_id: root, current_line_id: source.id, phase: 'REVISING' as const, opened_at: { revise: Date.now() } }];
