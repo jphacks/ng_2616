@@ -19,8 +19,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # 実在するテーブル名に変更（RLS で 0 件が返っても DB アクセスとしてカウントされる）
-          TABLE: ${{ vars.SUPABASE_TABLE || 'todos' }}
+          # ping 用テーブル（SQL Editor で public.keepalive を作成しておく）
+          TABLE: ${{ vars.SUPABASE_TABLE || 'keepalive' }}
         run: |
           set -euo pipefail
           status=$(curl -s -o response.json -w "%{http_code}" \
