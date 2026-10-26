@@ -1,0 +1,40 @@
+# .github/workflows/supabase-keepalive.yml
+# Supabase 無料プランの自動停止（7日間の非アクティブ）を防ぎつつ、
+# 応答がなければジョブを失敗させて GitHub からメール通知を受け取る。
+
+name: Supabase keepalive
+
+on:
+  schedule:
+    # 3日ごと 12:17 JST（cron は UTC 指定なので 03:17 UTC）
+    - cron: "17 3 */3 * *"
+  workflow_dispatch: # Actions タブから手動実行もできる
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Supabase database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # ping 用テーブル（SQL Editor で public.keepalive を作成しておく）
+          TABLE: ${{ vars.SUPABASE_TABLE || 'keepalive' }}
+        run: |
+          set -euo pipefail
+          status=$(curl -s -o response.json -w "%{http_code}" \
+            --retry 3 --retry-delay 10 \
+            "${SUPABASE_URL}/rest/v1/${TABLE}?select=*&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+
+          echo "HTTP status: ${status}"
+
+          if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+            echo "::error::Supabase の応答が異常です (HTTP ${status})。プロジェクトが停止していないかダッシュボードを確認してください。"
+            cat response.json || true
+            exit 1
+          fi
+
+          echo "Supabase は正常に応答しました。"
