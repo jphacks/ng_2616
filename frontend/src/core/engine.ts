@@ -12,6 +12,7 @@ import {
   withLineLean,
   withTheorem,
   type CheckerFeedback,
+  type GraphSpec,
   type LeanCheckResult,
   type Line,
   type LineLean,
@@ -25,12 +26,13 @@ import {
   type UiLang,
 } from '@mn/contracts';
 import { api, ApiCallError } from '@/core/api/client';
-import { blockerToastKey, canStartPdfQuestion, continuable, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
+import { blockerToastKey, canStartPdfQuestion, continuable, graphAsk, hasOwnLine, suggestBaseLine, suggestModeOf, type AssistMode, type SuggestBlocker } from '@/core/candidates/blocker';
 import { abortOnEpochChange } from '@/core/candidates/epoch';
-import { addRejection, isRecordable, rejectionKey, rejectionsFor } from '@/core/candidates/rejection';
+import { addRejection, isRecordable, rejectionKey, rejectionsFor, targetKindOf } from '@/core/candidates/rejection';
 import { matchesSlot, suggestFingerprint, type SlotMeta } from '@/core/candidates/slot';
 import { getCas, type CasController } from '@/core/cas/controller';
 import { composeProof, contextFingerprint, inputHash, payloadForCandidate, payloadForLine, semanticHash } from '@/core/cas/payload';
+import { getGraphs, type GraphController } from '@/core/graph/controller';
 import { leanContextHash, leanEnabled, leanInput, needsLean } from '@/core/lean/route';
 import type { Snapshot } from '@/core/history/history';
 import { shortId, uuid } from '@/core/ids';
@@ -43,6 +45,8 @@ import {
   hasMath,
   hasUnresolvedWrong,
   isGiven,
+  isGraphRequest,
+  isSettledMath,
   lineIndex,
   mathLatexOf,
   newDraftLine,
@@ -74,11 +78,14 @@ export interface EngineDeps {
 /** The parts of the CAS controller and API client the engine uses; tests pass fakes for them. */
 export type CasPort = Pick<CasController, 'status' | 'versionString' | 'onChange' | 'start' | 'verify'>;
 export type ApiPort = Pick<typeof api, 'suggest' | 'recognize' | 'ocrPage'> & Partial<Pick<typeof api, 'leanCheck'>>;
+/** The graph worker as the engine uses it; tests pass a fake that draws nothing. */
+export type GraphPort = Pick<GraphController, 'render'>;
 
 /** Optional replacements for the real CAS worker and API client (omitted: the app behaves as before). */
 export interface EngineOverrides {
   cas?: CasPort;
   api?: ApiPort;
+  graphs?: GraphPort;
 }
 
 /** Orchestrates the asynchronous Must flows on top of the store (one engine per open notebook). */
@@ -86,6 +93,7 @@ export class NotebookEngine {
   readonly sessionId = uuid();
   private cas: CasPort;
   private api: ApiPort;
+  private graphs: GraphPort;
   private aborts = new Map<string, AbortController>();
   private suggestTimer: ReturnType<typeof setTimeout> | null = null;
   private heldTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,6 +110,7 @@ export class NotebookEngine {
   constructor(private deps: EngineDeps, overrides: EngineOverrides = {}) {
     this.cas = overrides.cas ?? getCas();
     this.api = overrides.api ?? api;
+    this.graphs = overrides.graphs ?? getGraphs();
     this.autosave = new Autosaver({
       getState: () => store.getState(),
       subscribe: (fn) => store.subscribe(fn),
@@ -266,10 +275,10 @@ export class NotebookEngine {
     const c = s.candidate;
     if (!c || c.state !== 'HELD' || this.disposed) return;
     if (Date.now() - this.lastStrokeAt < HELD_QUIET_MS) return this.armHeldTimer();
-    // a NEXT_STEP suggestion lands on its reserved draft line: while that very draft holds the student's ink, showing it
+    // a next step or a graph lands on its reserved draft line: while that very draft holds the student's ink, showing it
     // would offer to replace their writing, so it stays hidden until the draft is emptied or confirmed
     const target = findLine(this.nb, c.targetLineId);
-    if (c.mode === 'NEXT_STEP' && target?.state === 'DRAFT' && target.ink.length > 0) return;
+    if (targetKindOf(c.mode) === 'new' && target?.state === 'DRAFT' && target.ink.length > 0) return;
     if (!this.suggestSlot || this.isStale(this.suggestSlot)) {
       s.set('candidate', null);
       return;
@@ -466,7 +475,11 @@ export class NotebookEngine {
         state: 'VERIFYING',
         segments: result.segments,
         // the checker the model chose (ADR 0008); a new reading has no Lean verdict yet
-        extensions: { ...withoutReading(line.extensions), ...(result.route ? { route: result.route } : {}) },
+        extensions: {
+          ...withoutReading(line.extensions),
+          ...(result.route ? { route: result.route } : {}),
+          ...(result.graph_request ? { graph_request: true } : {}),
+        },
       };
       store.getState().settleLine(recognized);
       const reread = this.syncDeclarations();
@@ -547,6 +560,13 @@ export class NotebookEngine {
   // ------------------------------------------------------------------ verification
 
   async verifyLine(lineId: string): Promise<Proof | null> {
+    const asking = findLine(this.nb, lineId);
+    // a request for a graph has nothing to check: it settles as written, and the graph is suggested next
+    if (asking && isGraphRequest(asking)) {
+      store.getState().settleLine({ ...asking, version: asking.version + 1, state: 'SETTLED', failure: undefined, verified: undefined });
+      this.scheduleSuggestion();
+      return null;
+    }
     if (this.cas.status !== 'ready') {
       const ok = await this.cas.start();
       if (!ok) {
@@ -631,7 +651,7 @@ export class NotebookEngine {
     if (this.cas.status !== 'ready') return;
     for (const l of nb.lines) {
       const cur = findLine(this.nb, l.id);
-      if (!cur || cur.state !== 'SETTLED' || !hasMath(cur)) continue;
+      if (!cur || !isSettledMath(cur)) continue;
       const hash = inputHash(this.nb, payloadForLine(this.nb, cur.id), this.cas.versionString);
       if (cur.verified?.input_hash === hash) {
         this.cache.set(hash, cur.verified.proof);
@@ -778,11 +798,14 @@ export class NotebookEngine {
     if (this.cas.status !== 'ready') return 'cas';
     if (anyPending(nb) || Object.keys(s.leanPending).length > 0) return 'pending';
     if (hasUnresolvedWrong(nb)) return 'wrong';
-    const last = suggestBaseLine(nb);
-    // Templates do not start automatically; a reviewed PDF question can start on an explicit press.
-    if (!last || (!hasOwnLine(nb) && !(manual && canStartPdfQuestion(last)))) return 'empty';
-    const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
-    if (!incomplete && !continuable(last)) return 'cannot-continue';
+    // a graph request is answered even when it holds no formula and the CAS gave it no verdict
+    if (!graphAsk(nb)) {
+      const last = suggestBaseLine(nb);
+      // Templates do not start automatically; a reviewed PDF question can start on an explicit press.
+      if (!last || (!hasOwnLine(nb) && !(manual && canStartPdfQuestion(last)))) return 'empty';
+      const incomplete = proofOf(last)?.reason === 'INCOMPLETE';
+      if (!incomplete && !continuable(last)) return 'cannot-continue';
+    }
     if (s.candidate && ['GENERATING', 'VERIFYING', 'READY', 'HELD'].includes(s.candidate.state)) return 'busy';
     const active = s.activeLineId ? findLine(nb, s.activeLineId) : undefined;
     if (active && active.state === 'DRAFT' && active.ink.length > 0) return 'writing';
@@ -805,9 +828,11 @@ export class NotebookEngine {
     }
     const s = store.getState();
     const nb = this.nb;
-    const last = suggestBaseLine(nb)!;
+    // an unanswered request for a graph comes first; otherwise the derivation continues
+    const ask = graphAsk(nb);
+    const last = ask ?? suggestBaseLine(nb)!;
     const lastMath = last.segments.find((seg) => seg.type === 'math');
-    const mode = suggestModeOf(last);
+    const mode = ask ? 'GRAPH' : suggestModeOf(last);
     const draftAfter = nb.lines.slice(lineIndex(nb, last.id) + 1).find((l) => emptyDraft(l));
     const targetId = mode === 'COMPLETE_RHS' ? last.id : (draftAfter?.id ?? shortId('L'));
     const epoch = s.epoch;
@@ -956,6 +981,7 @@ export class NotebookEngine {
     slot: SlotMeta,
     signal?: AbortSignal,
   ): Promise<Attempt<Candidate>> {
+    if (pending.mode === 'GRAPH') return this.drawCandidate(draft, pending, slot);
     const nb = this.nb;
     const basedOn = findLine(nb, pending.basedOnLineId)!;
     const verifiedLines: Candidate['lines'] = [];
@@ -1003,6 +1029,28 @@ export class NotebookEngine {
       chain.push(probe);
     }
     return { kind: 'ready', candidate: { ...pending, id: draft.id, contentHash: draft.content_hash, lines: verifiedLines, policy } };
+  }
+
+  /**
+   * A suggested graph is shown only once it draws. A graph that fails goes back to the model with
+   * matplotlib's reason; a worker that is unavailable is not the model's fault, so nothing is shown.
+   */
+  private async drawCandidate(
+    draft: NonNullable<Awaited<ReturnType<typeof api.suggest>>['candidate']>,
+    pending: Candidate,
+    slot: SlotMeta,
+  ): Promise<Attempt<Candidate>> {
+    const first = draft.lines[0];
+    const graph = first?.graph;
+    if (!first || !graph) return { kind: 'none' };
+    const image = await this.graphs.render(graph);
+    if (this.isStale(slot)) return { kind: 'stale' };
+    if (!image.ok) {
+      if (image.code === 'GRAPH_UNAVAILABLE') return { kind: 'none' };
+      return { kind: 'wrong', hash: draft.content_hash, feedback: { latex: graphSummary(graph), reason: image.code.slice(0, 64), evidence: [image.message.slice(0, 500)] } };
+    }
+    const lines: Candidate['lines'] = [{ target: { ...first.target }, segments: first.segments, extensions: { graph } }];
+    return { kind: 'ready', candidate: { ...pending, id: draft.id, contentHash: draft.content_hash, lines, policy: 'verified' } };
   }
 
   /**
@@ -1061,12 +1109,14 @@ export class NotebookEngine {
       return 'stale';
     }
     const first = c.lines[0]!;
-    // adoption re-checks the verification input against the current context (spec §11)
-    const ctx = c.mode === 'COMPLETE_RHS' ? contextLinesFor(nb, basedOn.id) : [...contextLinesFor(nb, basedOn.id), basedOn];
-    const recheck = inputHash(nb, payloadForCandidate(nb, ctx, first.target, c.mode === 'COMPLETE_RHS' ? 'identity' : undefined), this.cas.versionString);
-    if (recheck !== first.verified?.input_hash) {
-      s.set('candidate', null);
-      return 'stale';
+    // adoption re-checks the verification input against the current context (spec §11); a graph has none
+    if (c.mode !== 'GRAPH') {
+      const ctx = c.mode === 'COMPLETE_RHS' ? contextLinesFor(nb, basedOn.id) : [...contextLinesFor(nb, basedOn.id), basedOn];
+      const recheck = inputHash(nb, payloadForCandidate(nb, ctx, first.target, c.mode === 'COMPLETE_RHS' ? 'identity' : undefined), this.cas.versionString);
+      if (recheck !== first.verified?.input_hash) {
+        s.set('candidate', null);
+        return 'stale';
+      }
     }
     const draft = newDraftLine();
     s.commit(
@@ -1323,8 +1373,14 @@ export class NotebookEngine {
 }
 
 /** A line's extensions without what belonged to its last reading: the route and Lean's verdict. */
+/** A failed graph as the model is told about it: its title and every formula it used. */
+function graphSummary(graph: GraphSpec): string {
+  const formulas = graph.series.map((s) => Object.entries(s.formulas).map(([slot, f]) => `${slot} = ${f.latex}`).join(', ')).join('; ');
+  return `${graph.title}: ${formulas}`.slice(0, 4000);
+}
+
 function withoutReading(extensions: Line['extensions']): NonNullable<Line['extensions']> {
-  const { route: _route, lean: _lean, ...rest } = extensions ?? {};
+  const { route: _route, lean: _lean, graph_request: _graph, ...rest } = extensions ?? {};
   return rest;
 }
 

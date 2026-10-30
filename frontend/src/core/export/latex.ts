@@ -14,11 +14,23 @@ const GREEK: Record<string, string> = Object.fromEntries([
   ['−', '-'],
 ].filter(([c]) => c !== '΢')); // U+03A2 is unassigned
 
+// Unicode sub- and superscripts (graph titles such as "ψₙ(x)" or "|ψ|²"): Latin Modern has no glyphs for them
+const SCRIPTS: Record<string, string> = Object.fromEntries([
+  ...[...'₀₁₂₃₄₅₆₇₈₉'].map((c, i) => [c, `_{${i}}`]),
+  ...[...'ₐₑₒₓₕₖₗₘₙₚₛₜ'].map((c, i) => [c, `_{${'aeoxhklmnpst'[i]}}`]),
+  ...[...'⁰¹²³⁴⁵⁶⁷⁸⁹'].map((c, i) => [c, `^{${i}}`]),
+  ['ⁿ', '^{n}'], ['ⁱ', '^{i}'],
+]);
+
 /** Only text is escaped; math is parsed and reprinted through the shared IR, or rebuilt from allowed tokens. */
 export function escapeTex(text: string): string {
   const escapes: Record<string, string> = { '\\': '\\textbackslash{}', '{': '\\{', '}': '\\}', '$': '\\$', '&': '\\&', '#': '\\#', '%': '\\%', '_': '\\_', '^': '\\textasciicircum{}', '~': '\\textasciitilde{}' };
   return text.replace(/[\\{}$&#%_^~]/g, c => escapes[c]!).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').replace(/\r\n?/g, '\n')
-    .replace(/[Α-Ωα-ωϑϕϖϱϵ−]/g, c => GREEK[c] ? `$${GREEK[c]}$` : c);
+    // a run such as "ψₙ" becomes one formula: "$\psi$$_{n}$" would open display math
+    .replace(/[Α-Ωα-ωϑϕϖϱϵ−₀-₉ₐₑₒₓₕₖₗₘₙₚₛₜ⁰¹²³⁴-⁹ⁿⁱ]+/g, run => {
+      const parts = [...run].map(c => GREEK[c] ?? SCRIPTS[c]);
+      return parts.every(Boolean) ? `$${parts.join('')}$` : run;
+    });
 }
 
 function mathTex(value: string): string {
@@ -29,6 +41,12 @@ function mathTex(value: string): string {
   if (raw === null) throw new Error('IR_INVALID');
   return raw;
 }
+
+// Graph lines travel inside the .tex as base64, so the file stays self-contained and the compiler
+// needs no extra files: this fixed Lua (no TeX special characters) writes each PNG next to the
+// .tex before \includegraphics reads it. Pictures share a budget below the compiler's 1 MiB limit.
+const GRAPH_LUA = "mnGraph = function(name, data) local alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/' local out, n, bits, count = {}, 0, 0, 0 for i = 1, string.len(data) do local v = string.find(alphabet, string.sub(data, i, i), 1, true) if v then bits = (bits << 6) | (v - 1) count = count + 6 if count >= 8 then count = count - 8 n = n + 1 out[n] = string.char((bits >> count) & 255) bits = bits & ((1 << count) - 1) end end end local f = io.open(name, 'wb') f:write(table.concat(out)) f:close() end";
+const GRAPH_BUDGET = 640_000;
 
 /** A fixed, self-contained adaptation of homework_example.tex; sample answers are excluded. */
 export function serializeLatex(value: PdfDocument): string {
@@ -61,14 +79,25 @@ export function serializeLatex(value: PdfDocument): string {
     '\\textbf{' + (ja ? '設問 ' : 'Exercise ') + escapeTex(h.exercise || '1') + '.}\\par',
   ];
   const records: string[] = [];
+  let graphs = 0;
+  let budget = GRAPH_BUDGET;
   for (const section of data.sections) {
     const historical = section.title === 'Revision history' || section.title === '修正履歴';
     if (historical) { if (h.include_records) records.push('\\subsection*{' + escapeTex(section.title) + '}'); }
     else out.push('\\subsection*{' + escapeTex(section.title) + '}');
     for (const block of section.blocks) {
       const body: string[] = [];
+      const caption = block.fragments.map(f => escapeTex(f.value)).join(' ');
+      if (block.image && !historical && block.image.png.length <= budget) {
+        // the picture is written once, in the derivation; the record appendix reuses the file
+        budget -= block.image.png.length;
+        const file = `graph-${++graphs}.png`;
+        if (graphs === 1) out.push('\\directlua{' + GRAPH_LUA + '}');
+        out.push(`\\directlua{mnGraph('${file}', '${block.image.png.replace(/.{1,100}/g, '$&\n').trimEnd()}')}`);
+        body.push('\\begin{center}\\includegraphics[width=0.82\\linewidth]{' + file + '}\\\\[2pt]{\\small ' + caption + '}\\end{center}');
+      } else if (block.image) body.push('{\\small ' + caption + ' (' + (ja ? 'グラフはPDFの容量上限のため省略' : 'graph omitted: the report is at its size limit') + ')}\\par');
       // Explanations and equations use separate rows, including mixed notebook lines.
-      for (const f of block.fragments) {
+      else for (const f of block.fragments) {
         if (f.kind === 'math') body.push('\\ReportEquation{' + mathTex(f.value) + '}');
         else if (f.value.trim()) body.push(escapeTex(f.value.trim()) + '\\par');
       }

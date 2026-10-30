@@ -50,7 +50,7 @@ describe('notebook stats', () => {
     const s = notebookStats(nb);
     assert.equal(s.lines, 4);
     assert.equal(s.ai_lines, 2);
-    assert.deepEqual(s.ai_modes, { COMPLETE_RHS: 1, NEXT_STEP: 1, BRIDGE: 0 });
+    assert.deepEqual(s.ai_modes, { COMPLETE_RHS: 1, NEXT_STEP: 1, BRIDGE: 0, GRAPH: 0 });
     assert.deepEqual(s.checked, { ok: 3, wrong: 0, unknown: 1 });
     assert.equal(s.mistakes, 2);
     assert.equal(s.fixed, 1);

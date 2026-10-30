@@ -17,6 +17,8 @@ export const RecognizeWireSchema = z.object({
   unreadable: z.boolean(),
   segments: z.array(WireSegmentSchema).max(16),
   route: RouteWireSchema.optional(),
+  /** the line asks for a graph ("plot ψ for n = 1, 2, 3"); older outputs and scripted lines omit it */
+  graph_request: z.boolean().optional(),
 });
 
 export const SuggestWireSchema = z.object({
@@ -50,8 +52,9 @@ export const RECOGNIZE_JSON_SCHEMA = {
     unreadable: { type: 'boolean' },
     segments: { type: 'array', items: segmentJsonSchema, maxItems: 16 },
     route: { type: 'string', enum: ['cas', 'lean', 'none'] },
+    graph_request: { type: 'boolean' },
   },
-  required: ['unreadable', 'segments', 'route'],
+  required: ['unreadable', 'segments', 'route', 'graph_request'],
   additionalProperties: false,
 } as const;
 

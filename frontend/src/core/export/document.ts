@@ -1,4 +1,4 @@
-import { NotebookSchema, PdfDocumentSchema, hashOf, type Line, type Notebook, type PdfBlock, type PdfDocument, type PdfFragment, type Segment, type UiLang } from '@mn/contracts';
+import { NotebookSchema, PdfDocumentSchema, graphOf, hashOf, type GraphPng, type Line, type Notebook, type PdfBlock, type PdfDocument, type PdfFragment, type Segment, type UiLang } from '@mn/contracts';
 import { printSegmentLatex, validateExpr, type MathJSON } from '@mn/contracts/ir';
 import { inputHash, payloadForLine } from '@/core/cas/payload';
 import { safeRawMath } from './raw-math';
@@ -9,8 +9,8 @@ export type { ReportDetails } from '@mn/contracts';
 import type { ReportDetails } from '@mn/contracts';
 
 const WORDS = {
-  en: { problem: 'Problem', derivation: 'Derivation', history: 'Revision history', statement: 'Statement', given: 'Given', definitions: 'Definitions', assumptions: 'Assumptions', unknowns: 'Unknowns', variable: 'Independent variable', functions: 'Functions', origin: 'Source', verified: 'Verified', local: 'Local transformation consistent; depends on unverified lines', wrong: 'Wrong', unknown: 'Unverified', none: 'Not checked', stale: 'Verification is pending or no longer current', premise: 'Given (stated, not checked)', definition: 'Definition (not verified)', draft: 'Unfinished line omitted', unparsed: 'Unparsed formula (not verified)', mock: 'MOCK / scripted content', ai: 'AI-assisted', aiUnknown: 'AI suggestion adopted without verification', superseded: 'Superseded', empty: 'No confirmed lines.', unreadable: 'Contains unreadable content', snapshot: 'Content at the time PDF export was requested. Verification labels describe the notebook; they are not a new proof.' },
-  ja: { problem: '問題', derivation: '導出', history: '修正履歴', statement: '問題文', given: '条件', definitions: '定義', assumptions: '仮定', unknowns: '未知数', variable: '独立変数', functions: '関数', origin: '出典', verified: '検証済み', local: '局所変形は整合（未検証の行に依存）', wrong: '誤り', unknown: '確認不能', none: '検証対象外', stale: '検証待ち、または現在の前提では未検証', premise: '前提（問題として与えられた内容・検証対象外）', definition: '定義（未検証）', draft: '未確定行の数式・筆跡は省略', unparsed: '解析不能の数式（未検証）', mock: '模擬・台本の内容', ai: 'AIによる補完を含む', aiUnknown: '未検証のAI候補を採用', superseded: '修正済み', empty: '確定済みの行はありません。', unreadable: '未読箇所あり', snapshot: 'PDF出力を開始した時点の内容です。検証表示はノートの記録であり、新たな証明ではありません。' },
+  en: { problem: 'Problem', derivation: 'Derivation', history: 'Revision history', statement: 'Statement', given: 'Given', definitions: 'Definitions', assumptions: 'Assumptions', unknowns: 'Unknowns', variable: 'Independent variable', functions: 'Functions', origin: 'Source', verified: 'Verified', local: 'Local transformation consistent; depends on unverified lines', wrong: 'Wrong', unknown: 'Unverified', none: 'Not checked', stale: 'Verification is pending or no longer current', premise: 'Given (stated, not checked)', definition: 'Definition (not verified)', draft: 'Unfinished line omitted', unparsed: 'Unparsed formula (not verified)', mock: 'MOCK / scripted content', ai: 'AI-assisted', aiUnknown: 'AI suggestion adopted without verification', superseded: 'Superseded', empty: 'No confirmed lines.', unreadable: 'Contains unreadable content', graph: 'Graph drawn from the notebook (not a checked statement)', graphMissing: 'This graph could not be drawn for the export', graphRequest: 'Request for a graph (not checked)', snapshot: 'Content at the time PDF export was requested. Verification labels describe the notebook; they are not a new proof.' },
+  ja: { problem: '問題', derivation: '導出', history: '修正履歴', statement: '問題文', given: '条件', definitions: '定義', assumptions: '仮定', unknowns: '未知数', variable: '独立変数', functions: '関数', origin: '出典', verified: '検証済み', local: '局所変形は整合（未検証の行に依存）', wrong: '誤り', unknown: '確認不能', none: '検証対象外', stale: '検証待ち、または現在の前提では未検証', premise: '前提（問題として与えられた内容・検証対象外）', definition: '定義（未検証）', draft: '未確定行の数式・筆跡は省略', unparsed: '解析不能の数式（未検証）', mock: '模擬・台本の内容', ai: 'AIによる補完を含む', aiUnknown: '未検証のAI候補を採用', superseded: '修正済み', empty: '確定済みの行はありません。', unreadable: '未読箇所あり', graph: 'ノートから描画したグラフ（検証対象外）', graphMissing: 'このグラフはPDF用に描画できませんでした', graphRequest: 'グラフの依頼（検証対象外）', snapshot: 'PDF出力を開始した時点の内容です。検証表示はノートの記録であり、新たな証明ではありません。' },
 } as const;
 
 function text(value: string): PdfFragment { return { kind: 'text', value }; }
@@ -69,11 +69,19 @@ function pdfQuestion(line: Line) {
     mock: data.mock === true, corrected: data.corrected === true };
 }
 
+/** The line extensions an export reads: a PDF question's label, and a graph or a request for one. */
+function exportExtensions(l: Line): Line['extensions'] {
+  const question = pdfQuestion(l);
+  const graph = graphOf(l);
+  const out = { ...(question ? { pdf_question: question } : {}), ...(graph ? { graph } : {}), ...(l.extensions?.graph_request === true ? { graph_request: true } : {}) };
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Strip data the PDF does not use before rendering; this never mutates the live notebook. */
 export function exportSnapshot(nb: Notebook): Notebook {
   return {
     ...nb, extensions: nb.extensions?.demo ? { demo: true } : undefined, recoveries: [],
-    lines: nb.lines.map((l) => ({ ...l, ink: [], is_memo: l.is_memo, extensions: pdfQuestion(l) ? { pdf_question: pdfQuestion(l) } : undefined, failure: l.failure ? { stage: l.failure.stage, code: l.failure.code } : undefined,
+    lines: nb.lines.map((l) => ({ ...l, ink: [], is_memo: l.is_memo, extensions: exportExtensions(l), failure: l.failure ? { stage: l.failure.stage, code: l.failure.code } : undefined,
       verified: l.verified ? { ...l.verified, proof: { ...l.verified.proof, evidence: [], hints: [] } } : undefined })),
   };
 }
@@ -91,7 +99,13 @@ export function validateExportSnapshot(value: unknown): Notebook {
   return nb;
 }
 
-export function serializeNotebook(nb: Notebook, language: UiLang, report?: ReportDetails): { document: PdfDocument; snapshotHash: string; omitted: number } {
+/** `graphs` holds the browser's drawings of graph lines, by line id; a graph line without one says so. */
+export function serializeNotebook(
+  nb: Notebook,
+  language: UiLang,
+  report?: ReportDetails,
+  graphs: Readonly<Record<string, GraphPng>> = {},
+): { document: PdfDocument; snapshotHash: string; omitted: number } {
   const w = WORDS[language];
   const blocks: PdfBlock[] = [];
   const opening = new Set<string>();
@@ -117,7 +131,11 @@ export function serializeNotebook(nb: Notebook, language: UiLang, report?: Repor
     if (!historical && l.state === 'SETTLED' && proof) {
       try { current = inputHash(nb, payloadForLine(nb, l.id), proof.cas.version) === l.verified?.input_hash && proof.input_hash === l.verified.input_hash; } catch { current = false; }
     }
-    if (l.role === 'premise') notes.push(w.premise);
+    const graph = graphOf(l);
+    const image = graph ? graphs[l.id] : undefined;
+    if (graph) notes.push(image ? w.graph : w.graphMissing);
+    else if (l.extensions?.graph_request === true) notes.push(w.graphRequest);
+    else if (l.role === 'premise') notes.push(w.premise);
     else if (l.role === 'definition') notes.push(w.definition);
     else if (!current || !proof) notes.push(w.stale);
     else if (proof.status === 'ok') notes.push(proof.depends_on_unverified || proof.unverified_ancestors.length ? `${w.local}: ${proof.unverified_ancestors.map((id) => numbers.get(id) ?? id).join(', ')}` : w.verified);
@@ -133,7 +151,7 @@ export function serializeNotebook(nb: Notebook, language: UiLang, report?: Repor
     if (l.segments.some((s) => s.type === 'math' && contains(s.expr, 'Unparsed'))) notes.push(w.unparsed);
     if (l.segments.some((s) => s.type === 'math' && contains(s.expr, 'Unreadable'))) notes.push(w.unreadable);
     if (historical) notes.push(`${w.superseded}${l.superseded_by ? ` → ${numbers.get(l.superseded_by) ?? l.superseded_by}` : ''}`);
-    return { label: historical ? l.id : numbers.get(l.id) ?? l.id, fragments: fragments(l.segments), notes };
+    return { label: historical ? l.id : numbers.get(l.id) ?? l.id, fragments: fragments(l.segments), notes, ...(image ? { image } : {}) };
   };
   const lines: PdfBlock[] = [];
   const history: PdfBlock[] = [];

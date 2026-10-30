@@ -36,7 +36,7 @@ export function totals(rows: readonly NotebookInsight[]): Totals {
     notebooks: 0,
     lines: 0,
     ai_lines: 0,
-    ai_modes: { COMPLETE_RHS: 0, NEXT_STEP: 0, BRIDGE: 0 },
+    ai_modes: { COMPLETE_RHS: 0, NEXT_STEP: 0, BRIDGE: 0, GRAPH: 0 },
     checked: { ok: 0, wrong: 0, unknown: 0 },
     mistakes: 0,
     fixed: 0,
@@ -50,7 +50,7 @@ export function totals(rows: readonly NotebookInsight[]): Totals {
     t.notebooks += 1;
     t.lines += s.lines;
     t.ai_lines += s.ai_lines;
-    for (const m of ['COMPLETE_RHS', 'NEXT_STEP', 'BRIDGE'] as const) t.ai_modes[m] += s.ai_modes[m];
+    for (const m of ['COMPLETE_RHS', 'NEXT_STEP', 'BRIDGE', 'GRAPH'] as const) t.ai_modes[m] += s.ai_modes[m];
     for (const k of ['ok', 'wrong', 'unknown'] as const) t.checked[k] += s.checked[k];
     t.mistakes += s.mistakes;
     t.fixed += s.fixed;

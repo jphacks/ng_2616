@@ -1,10 +1,10 @@
 'use client';
 
-import type { Notebook, ReportDetails, UiLang } from '@mn/contracts';
+import type { GraphPng, Notebook, ReportDetails, UiLang } from '@mn/contracts';
 import { ApiCallError } from '@/core/api/client';
 
-export async function compileReportPdf(notebook: Notebook, language: UiLang, report: ReportDetails, signal: AbortSignal): Promise<Blob> {
-  const response = await fetch('/api/v1/reports/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ notebook, language, report }), signal });
+export async function compileReportPdf(notebook: Notebook, language: UiLang, report: ReportDetails, signal: AbortSignal, graphs: Record<string, GraphPng> = {}): Promise<Blob> {
+  const response = await fetch('/api/v1/reports/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ notebook, language, report, graphs }), signal });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
     throw new ApiCallError(data?.error?.code ?? 'TEX_COMPILE_FAILED', 'PDF compilation failed', response.status, !!data?.error?.retryable);

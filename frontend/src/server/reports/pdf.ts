@@ -21,9 +21,9 @@ export async function reportPdf(request: Request): Promise<Response> {
     const bounded = validateExportSnapshot((raw as Record<string, unknown>).notebook);
     const parsed = TexReportRequestSchema.safeParse({ ...raw, notebook: bounded });
     if (!parsed.success) throw new GatewayError(400, 'INVALID_REQUEST', 'invalid report input');
-    const { notebook, language, report } = parsed.data;
+    const { notebook, language, report, graphs } = parsed.data;
     const snapshot = exportSnapshot(notebook);
-    const { document } = serializeNotebook(snapshot, language, report);
+    const { document } = serializeNotebook(snapshot, language, report, graphs);
     const tex = serializeLatex(document);
     const env = serverEnv();
     const endpoint = env.PDF_COMPILER_URL;

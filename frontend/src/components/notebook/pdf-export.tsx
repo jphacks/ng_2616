@@ -7,6 +7,7 @@ import clsx from 'clsx';
 import type { Notebook } from '@mn/contracts';
 import { ApiCallError } from '@/core/api/client';
 import { compileReportPdf } from '@/core/export/compile';
+import { drawGraphs } from '@/core/export/graphs';
 import { serializeLatex } from '@/core/export/latex';
 import { exportSnapshot, serializeNotebook, validateExportSnapshot, type ReportDetails } from '@/core/export/document';
 import { useNotebook } from '@/core/store/notebook-store';
@@ -75,11 +76,13 @@ export function PdfExport() {
     try {
       // Capture now, including unsaved changes; subsequent writing cannot change this export.
       const snapshot = validateExportSnapshot(snapshotRef.current);
-      const { document, omitted } = serializeNotebook(snapshot, currentLocale(), report);
+      // graph lines carry only their description: draw them here for either renderer
+      const graphs = await drawGraphs(snapshot, ctl.signal);
+      const { document, omitted } = serializeNotebook(snapshot, currentLocale(), report, graphs);
       const { generateBrowserPdf, pdfFileName } = await import('@/core/export/browser-pdf');
       ctl.signal.throwIfAborted();
       if (method === 'tex') setTexDownload({ url: URL.createObjectURL(new Blob([serializeLatex(document)], { type: 'application/x-tex;charset=utf-8' })), name: pdfFileName(document.title).replace(/\.pdf$/, '.tex') });
-      const blob = method === 'tex' ? await compileReportPdf(snapshot, currentLocale(), report, ctl.signal) : await generateBrowserPdf(document, ctl.signal, (p) => {
+      const blob = method === 'tex' ? await compileReportPdf(snapshot, currentLocale(), report, ctl.signal, graphs) : await generateBrowserPdf(document, ctl.signal, (p) => {
         if (!ctl.signal.aborted) setProgress(p);
       });
       ctl.signal.throwIfAborted();

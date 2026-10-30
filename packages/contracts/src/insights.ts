@@ -56,7 +56,8 @@ export const NotebookStatsSchema = z.object({
   lines: z.number().int().nonnegative(),
   /** of those, lines the assistant wrote or completed */
   ai_lines: z.number().int().nonnegative(),
-  ai_modes: z.object({ COMPLETE_RHS: z.number().int(), NEXT_STEP: z.number().int(), BRIDGE: z.number().int() }),
+  // GRAPH arrived after stats were first stored: older records read it as 0
+  ai_modes: z.object({ COMPLETE_RHS: z.number().int(), NEXT_STEP: z.number().int(), BRIDGE: z.number().int(), GRAPH: z.number().int().default(0) }),
   /** the checker's verdict on each settled line with math */
   checked: z.object({ ok: z.number().int(), wrong: z.number().int(), unknown: z.number().int() }),
   /** wrong lines the checker caught, and how many of them were revised until they held */

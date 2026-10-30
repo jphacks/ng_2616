@@ -1,5 +1,7 @@
 import 'server-only';
 import {
+  GRAPH_JSON_SCHEMA,
+  GraphWireSchema,
   OCR_JSON_SCHEMA,
   OcrWireSchema,
   RECOGNIZE_JSON_SCHEMA,
@@ -26,9 +28,9 @@ import {
 import type { ServerEnv } from '@/server/env';
 import { AiError } from '../errors';
 import type { AiService, CallCtx } from '../service';
-import { finalizeCandidate } from './candidate';
+import { finalizeCandidate, graphCandidate } from './candidate';
 import { DEMO_SCRIPT_ID, scriptedRecognition, scriptedSuggestion } from './demo';
-import { OCR_SYSTEM, QUESTION_PAGE_SYSTEM, RECOGNIZE_SYSTEM, SUGGEST_SYSTEM, TAG_SYSTEM, recognizeParts, suggestParts, tagParts } from './prompts';
+import { GRAPH_SYSTEM, OCR_SYSTEM, QUESTION_PAGE_SYSTEM, RECOGNIZE_SYSTEM, SUGGEST_SYSTEM, TAG_SYSTEM, graphParts, recognizeParts, suggestParts, tagParts } from './prompts';
 import type { LlmProvider } from './providers/types';
 
 /** Stage 1: the Next.js server calls the LLM itself. Relay mode swaps this for the FastAPI backend. */
@@ -68,7 +70,14 @@ export class DirectAiService implements AiService {
     // a read the parser cannot handle is kept as written and marked not checkable, never failed
     const parsed = wireToSegments(wire.data.segments, { functions: input.functions, symbols: input.symbols, allowUnparsed: true });
     if (!parsed.ok) throw new AiError('IR_INVALID', `${parsed.message} — read as: ${parsed.latex}`.slice(0, 400));
-    return { segments: parsed.segments, unreadable: wire.data.unreadable, mock: false, transcription, ...(wire.data.route ? { route: wire.data.route } : {}) };
+    return {
+      segments: parsed.segments,
+      unreadable: wire.data.unreadable,
+      mock: false,
+      transcription,
+      ...(wire.data.route ? { route: wire.data.route } : {}),
+      ...(wire.data.graph_request ? { graph_request: true } : {}),
+    };
   }
 
   async suggest(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult> {
@@ -77,6 +86,7 @@ export class DirectAiService implements AiService {
     if (input.context.lines.some((l) => l.status === 'wrong')) return { state: 'NONE', reason: 'UNRESOLVED_WRONG', mock: this.llm.mock };
     if (input.demo?.script === DEMO_SCRIPT_ID) return scriptedSuggestion(input, ctx.signal);
     if (this.llm.mock) return { state: 'NONE', reason: 'MOCK_PROVIDER', mock: true };
+    if (input.mode === 'GRAPH') return this.graph(input, ctx);
     const raw = await this.llm.generateJson({
       task: 'suggest',
       model: this.env.LLM_MODEL_SUGGEST,
@@ -104,6 +114,36 @@ export class DirectAiService implements AiService {
       return { state: 'NONE', reason: 'IR_INVALID', mock: false };
     }
     return finalizeCandidate(input, parsed.segments, wire.data.role, false, proofStep ? 'lean' : undefined);
+  }
+
+  /**
+   * A graph for the line that asks for one: the model describes it, our parser reads every formula.
+   * A description the parser refuses is sent back once with the reason; the browser then checks
+   * that it actually draws.
+   */
+  private async graph(input: SuggestInput, ctx: CallCtx): Promise<CandidateDraftResult> {
+    let feedback = input.checker_feedback ?? [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const raw = await this.llm.generateJson({
+        task: 'suggest',
+        model: this.env.LLM_MODEL_SUGGEST,
+        thinking: this.env.LLM_THINKING_SUGGEST,
+        system: GRAPH_SYSTEM,
+        parts: graphParts({ ...input, checker_feedback: feedback }),
+        schema: GRAPH_JSON_SCHEMA,
+        maxOutputTokens: 8192,
+        timeoutMs: 40_000,
+        signal: ctx.signal,
+      });
+      if (process.env.NODE_ENV === 'development') console.info('[graph]', JSON.stringify(raw).slice(0, 800));
+      const wire = GraphWireSchema.safeParse(raw);
+      if (!wire.success) throw new AiError('SCHEMA_INVALID', 'graph output did not match the schema');
+      if (!wire.data.has_graph) return { state: 'NONE', reason: 'MODEL_DECLINED', mock: false };
+      const result = graphCandidate(input, wire.data, false);
+      if (result.state === 'GENERATED' || result.reason !== 'IR_INVALID') return result;
+      feedback = [...feedback, { latex: wire.data.title || 'graph', reason: 'IR_INVALID', evidence: [result.detail ?? 'a formula could not be read'] }].slice(-3);
+    }
+    return { state: 'NONE', reason: 'IR_INVALID', mock: false };
   }
 
   async questionPage(input: QuestionPageInput, ctx: CallCtx): Promise<QuestionPage> {

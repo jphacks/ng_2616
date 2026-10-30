@@ -1,10 +1,12 @@
 'use client';
 
-import type { Line } from '@mn/contracts';
+import { graphOf, type Line } from '@mn/contracts';
 import clsx from 'clsx';
 import { Check, CornerUpLeft, Info, PenLine, RotateCcw, Sparkles, StickyNote, Trash2, TriangleAlert } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { FEATURES } from '@/features/registry.generated';
+import { targetKindOf } from '@/core/candidates/rejection';
+import { isGraphRequest } from '@/core/notebook/model';
 import { useNotebook } from '@/core/store/notebook-store';
 import { useT } from '@/i18n';
 import { Button, IconButton } from '@/ui/button';
@@ -12,6 +14,7 @@ import { Spinner } from '@/ui/spinner';
 import { useEngine } from './engine-context';
 import { isPenDown } from './gestures';
 import { GhostLine, RejectionChip } from './ghost-line';
+import { GraphPicture } from './graph-picture';
 import { InkCanvas } from './ink-canvas';
 import { Segments } from './segments';
 import { StatusBadge } from './status';
@@ -56,12 +59,14 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
 
   const ghostHere =
     candidate &&
-    ((candidate.mode === 'NEXT_STEP' && candidate.targetLineId === line.id && line.state === 'DRAFT' && line.ink.length === 0) ||
+    ((targetKindOf(candidate.mode) === 'new' && candidate.targetLineId === line.id && line.state === 'DRAFT' && line.ink.length === 0) ||
       (candidate.mode === 'COMPLETE_RHS' && candidate.targetLineId === line.id));
   const showGhost = (ghostHere || ghostWithoutTarget) && line.ink.length === 0;
   const showRejection = rejection && line.state === 'DRAFT' && isLastDraft;
   const pdfQuestion = line.extensions?.pdf_question as { label?: string; title?: string; mock?: boolean; corrected?: boolean } | undefined;
   const openDetails = () => engine.openLine(line.id);
+  // a graph line is a picture: no verdict to show, so nothing to open or revise
+  const graph = line.state === 'SETTLED' ? graphOf(line) : undefined;
 
   if (line.state === 'SUPERSEDED') {
     return (
@@ -111,7 +116,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
   return (
     <SwipeRow
       id={line.id}
-      actions={swipe}
+      actions={graph ? [] : swipe}
       className={clsx(
         'ruled relative flex gap-3 pr-4 transition-colors',
         active && line.state === 'DRAFT' && (line.is_memo ? 'bg-amber-500/10' : 'bg-accent-soft/25'),
@@ -196,6 +201,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             </div>
           </div>
         )}
+        {graph && <GraphPicture spec={graph} />}
         {line.state === 'SETTLED' && line.is_memo && (
           <div
             role="button"
@@ -208,7 +214,7 @@ export const LineRow = memo(function LineRow({ line, number, isLastDraft, revisi
             <InkCanvas strokes={line.ink} editable={false} tool={tool} />
           </div>
         )}
-        {line.state === 'SETTLED' && !line.is_memo && (
+        {line.state === 'SETTLED' && !line.is_memo && !graph && (
           <button type="button" onClick={openDetails} className="flex min-h-16 w-full min-w-0 items-center text-left">
             <Segments segments={line.segments} className="w-full" />
           </button>
@@ -318,6 +324,7 @@ function Gutter({ n, line }: { n: number; line: Line }) {
       {line.role === 'premise' && (
         <span className="rounded-md px-1 text-2xs font-medium text-none">{t('line.given')}</span>
       )}
+      {isGraphRequest(line) && <span className="rounded-md px-1 text-2xs font-medium text-accent">{t('graph.request')}</span>}
       {line.source === 'ai' && (
         <span className={clsx('inline-flex items-center gap-0.5 rounded-md px-1 text-2xs font-medium', line.ai_origin?.unverified_adoption ? 'text-unknown' : 'text-accent')} title={line.ai_origin?.unverified_adoption ? t('line.unverifiedAdoption') : undefined}>
           <Sparkles size={11} />

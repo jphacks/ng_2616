@@ -56,6 +56,9 @@ body{font-family:Arial,"Noto Sans JP","Yu Gothic",Meiryo,sans-serif;font-size:15
 .pdf-math{white-space:nowrap;margin:10px 0 14px;line-height:normal}
 .pdf-math-inner{display:inline-block;transform-origin:top left}
 .pdf-math .katex{font-size:1.22em;line-height:1.2}
+.pdf-graph{margin:6px 0 4px;text-align:center}
+.pdf-graph img{display:inline-block;width:560px;max-width:100%;height:auto}
+.pdf-caption{font-size:13px;color:#343e52;text-align:center}
 .pdf-footer{position:absolute;bottom:22px;left:56px;right:56px;border-top:1px solid #e0e3e8;padding-top:6px;font:11px Arial,sans-serif;color:#657085;text-align:right}
 `;
 
@@ -87,6 +90,22 @@ function unitsFor(doc: Document, data: PdfDocument): HTMLElement[] {
     for (const [index, block] of section.blocks.entries()) {
       const blockStart = index === 0 ? sectionStart : units.length;
       if (block.label) add(block.label, 'pdf-label', true);
+      if (block.image) {
+        // a graph line: the picture, its title underneath, then its notes
+        const figure = doc.createElement('div');
+        figure.className = 'pdf-unit pdf-graph';
+        const img = doc.createElement('img');
+        img.src = `data:image/png;base64,${block.image.png}`;
+        img.width = block.image.width;
+        img.height = block.image.height;
+        img.alt = block.fragments.map((f) => f.value).join(' ');
+        figure.append(img);
+        units.push(figure);
+        for (const fragment of block.fragments) add(fragment.value, 'pdf-caption');
+        for (const note of block.notes) add(note, 'pdf-note');
+        finishBlock(blockStart);
+        continue;
+      }
       for (const fragment of block.fragments) {
         if (fragment.kind === 'text') { add(fragment.value.trim()); continue; }
         const outer = doc.createElement('div');
@@ -250,6 +269,8 @@ export async function generateBrowserPdf(data: PdfDocument, signal: AbortSignal,
     const units = unitsFor(doc, data);
     doc.body.append(...units);
     await waitFor(doc.fonts.ready, signal);
+    // graph pictures must be decoded before pages are measured and captured
+    await waitFor(Promise.all([...doc.images].map((img) => img.decode().catch(() => undefined))), signal);
     check(signal);
     const pages = paginate(doc, wrapWideFormulas(doc, units));
     // Explicitly include all KaTeX families: iframe nodes belong to a different HTMLElement realm.

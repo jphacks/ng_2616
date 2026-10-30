@@ -16,7 +16,7 @@ export function workLines(nb: Notebook): Line[] {
 export function notebookStats(nb: Notebook): NotebookStats {
   const work = workLines(nb);
   const ai = work.filter((l) => l.ai_origin || l.source === 'ai');
-  const ai_modes = { COMPLETE_RHS: 0, NEXT_STEP: 0, BRIDGE: 0 };
+  const ai_modes = { COMPLETE_RHS: 0, NEXT_STEP: 0, BRIDGE: 0, GRAPH: 0 };
   for (const l of ai) if (l.ai_origin) ai_modes[l.ai_origin.mode] += 1;
   const checked = { ok: 0, wrong: 0, unknown: 0 };
   for (const l of work) {
